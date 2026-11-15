@@ -175,8 +175,8 @@ section 8 du brief), puis par un ADR (`docs/adr/ADR-XXX-sujet.md`).
   mises à jour, une fois la version publiée depuis au moins 7 jours.
 - Réglages GitHub en code : `scripts/github/apply-settings.sh` (fusion en
   squash seule, permissions des workflows) et `.github/rulesets/main.json`. Le
-  dépôt est privé sur un compte GitHub Free, donc le ruleset ne s'applique
-  qu'au passage en public. En attendant, les garde-fous sont pre-commit et la CI.
+  dépôt est public depuis le 15/11/2026, par décision de Lucas. Le script
+  demande les droits admin : Lucas le lance lui-même, hors session d'agent.
 - Licence du générateur : Apache-2.0.
 
 ## Arborescence

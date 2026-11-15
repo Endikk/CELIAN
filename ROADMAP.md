@@ -34,18 +34,12 @@ jour à la fin de chaque session.
   à l'exemple du blueprint. Le brief est resserré sur ce point.
 - ECC est désactivé dans ce projet (R-03).
 - Plan de la phase 1 validé.
-
-### Constaté en fin de session
-
-Le dépôt est public depuis le 15/11/2026 à 01:30, d'après le journal GitHub,
-alors que la décision notée était « privé ». Le scan gitleaks de tout
-l'historique est propre. Aucun ruleset n'est appliqué : `main` n'est pas
-protégée. Lucas doit confirmer que la visibilité publique est voulue (R-01).
+- Le dépôt est public, c'est voulu (R-01, R-16).
 
 ### Prochain
 
-- Lucas confirme la visibilité du dépôt. Si elle reste publique, il lance
-  `scripts/github/apply-settings.sh` pour appliquer le ruleset (R-01).
+- Lucas lance `scripts/github/apply-settings.sh` pour appliquer le ruleset de
+  `main`. Le DSI vérifie ensuite par l'API qu'il est actif (R-01).
 - Lucas remplace son jeton `gh` classique en suivant
   `docs/securite/jeton-github.md`, puis le révoque (R-07).
 - Actions de Lucas : installer l'app GitHub Renovate, installer Pixel Agents,

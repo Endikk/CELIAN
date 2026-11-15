@@ -8,7 +8,7 @@ ferme quand sa mitigation est en place et vérifiée.
 
 | ID | Risque | Probabilité | Impact | Porteur | État |
 | --- | --- | --- | --- | --- | --- |
-| R-01 | Protection de `main` non appliquée | Certaine | Fort dès la phase 2 | OPS | Dépôt public, ruleset à appliquer |
+| R-01 | Protection de `main` non appliquée | Certaine | Fort dès la phase 2 | OPS | Ruleset à appliquer par Lucas |
 | R-02 | Plugins tiers et utilisateur non figés ni relus | Moyenne | Fort | SECU | Ouvert |
 | R-03 | Contexte d'agent surchargé, coût en tokens | Forte | Moyen | DSI, FINOPS | Atténué : ECC désactivé |
 | R-04 | Critère des 15 minutes hors d'atteinte | Moyenne | Fort | OPS | Ouvert |
@@ -23,7 +23,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-13 | Dépendance au format des plugins Claude Code | Moyenne | Moyen | ARCHI | Ouvert |
 | R-14 | Valeur non confirmée par de vrais utilisateurs | Moyenne | Fort | PO | Ouvert |
 | R-15 | Ressources GCP qui survivent à `tofu destroy` | Moyenne | Fort | OPS, FINOPS | Ouvert |
-| R-16 | Allocation GitHub Actions épuisée | Forte | Moyen | OPS, FINOPS | Ouvert |
+| R-16 | Allocation GitHub Actions épuisée | Faible | Moyen | OPS, FINOPS | Atténué : dépôt public |
 | R-17 | Tailles par défaut et démo allumée en permanence | Moyenne | Moyen | FINOPS | Ouvert |
 | R-18 | Services GCP facturés au volume | Moyenne | Faible | FINOPS | Ouvert |
 | R-19 | Identité GCP de la CI et état OpenTofu | Moyenne | Fort | SECU, OPS | Ouvert |
@@ -33,7 +33,7 @@ ferme quand sa mitigation est en place et vérifiée.
 
 ### R-01. Protection de `main` non appliquée
 
-Le dépôt est privé sur un compte GitHub Free. L'API refuse les rulesets :
+Le dépôt était privé sur un compte GitHub Free, et l'API refusait les rulesets :
 `Upgrade to GitHub Pro or make this repository public to enable this feature.`
 N'importe quel push direct sur `main` passe, et le hook local saute avec
 `--no-verify` ou sur un clone où personne n'a lancé `pre-commit install`. En
@@ -50,10 +50,10 @@ Lucas : passer le dépôt en public avant la phase 2, après un scan gitleaks de
 toutes les refs. Cela débloque les rulesets, les relecteurs d'environnement et
 la protection des pushs, et ferme aussi R-16.
 
-Constat du 15/11/2026, en fin de session : le dépôt est public depuis 01:30
-(journal GitHub), sans ruleset appliqué. Visibilité à confirmer par Lucas, puis
-application du ruleset par `scripts/github/apply-settings.sh`, qui demande les
-droits admin.
+Décision de Lucas du 15/11/2026 : le dépôt est public, c'est voulu. Reste à
+appliquer le ruleset avec `scripts/github/apply-settings.sh`, qui demande les
+droits admin et que Lucas lance lui-même. R-01 se ferme quand l'API montre le
+ruleset actif.
 
 ### R-02. Plugins tiers et utilisateur non figés ni relus
 
@@ -293,7 +293,9 @@ une fois l'allocation épuisée, et plus aucune PR ne peut passer.
 Mitigation : lancer la matrice la nuit ou sur label, filtres de chemins,
 annulation des exécutions dépassées (déjà en place), rétention courte des
 artefacts, runners Linux seulement. Sur un dépôt public, les runners standard
-sont gratuits : passer en public fermerait aussi R-01. Décision de Lucas.
+sont gratuits : passer en public fermerait aussi R-01. Décision de Lucas du
+15/11/2026 : le dépôt est public. Restent les limites de stockage et de cache,
+à suivre en phase 4.
 
 ### R-17. Tailles par défaut et démo allumée en permanence
 
