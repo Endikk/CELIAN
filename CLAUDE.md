@@ -93,13 +93,18 @@ le dépôt :
 Le plugin superpowers est désactivé dans ce projet : sa méthode de
 planification double celle de Spec Kit.
 
-Ces marketplaces ne peuvent pas être figées sur un commit : Claude Code accepte
-une branche ou un tag, pas un SHA (essai du 15/11/2026 : `Remote branch <sha>
-not found`), et wshobson/agents ne publie aucun tag. Leur contenu a été relu le
-15/11/2026 aux commits `9c61ab2` (wshobson) et `5e30fa5` (HashiCorp) : aucun
-hook, aucun serveur MCP, un seul script lancé à la demande par un skill Helm.
-La mise à jour automatique est désactivée par défaut pour les marketplaces
-tierces. Toute mise à jour volontaire passe par une relecture [SECU].
+Ces marketplaces ne sont pas encore figées. Claude Code accepte un SHA complet
+comme `ref` de marketplace à partir de la version 2.1.324
+(<https://code.claude.com/docs/en/plugins/marketplace-reference.md>) ; le poste
+tourne en 2.1.322, d'où l'échec de l'essai du 15/11/2026. Après la mise à jour
+de Claude Code, fixer `ref` sur `9c61ab243def98f72da12abd41cfcf5bcd91af9d`
+(wshobson) et `5e30fa5c867ba6777c37e4206babfd08049c396f` (HashiCorp), les
+commits relus le 15/11/2026 : aucun hook, aucun serveur MCP, un seul script
+lancé à la demande par un skill Helm. La mise à jour automatique est désactivée
+par défaut pour les marketplaces tierces
+(<https://code.claude.com/docs/en/discover-plugins.md>). Toute mise à jour
+volontaire passe par une relecture [SECU], parce qu'un skill reste une
+instruction suivie par un agent qui a le shell.
 
 ## Garde-fous
 
