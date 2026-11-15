@@ -61,7 +61,7 @@ rôle est un sous-agent. Quand on change de casquette, le tag du rôle ouvre le
 paragraphe.
 
 | Tag | Rôle |
-|---|---|
+| --- | --- |
 | [DSI] | Directeur SI, agent principal |
 | [PO] | Product Owner : vision, PRD, user stories, non-objectifs |
 | [ARCHI] | Architecte solution et cloud : spec, blueprints, C4, ADR |
@@ -89,14 +89,20 @@ section 8 du brief), puis par un ADR (`docs/adr/ADR-XXX-sujet.md`).
 - Langue : docs de cadrage, ADR, benchmarks et README en français. Code,
   identifiants, noms de dossiers et messages de commit en anglais.
 - Jamais de tiret cadratin (U+2014), ni dans les réponses ni dans les fichiers.
+  Le hook `no-em-dash` le refuse.
 - Trunk-based : `main` et des branches courtes `feat/`, `fix/`, `docs/`,
   `chore/`. Une PR traite un seul sujet et se rattache à une tâche ou à un ADR.
-- Conventional Commits.
+- Conventional Commits, vérifiés par commitlint : en local par le hook
+  `commit-msg`, en CI sur le titre de la PR. Fusion en squash, donc le titre de
+  la PR devient le commit sur `main`.
+- Après un clonage : `pre-commit install`. Les mêmes hooks tournent en CI
+  (`.github/workflows/ci.yml`), plus un scan gitleaks de tout l'historique.
+- Versions des hooks et des actions figées par SHA, avec le tag en commentaire.
 - Licence du générateur : Apache-2.0.
 
 ## Arborescence
 
-```
+```text
 CLAUDE.md          ce fichier
 ROADMAP.md         fait, en cours, prochain
 docs/              vision, PRD, risques, adr/, benchmarks/

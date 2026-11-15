@@ -1,0 +1,6 @@
+config:
+  default: true
+  # Prose is wrapped by hand; tables, URLs and code run longer.
+  MD013: false
+  # Templates (PR, issues) start with a level-2 heading on purpose.
+  MD041: false
