@@ -8,13 +8,13 @@ ferme quand sa mitigation est en place et vérifiée.
 
 | ID | Risque | Probabilité | Impact | Porteur | État |
 | --- | --- | --- | --- | --- | --- |
-| R-01 | Protection de `main` non appliquée | Certaine | Fort dès la phase 2 | OPS | Décision attendue |
+| R-01 | Protection de `main` non appliquée | Certaine | Fort dès la phase 2 | OPS | Dépôt public, ruleset à appliquer |
 | R-02 | Plugins tiers et utilisateur non figés ni relus | Moyenne | Fort | SECU | Ouvert |
 | R-03 | Contexte d'agent surchargé, coût en tokens | Forte | Moyen | DSI, FINOPS | Atténué : ECC désactivé |
 | R-04 | Critère des 15 minutes hors d'atteinte | Moyenne | Fort | OPS | Ouvert |
 | R-05 | Dépense GCP non maîtrisée | Moyenne | Fort | FINOPS | Ouvert |
 | R-06 | Catalogue qui se périme | Forte | Moyen | ARCHI | Ouvert |
-| R-07 | Agents capables de lire et d'exfiltrer des secrets | Forte | Fort | SECU | Mitigation en PR #6, jeton à changer |
+| R-07 | Agents capables de lire et d'exfiltrer des secrets | Forte | Fort | SECU | Règles en place (PR #6), jeton à changer |
 | R-08 | Checks contournables par le rôle admin | Certaine | Moyen | OPS | Corrigé dans la PR #2 |
 | R-09 | Outils trop jeunes | Moyenne | Faible | BENCH | Atténué |
 | R-10 | Artefacts AGPL copiés dans le générateur | Faible | Moyen | SECU | Ouvert |
@@ -49,6 +49,11 @@ scan gitleaks tourne sur chaque push de branche (PR #2). Décision attendue de
 Lucas : passer le dépôt en public avant la phase 2, après un scan gitleaks de
 toutes les refs. Cela débloque les rulesets, les relecteurs d'environnement et
 la protection des pushs, et ferme aussi R-16.
+
+Constat du 15/11/2026, en fin de session : le dépôt est public depuis 01:30
+(journal GitHub), sans ruleset appliqué. Visibilité à confirmer par Lucas, puis
+application du ruleset par `scripts/github/apply-settings.sh`, qui demande les
+droits admin.
 
 ### R-02. Plugins tiers et utilisateur non figés ni relus
 
