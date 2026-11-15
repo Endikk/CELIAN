@@ -154,5 +154,5 @@ sur les règles.
 Chaque revue de PR vérifie la conformité aux principes. Une dérogation se
 justifie dans un ADR, avec sa durée et la condition qui la lèvera.
 
-**Version** : 1.0.0 | **Ratifiée** : TODO(RATIFICATION_DATE) date de
-validation par Lucas à la GATE 0 | **Dernier amendement** : 2026-11-15
+**Version** : 1.0.0 | **Ratifiée** : 2026-11-15, par Lucas à la GATE 0 |
+**Dernier amendement** : 2026-11-15
