@@ -18,7 +18,9 @@ d'échec. Le projet généré reçoit plus tard les correctifs du blueprint par
 
 ## Constitution
 
-Dix principes non négociables, repris de la section 3 du brief.
+Dix principes non négociables, repris de la section 3 du brief. Le texte qui
+fait foi est [.specify/memory/constitution.md](.specify/memory/constitution.md) ;
+en cas d'écart, il l'emporte sur ce résumé.
 
 1. Rien n'est généré sans être testé automatiquement.
 2. La spec est abstraite (`database: postgres`). Le catalogue la traduit en
@@ -122,6 +124,10 @@ erreur.
 
 Six phases, chacune fermée par une gate que Lucas valide. On ne passe pas à la
 suite sans son accord. La phase en cours est dans `ROADMAP.md`.
+
+Spec Kit est la seule méthode de spécification : `/speckit-specify`,
+`/speckit-plan`, `/speckit-tasks`, `/speckit-implement`. Pas de BMAD, et pas
+d'autre méthode de planification en parallèle.
 
 Avant chaque phase : un plan court, puis attente de validation. Un golden repo
 se construit à la main avant toute mise en template. Chaque choix structurant
