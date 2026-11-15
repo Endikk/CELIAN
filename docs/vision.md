@@ -1,5 +1,7 @@
 # Vision de CELIAN
 
+Statut : validée par Lucas à la GATE 0 le 15/11/2026.
+
 Sources : brief v1.0 (sections 2, 3, 4 et 12), constitution 1.0.0 et
 `CLAUDE.md`, lus le 15/11/2026. Le détail du MVP est dans le
 [PRD](prd-mvp.md).

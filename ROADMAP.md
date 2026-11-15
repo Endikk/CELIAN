@@ -20,14 +20,16 @@ jour à la fin de chaque session.
 
 - PR #2 : release-please, Renovate, ruleset de `main` sans contournement admin,
   scan de secrets sur chaque push. CI verte, à fusionner.
-- PR #3 : Spec Kit et constitution. Fait partie de la GATE 0.
+- PR #3 : Spec Kit et constitution. Validée à la GATE 0, à fusionner.
 - PR #4 : sous-agents par rôle, plugins du projet, garde-fous cloud. CI verte,
   à fusionner.
 - PR #5 : vision, PRD, cette feuille de route, registre des risques
-  relu par [SECU] et [FINOPS]. Fait partie de la GATE 0.
+  relu par [SECU] et [FINOPS]. Validée à la GATE 0, à fusionner.
 
 ### Décisions de Lucas du 15/11/2026
 
+- GATE 0 validée : vision, constitution 1.0.0 et PRD, avec les propositions du
+  PO pour les questions Q1 à Q12.
 - Q1 : les 15 minutes couvrent l'entretien, la génération, le démarrage local,
   le plan GCP et la CI du premier push. L'apply se mesure à part.
 - Q2 : l'utilisateur lance l'apply, jamais l'agent.
@@ -37,8 +39,8 @@ jour à la fin de chaque session.
 
 ### Prochain
 
-- GATE 0 : Lucas valide la vision, la constitution et le reste du PRD
-  (questions Q3 à Q6 et Q8 à Q12).
+- Lucas fusionne les PR dans l'ordre #2, #4, #3, #5. La phase 0 se ferme avec
+  la dernière fusion.
 - Décisions de Lucas attendues dans `docs/risques.md` : passage du dépôt en
   public avant la phase 2 (R-01, R-16), règles de permission et jeton `gh` sans
   droits admin (R-07).
@@ -51,7 +53,7 @@ jour à la fin de chaque session.
 
 | Phase | Objectif | Rôles | Gate | État |
 | --- | --- | --- | --- | --- |
-| 0 | Installation et cadrage | DSI, PO | Vision, PRD, constitution validés | En cours |
+| 0 | Installation et cadrage | DSI, PO | Vision, PRD, constitution validés | Gate validée le 15/11/2026, fusions en attente |
 | 1 | Benchmarks BENCH-001 à 007, ADR, catalogue daté | BENCH, ARCHI | ADR validés | À venir |
 | 2 | Golden repo SaaS B2B construit à la main | DEV, OPS, SECU | Démo du golden repo | À venir |
 | 3 | Template Copier, JSON Schema de la spec v1 | ARCHI, DEV | Génération depuis un exemple de spec | À venir |

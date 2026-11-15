@@ -1,7 +1,7 @@
 # PRD du MVP de CELIAN
 
-Statut : brouillon soumis à la GATE 0. Rédigé par [PO] le 15/11/2026. Lucas a
-tranché Q1, Q2 et Q7 le même jour.
+Statut : validé par Lucas à la GATE 0 le 15/11/2026, questions Q1 à Q12
+comprises. Rédigé par [PO] le même jour.
 
 Sources : brief v1.0 (sections 2 à 4, 6, 8, 9 et 12), constitution 1.0.0
 (branche `chore/speckit`) et `CLAUDE.md`, lus le 15/11/2026. La vision tient en
@@ -417,7 +417,7 @@ parce qu'une personne extérieure ne les aura pas en cache.
 - Le critère est atteint quand toutes les conditions passent dans une même
   session. Le résultat va dans un rapport daté.
 
-## 8. Dépendances, hypothèses et questions ouvertes
+## 8. Dépendances, hypothèses et questions tranchées
 
 ### Dépendances
 
@@ -442,26 +442,23 @@ Aucune n'est validée à ce jour.
 
 ### Questions tranchées
 
-| # | Question | Décision de Lucas, 15/11/2026 |
+Lucas a retenu les propositions du PO pour les douze questions, le 15/11/2026.
+
+| # | Question | Décision |
 | --- | --- | --- |
 | Q1 | Que couvrent les 15 minutes ? | Section 7 : plan GCP et CI dedans, apply mesuré à part, images comprises |
 | Q2 | Qui lance `tofu apply` dans le produit ? | L'utilisateur, jamais l'agent : principe X transposé aux utilisateurs |
+| Q3 | Qui crée le dépôt GitHub distant et pousse ? | CELIAN, avec les droits de l'utilisateur et après confirmation |
+| Q4 | Langue de la documentation générée ? | Question de l'entretien, français par défaut |
+| Q5 | Systèmes d'exploitation du PC ? | macOS et Linux, Windows à évaluer par [OPS] |
+| Q6 | Environnements déployés sur GCP ? | Un seul, structure Argo CD prête pour staging et prod |
 | Q7 | Quel code métier écrit l'agent ? | Les ADR et les textes du projet. Le code métier se limite à l'exemple du blueprint |
+| Q8 | Où publier et signer les images avant que GCP existe ? | À instruire par [OPS] et [SECU] avant la phase 2, arbitré par [ARCHI] |
+| Q9 | Un serveur Dependency-Track dans le MVP ? | Non : SBOM archivé par la CI, serveur plus tard |
+| Q10 | BENCH-006 reste-t-il utile, la CLI Python étant retenue ? | Oui, court, pour tracer le pourquoi dans un ADR |
+| Q11 | Accès au plugin pour la phase 6, le dépôt étant privé ? | Un accès en lecture le temps du test |
+| Q12 | Une analyse des outils existants avant la GATE 1 ? | Oui, courte, par [BENCH] |
 
 Q7 resserre le brief, qui confiait le code métier à l'agent. Raison : ce code
 ne serait pas déterministe, la matrice de validation ne le couvrirait donc pas,
 et il agrandirait la surface de conflit de `copier update` (R-11).
-
-### Questions ouvertes
-
-| # | Question | Proposition du PO | Qui tranche |
-| --- | --- | --- | --- |
-| Q3 | Qui crée le dépôt GitHub distant et pousse ? | CELIAN, avec les droits de l'utilisateur et après confirmation | Lucas, [DEV] |
-| Q4 | Langue de la documentation générée ? | Question de l'entretien, français par défaut | Lucas |
-| Q5 | Systèmes d'exploitation du PC ? | macOS et Linux, Windows à évaluer par [OPS] | Lucas, [OPS] |
-| Q6 | Environnements déployés sur GCP ? | Un seul, structure Argo CD prête pour staging et prod | Lucas, [FINOPS] |
-| Q8 | Où publier et signer les images avant que GCP existe ? | À instruire par [OPS] et [SECU] avant la phase 2 | [ARCHI] |
-| Q9 | Un serveur Dependency-Track dans le MVP ? | Non : SBOM archivé par la CI, serveur plus tard | Lucas, [SECU] |
-| Q10 | BENCH-006 reste-t-il utile, la CLI Python étant retenue ? | Le garder court, pour tracer le pourquoi dans un ADR | Lucas |
-| Q11 | Accès au plugin pour la phase 6, le dépôt étant privé ? | Un accès en lecture le temps du test | Lucas |
-| Q12 | Une analyse des outils existants avant la GATE 1 ? | Oui, courte, par [BENCH] | Lucas |

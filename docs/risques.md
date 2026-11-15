@@ -290,9 +290,9 @@ produit, les tailles par défaut du blueprint (dev, staging, prod) deviennent la
 facture de chaque utilisateur, sans estimation avant génération puisque
 Infracost est hors MVP.
 
-Mitigation : le PRD propose que les 15 minutes couvrent un plan valide, l'apply
-réel étant mesuré à part, et un seul environnement déployé sur GCP (section 7,
-questions Q1 et Q6, à valider à la GATE 0). Reste à compter les apply réels
+Mitigation : les 15 minutes couvrent un plan valide, l'apply réel étant mesuré
+à part, et un seul environnement est déployé sur GCP (PRD section 7, questions
+Q1 et Q6, validées à la GATE 0 le 15/11/2026). Reste à compter les apply réels
 prévus aux phases 2 et 6, à prévoir un profil démo zonal et minimal, et à faire
 valider par [FINOPS] les tailles par défaut du blueprint.
 
