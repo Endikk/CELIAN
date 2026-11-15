@@ -1,0 +1,46 @@
+# OS and editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Secrets and local environment
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+kubeconfig*
+*.kubeconfig
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Node
+node_modules/
+
+# .NET
+bin/
+obj/
+*.user
+
+# OpenTofu (the .terraform.lock.hcl file stays versioned)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+
+# Claude Code, per-user settings
+.claude/settings.local.json
