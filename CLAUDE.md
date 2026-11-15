@@ -121,6 +121,28 @@ motifs de commande : un détour (script, `bash -c`) reste possible. Elles ne
 remplacent pas le principe X, elles le rendent plus difficile à enfreindre par
 erreur.
 
+Contre la fuite d'identifiants (R-07), le même fichier :
+
+- refuse `gh auth token` et les commandes `gcloud` qui impriment un jeton ;
+- refuse la lecture de `~/.config/gh`, `~/.config/gcloud`, `~/.ssh`, `~/.aws`,
+  `~/.kube`, `~/.docker/config.json`, `~/.netrc` et `~/.git-credentials` ;
+- bloque les outils de lecture hors des dossiers de travail
+  (`blockReadsOutsideWorkingDirectories`) ;
+- demande une confirmation humaine pour les canaux de sortie et
+  l'exécution de code arbitraire : `curl`, `wget`, `python`, `node`,
+  `docker run`, `exec` et `cp`, `gh auth`, `gh gist`, `security`, l'ajout
+  d'un remote et un `git push` vers une URL.
+
+Une règle `ask` du projet passe devant un `allow` de l'utilisateur, et le mode
+auto la respecte (<https://code.claude.com/docs/en/permissions>,
+<https://code.claude.com/docs/en/permission-modes>, relu le 15/11/2026). Un
+test sans interface l'a confirmé le même jour : `curl --version` est autorisé
+sans ce fichier, et bloqué avec lui. Ces règles restent un filtre de motifs, et
+un deny sur Read ne couvre pas un script qui ouvre le fichier lui-même. Les
+deux vraies barrières sont un jeton GitHub sans droits admin
+([docs/securite/jeton-github.md](docs/securite/jeton-github.md)) et le sandbox,
+qui fera l'objet d'une PR à part une fois testé avec Docker.
+
 ## Méthode
 
 Six phases, chacune fermée par une gate que Lucas valide. On ne passe pas à la
