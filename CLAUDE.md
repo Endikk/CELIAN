@@ -74,6 +74,34 @@ paragraphe.
 | [BENCH] | Veille et benchmarks pondérés, mesures réelles |
 | [DOC] | Rédaction technique : README, guides, changelog |
 
+Chaque rôle sauf le DSI a son sous-agent dans `.claude/agents/<tag>.md`
+(`po`, `archi`, `data`, `dev`, `ops`, `secu`, `finops`, `qa`, `bench`, `doc`),
+avec les outils minimum de son domaine. Le DSI leur délègue les tâches de leur
+domaine.
+
+## Plugins du projet
+
+Déclarés dans `.claude/settings.json`, donc versionnés et actifs pour qui clone
+le dépôt :
+
+- marketplace `claude-code-workflows` (wshobson/agents) : `cloud-infrastructure`,
+  `kubernetes-operations`, `cicd-automation`, `observability-monitoring`,
+  `security-scanning`, `c4-architecture`, `git-pr-workflows` ;
+- marketplace `hashicorp` : `terraform`. Écrit pour Terraform, appliqué à
+  OpenTofu. Toute divergence rencontrée se signale.
+
+Le plugin superpowers est désactivé dans ce projet : sa méthode de
+planification double celle de Spec Kit.
+
+## Garde-fous
+
+`.claude/settings.json` refuse aux agents `tofu apply`, `tofu destroy`, leurs
+équivalents Terraform, les créations et suppressions de ressources `gcloud`, et
+la lecture des fichiers `.env` et des états OpenTofu. Ces règles filtrent des
+motifs de commande : un détour (script, `bash -c`) reste possible. Elles ne
+remplacent pas le principe X, elles le rendent plus difficile à enfreindre par
+erreur.
+
 ## Méthode
 
 Six phases, chacune fermée par une gate que Lucas valide. On ne passe pas à la

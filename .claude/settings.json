@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "enabledPlugins": {
+    "cloud-infrastructure@claude-code-workflows": true,
+    "kubernetes-operations@claude-code-workflows": true,
+    "cicd-automation@claude-code-workflows": true,
+    "observability-monitoring@claude-code-workflows": true,
+    "security-scanning@claude-code-workflows": true,
+    "c4-architecture@claude-code-workflows": true,
+    "git-pr-workflows@claude-code-workflows": true,
+    "terraform@hashicorp": true,
+    "superpowers@claude-plugins-official": false
+  },
+  "extraKnownMarketplaces": {
+    "claude-code-workflows": {
+      "source": {
+        "source": "github",
+        "repo": "wshobson/agents"
+      }
+    },
+    "hashicorp": {
+      "source": {
+        "source": "github",
+        "repo": "hashicorp/agent-skills"
+      }
+    }
+  },
+  "permissions": {
+    "deny": [
+      "Bash(tofu apply *)",
+      "Bash(tofu * apply *)",
+      "Bash(tofu destroy *)",
+      "Bash(tofu * destroy *)",
+      "Bash(terraform apply *)",
+      "Bash(terraform * apply *)",
+      "Bash(terraform destroy *)",
+      "Bash(terraform * destroy *)",
+      "Bash(gcloud * create *)",
+      "Bash(gcloud * delete *)",
+      "Bash(gcloud * deploy *)",
+      "Bash(gcloud * enable *)",
+      "Bash(gcloud billing *)",
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/*.tfstate)",
+      "Read(**/*.tfstate.*)"
+    ]
+  }
+}
