@@ -3,28 +3,25 @@
 Mise à jour le 15/11/2026, à la fin de la session 1. Le DSI tient ce fichier à
 jour à la fin de chaque session.
 
-## Phase en cours : 0, installation et cadrage
+## Phase 0 terminée, phase 1 à démarrer
 
 ### Fait
 
 - Dépôt initialisé : arborescence, licence Apache-2.0, `CLAUDE.md`, brief
   versionné dans `docs/brief-v1.0.md`.
 - Conventions Git et CI : pre-commit (dont gitleaks et le refus du tiret
-  cadratin), commitlint, CODEOWNERS, modèle de PR, CI qui rejoue les hooks et
-  scanne tout l'historique (PR #1, fusionnée).
+  cadratin), commitlint, CODEOWNERS, modèle de PR, CI qui rejoue les hooks
+  (PR #1).
+- release-please, Renovate avec délai de 7 jours, ruleset de `main` en code,
+  scan de secrets sur chaque push (PR #2).
+- Dix sous-agents par rôle, plugins du projet, refus de `tofu apply` et des
+  créations `gcloud` (PR #4).
+- Spec Kit 1.4.0 et constitution 1.0.0 ratifiée (PR #3).
+- Vision, PRD, cette feuille de route, registre de 20 risques (PR #5).
+- Garde-fous contre la fuite d'identifiants et procédure de changement du
+  jeton `gh` (PR #6, R-07).
 - Réglages GitHub appliqués : fusion en squash seule, titre de PR comme
   commit, suppression des branches fusionnées.
-- Outils installés sur le poste : specify-cli 1.4.0, pre-commit 4.7.0.
-
-### En cours, en attente de Lucas
-
-- PR #2 : release-please, Renovate, ruleset de `main` sans contournement admin,
-  scan de secrets sur chaque push. CI verte, à fusionner.
-- PR #3 : Spec Kit et constitution. Validée à la GATE 0, à fusionner.
-- PR #4 : sous-agents par rôle, plugins du projet, garde-fous cloud. CI verte,
-  à fusionner.
-- PR #5 : vision, PRD, cette feuille de route, registre des risques
-  relu par [SECU] et [FINOPS]. Validée à la GATE 0, à fusionner.
 
 ### Décisions de Lucas du 15/11/2026
 
@@ -36,28 +33,28 @@ jour à la fin de chaque session.
 - Q7 : l'agent écrit les ADR et les textes du projet. Le code métier se limite
   à l'exemple du blueprint. Le brief est resserré sur ce point.
 - ECC est désactivé dans ce projet (R-03).
+- Plan de la phase 1 validé.
+- Le dépôt est public, c'est voulu (R-01, R-16).
 
 ### Prochain
 
-- Lucas fusionne les PR dans l'ordre #2, #4, #3, #5. La phase 0 se ferme avec
-  la dernière fusion.
-- PR #6 (R-07), empilée sur #4 : à fusionner après #4, une fois rebasée.
+- Lucas lance `scripts/github/apply-settings.sh` pour appliquer le ruleset de
+  `main`. Le DSI vérifie ensuite par l'API qu'il est actif (R-01).
 - Lucas remplace son jeton `gh` classique en suivant
   `docs/securite/jeton-github.md`, puis le révoque (R-07).
-- Décision de Lucas attendue : passage du dépôt en public avant la phase 2
-  (R-01, R-16).
 - Actions de Lucas : installer l'app GitHub Renovate, installer Pixel Agents,
   mettre Claude Code en 2.1.324 ou plus pour pouvoir figer les marketplaces
   (R-02).
-- Phase 1 : plan validé par Lucas le 15/11/2026. Elle démarre après les
-  fusions, dans une nouvelle session.
+- Phase 1, dans une nouvelle session : gabarits de benchmark et d'ADR, analyse
+  des outils existants (Q12), puis BENCH-006, 001, 002, 003, et 004, 005, 007
+  mesurés sur le cluster retenu, enfin `catalog/` avec son check CI.
 
 ## Les six phases du MVP
 
 | Phase | Objectif | Rôles | Gate | État |
 | --- | --- | --- | --- | --- |
-| 0 | Installation et cadrage | DSI, PO | Vision, PRD, constitution validés | Gate validée le 15/11/2026, fusions en attente |
-| 1 | Benchmarks BENCH-001 à 007, ADR, catalogue daté | BENCH, ARCHI | ADR validés | À venir |
+| 0 | Installation et cadrage | DSI, PO | Vision, PRD, constitution validés | Terminée le 15/11/2026 |
+| 1 | Benchmarks BENCH-001 à 007, ADR, catalogue daté | BENCH, ARCHI | ADR validés | Plan validé, à démarrer |
 | 2 | Golden repo SaaS B2B construit à la main | DEV, OPS, SECU | Démo du golden repo | À venir |
 | 3 | Template Copier, JSON Schema de la spec v1 | ARCHI, DEV | Génération depuis un exemple de spec | À venir |
 | 4 | Pipeline de validation blueprint et cible | QA, OPS | Matrice verte | À venir |

@@ -104,7 +104,7 @@ Les noms de commandes autres que `task up` et `copier update` se fixent en
 phase 5.
 
 1. Installation. L'utilisateur installe le plugin et la CLI. Le mode de
-   distribution, dépôt privé compris, se décide avec [DEV].
+   distribution se décide avec [DEV].
 2. Lancement. Il lance la commande d'entrée. CELIAN vérifie les prérequis. Le
    chronomètre du critère d'acceptation part ici.
 3. Entretien. Une dizaine de questions, chacune avec une valeur par défaut.
@@ -456,7 +456,7 @@ Lucas a retenu les propositions du PO pour les douze questions, le 15/11/2026.
 | Q8 | Où publier et signer les images avant que GCP existe ? | À instruire par [OPS] et [SECU] avant la phase 2, arbitré par [ARCHI] |
 | Q9 | Un serveur Dependency-Track dans le MVP ? | Non : SBOM archivé par la CI, serveur plus tard |
 | Q10 | BENCH-006 reste-t-il utile, la CLI Python étant retenue ? | Oui, court, pour tracer le pourquoi dans un ADR |
-| Q11 | Accès au plugin pour la phase 6, le dépôt étant privé ? | Un accès en lecture le temps du test |
+| Q11 | Accès au plugin pour la phase 6, le dépôt étant privé ? | Sans objet : le dépôt est public depuis le 15/11/2026 |
 | Q12 | Une analyse des outils existants avant la GATE 1 ? | Oui, courte, par [BENCH] |
 
 Q7 resserre le brief, qui confiait le code métier à l'agent. Raison : ce code

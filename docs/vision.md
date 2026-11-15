@@ -76,5 +76,4 @@ PRD précise ce que couvrent les 15 minutes.
 Aucun objectif d'adoption ou d'usage n'est chiffré. Rien n'est encore mesuré,
 et un chiffre non mesuré ne s'écrit pas.
 
-CELIAN est publié sous licence Apache-2.0. Le dépôt reste privé pour
-l'instant.
+CELIAN est publié sous licence Apache-2.0, dans un dépôt public.
