@@ -74,6 +74,50 @@ paragraphe.
 | [BENCH] | Veille et benchmarks pondérés, mesures réelles |
 | [DOC] | Rédaction technique : README, guides, changelog |
 
+Chaque rôle sauf le DSI a son sous-agent dans `.claude/agents/<tag>.md`
+(`po`, `archi`, `data`, `dev`, `ops`, `secu`, `finops`, `qa`, `bench`, `doc`),
+avec les outils minimum de son domaine. Le DSI leur délègue les tâches de leur
+domaine.
+
+## Plugins du projet
+
+Déclarés dans `.claude/settings.json`, donc versionnés et actifs pour qui clone
+le dépôt :
+
+- marketplace `claude-code-workflows` (wshobson/agents) : `cloud-infrastructure`,
+  `kubernetes-operations`, `cicd-automation`, `observability-monitoring`,
+  `security-scanning`, `c4-architecture`, `git-pr-workflows` ;
+- marketplace `hashicorp` : `terraform`. Écrit pour Terraform, appliqué à
+  OpenTofu. Toute divergence rencontrée se signale.
+
+Deux plugins utilisateur sont désactivés dans ce projet. superpowers, parce que
+sa méthode de planification double celle de Spec Kit. ECC (décision de Lucas du
+15/11/2026), pour la même raison et pour son coût : environ 48 000 tokens
+chargés à chaque session, mesurés le 15/11/2026 (R-03). Ses règles de
+`~/.claude/rules/ecc/` ne dépendent pas du plugin et restent lues.
+
+Ces marketplaces ne sont pas encore figées. Claude Code accepte un SHA complet
+comme `ref` de marketplace à partir de la version 2.1.324
+(<https://code.claude.com/docs/en/plugins/marketplace-reference.md>) ; le poste
+tourne en 2.1.322, d'où l'échec de l'essai du 15/11/2026. Après la mise à jour
+de Claude Code, fixer `ref` sur `9c61ab243def98f72da12abd41cfcf5bcd91af9d`
+(wshobson) et `5e30fa5c867ba6777c37e4206babfd08049c396f` (HashiCorp), les
+commits relus le 15/11/2026 : aucun hook, aucun serveur MCP, un seul script
+lancé à la demande par un skill Helm. La mise à jour automatique est désactivée
+par défaut pour les marketplaces tierces
+(<https://code.claude.com/docs/en/discover-plugins.md>). Toute mise à jour
+volontaire passe par une relecture [SECU], parce qu'un skill reste une
+instruction suivie par un agent qui a le shell.
+
+## Garde-fous
+
+`.claude/settings.json` refuse aux agents `tofu apply`, `tofu destroy`, leurs
+équivalents Terraform, les créations et suppressions de ressources `gcloud`, et
+la lecture des fichiers `.env` et des états OpenTofu. Ces règles filtrent des
+motifs de commande : un détour (script, `bash -c`) reste possible. Elles ne
+remplacent pas le principe X, elles le rendent plus difficile à enfreindre par
+erreur.
+
 ## Méthode
 
 Six phases, chacune fermée par une gate que Lucas valide. On ne passe pas à la
