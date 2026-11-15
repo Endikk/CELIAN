@@ -14,7 +14,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-04 | Critère des 15 minutes hors d'atteinte | Moyenne | Fort | OPS | Ouvert |
 | R-05 | Dépense GCP non maîtrisée | Moyenne | Fort | FINOPS | Ouvert |
 | R-06 | Catalogue qui se périme | Forte | Moyen | ARCHI | Ouvert |
-| R-07 | Agents capables de lire et d'exfiltrer des secrets | Forte | Fort | SECU | Décision attendue |
+| R-07 | Agents capables de lire et d'exfiltrer des secrets | Forte | Fort | SECU | Mitigation en PR #6, jeton à changer |
 | R-08 | Checks contournables par le rôle admin | Certaine | Moyen | OPS | Corrigé dans la PR #2 |
 | R-09 | Outils trop jeunes | Moyenne | Faible | BENCH | Atténué |
 | R-10 | Artefacts AGPL copiés dans le générateur | Faible | Moyen | SECU | Ouvert |
@@ -165,8 +165,7 @@ README piégé, lu par un rôle qui a à la fois WebFetch et le shell (BENCH, DE
 OPS, SECU). Aujourd'hui fuirait le jeton `gh` ; en phase 2, les identifiants
 GCP.
 
-Mitigation proposée, décision de Lucas attendue parce qu'elle touche ses
-réglages de permissions :
+Mitigation proposée par [SECU] :
 
 - dans `.claude/settings.json` du projet, des règles `ask` sur `Bash(gh *)`,
   `Bash(git push *)`, `Bash(curl *)`, `Bash(docker *)` et `Bash(python3 *)` (une
@@ -176,6 +175,15 @@ réglages de permissions :
 - le sandbox avec une liste blanche réseau, seule barrière que la
   documentation reconnaît ;
 - au quotidien, un jeton `gh` à grain fin sans droits admin.
+
+Décision de Lucas du 15/11/2026 : la PR #6 met en place les règles ask et
+deny, `blockReadsOutsideWorkingDirectories` et la procédure de changement de
+jeton (`docs/securite/jeton-github.md`). Écarts avec la proposition : ask sur
+`docker run`, `exec` et `cp` plutôt que sur tout `docker`, pour ne pas bloquer
+les mesures de la phase 1 ; `git push` vers `origin` reste libre, seul un push
+vers une URL ou un nouveau remote demande confirmation. Le sandbox fera l'objet
+d'une PR à part, après un test avec Docker. Le risque reste ouvert tant que le
+jeton classique n'est pas révoqué.
 
 ### R-08. Checks contournables par le rôle admin
 

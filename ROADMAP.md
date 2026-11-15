@@ -41,13 +41,16 @@ jour à la fin de chaque session.
 
 - Lucas fusionne les PR dans l'ordre #2, #4, #3, #5. La phase 0 se ferme avec
   la dernière fusion.
-- Décisions de Lucas attendues dans `docs/risques.md` : passage du dépôt en
-  public avant la phase 2 (R-01, R-16), règles de permission et jeton `gh` sans
-  droits admin (R-07).
+- PR #6 (R-07), empilée sur #4 : à fusionner après #4, une fois rebasée.
+- Lucas remplace son jeton `gh` classique en suivant
+  `docs/securite/jeton-github.md`, puis le révoque (R-07).
+- Décision de Lucas attendue : passage du dépôt en public avant la phase 2
+  (R-01, R-16).
 - Actions de Lucas : installer l'app GitHub Renovate, installer Pixel Agents,
   mettre Claude Code en 2.1.324 ou plus pour pouvoir figer les marketplaces
   (R-02).
-- Plan court de la phase 1, soumis à validation avant tout benchmark.
+- Phase 1 : plan validé par Lucas le 15/11/2026. Elle démarre après les
+  fusions, dans une nouvelle session.
 
 ## Les six phases du MVP
 
