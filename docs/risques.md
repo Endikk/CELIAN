@@ -8,7 +8,7 @@ ferme quand sa mitigation est en place et vérifiée.
 
 | ID | Risque | Probabilité | Impact | Porteur | État |
 | --- | --- | --- | --- | --- | --- |
-| R-01 | Protection de `main` non appliquée | Certaine | Fort dès la phase 2 | OPS | Ruleset à appliquer par Lucas |
+| R-01 | Protection de `main` non appliquée | Faible | Fort dès la phase 2 | OPS | Fermé : ruleset actif |
 | R-02 | Plugins tiers et utilisateur non figés ni relus | Moyenne | Fort | SECU | Ouvert |
 | R-03 | Contexte d'agent surchargé, coût en tokens | Forte | Moyen | DSI, FINOPS | Atténué : ECC désactivé |
 | R-04 | Critère des 15 minutes hors d'atteinte | Moyenne | Fort | OPS | Ouvert |
@@ -54,6 +54,11 @@ Décision de Lucas du 15/11/2026 : le dépôt est public, c'est voulu. Reste à
 appliquer le ruleset avec `scripts/github/apply-settings.sh`, qui demande les
 droits admin et que Lucas lance lui-même. R-01 se ferme quand l'API montre le
 ruleset actif.
+
+Fermé le 15/11/2026 : Lucas a lancé le script, et l'API montre le ruleset
+`main` en `active`, avec les règles `deletion`, `non_fast_forward`,
+`required_linear_history`, `pull_request` et `required_status_checks` sur
+`main`.
 
 ### R-02. Plugins tiers et utilisateur non figés ni relus
 
