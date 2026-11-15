@@ -27,6 +27,7 @@
     }
   },
   "permissions": {
+    "blockReadsOutsideWorkingDirectories": true,
     "deny": [
       "Bash(tofu apply *)",
       "Bash(tofu * apply *)",
@@ -44,7 +45,37 @@
       "Read(./.env)",
       "Read(./.env.*)",
       "Read(**/*.tfstate)",
-      "Read(**/*.tfstate.*)"
+      "Read(**/*.tfstate.*)",
+      "Bash(gh auth token *)",
+      "Bash(gcloud auth print-access-token *)",
+      "Bash(gcloud auth print-identity-token *)",
+      "Bash(gcloud auth application-default print-access-token *)",
+      "Read(~/.config/gh/**)",
+      "Read(~/.config/gcloud/**)",
+      "Read(~/.ssh/**)",
+      "Read(~/.aws/**)",
+      "Read(~/.kube/**)",
+      "Read(~/.docker/config.json)",
+      "Read(~/.netrc)",
+      "Read(~/.git-credentials)"
+    ],
+    "ask": [
+      "Bash(gh auth *)",
+      "Bash(gh gist *)",
+      "Bash(security *)",
+      "Bash(curl *)",
+      "Bash(wget *)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "Bash(node *)",
+      "Bash(docker run *)",
+      "Bash(docker exec *)",
+      "Bash(docker cp *)",
+      "Bash(git remote add *)",
+      "Bash(git remote set-url *)",
+      "Bash(git push http*)",
+      "Bash(git push git@*)",
+      "Bash(git push ssh://*)"
     ]
   }
 }
