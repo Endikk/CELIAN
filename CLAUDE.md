@@ -11,7 +11,8 @@ garde ce qui sert à chaque session.
 L'utilisateur répond à un entretien guidé : cible, type de projet, contraintes.
 L'entretien produit une spec YAML abstraite, source de vérité. Des blueprints
 Copier testés génèrent le dépôt de façon déterministe. Un agent écrit ensuite
-seulement ce qui est propre au projet, le code métier et les ADR. Une validation
+seulement ce qui est propre au projet : les ADR et les textes du projet. Le code
+métier se limite à l'exemple du blueprint (Q7, 15/11/2026). Une validation
 automatique tourne avant la livraison, et renvoie l'agent corriger en cas
 d'échec. Le projet généré reçoit plus tard les correctifs du blueprint par
 `copier update`.

@@ -1,6 +1,7 @@
 # PRD du MVP de CELIAN
 
-Statut : brouillon soumis à la GATE 0. Rédigé par [PO] le 15/11/2026.
+Statut : brouillon soumis à la GATE 0. Rédigé par [PO] le 15/11/2026. Lucas a
+tranché Q1, Q2 et Q7 le même jour.
 
 Sources : brief v1.0 (sections 2 à 4, 6, 8, 9 et 12), constitution 1.0.0
 (branche `chore/speckit`) et `CLAUDE.md`, lus le 15/11/2026. La vision tient en
@@ -42,7 +43,7 @@ Spec projet YAML (source de vérité, versionnée, validée)
 Blueprint SaaS B2B (IaC, Kubernetes, CI, Git, docs)   déterministe
   |
   v
-Agent (code métier, ADR)                              IA
+Agent (ADR, textes du projet)                         IA
   |
   v
 Validation automatique                                si échec, retour à l'agent
@@ -378,6 +379,7 @@ pas. L'ordre de reprise vient du brief, section 9.
 | Autres CI | GitLab CI et Forgejo Actions : le projet généré vit sur GitHub | Plus tard (brief, section 6) |
 | Idées de la section 12 du brief | Auditeur de projets existants, alertes catalogue, migration de cible, estimation des coûts avant génération, pack conformité, badge OpenSSF Scorecard, site de documentation | Gardées dans `ROADMAP.md` |
 | Exploitation du projet | Ni supervision ni astreinte après la livraison | Non prévu |
+| Code métier écrit par l'agent | L'agent écrit les ADR et les textes propres au projet. Le code applicatif se limite à l'exemple du blueprint, et l'utilisateur écrit son métier (Q7) | À rouvrir après le MVP |
 
 ## 7. Critère d'acceptation global
 
@@ -389,7 +391,7 @@ Le critère du MVP (brief, section 4) :
 
 ### Ce que couvrent les 15 minutes
 
-Proposition du PO, à valider à la GATE 0 (Q1). Le chronomètre part au
+Décision de Lucas du 15/11/2026 (Q1). Le chronomètre part au
 lancement de la commande d'entrée, sur un PC où les prérequis du README et le
 plugin sont installés. Il s'arrête quand l'entretien est terminé, le dépôt
 validé avec un `task up` réussi, le plan OpenTofu GCP valide et la CI du
@@ -438,17 +440,26 @@ Aucune n'est validée à ce jour.
 - La différenciation n'a pas été confrontée aux outils existants : aucune
   analyse concurrentielle n'a été faite.
 
+### Questions tranchées
+
+| # | Question | Décision de Lucas, 15/11/2026 |
+| --- | --- | --- |
+| Q1 | Que couvrent les 15 minutes ? | Section 7 : plan GCP et CI dedans, apply mesuré à part, images comprises |
+| Q2 | Qui lance `tofu apply` dans le produit ? | L'utilisateur, jamais l'agent : principe X transposé aux utilisateurs |
+| Q7 | Quel code métier écrit l'agent ? | Les ADR et les textes du projet. Le code métier se limite à l'exemple du blueprint |
+
+Q7 resserre le brief, qui confiait le code métier à l'agent. Raison : ce code
+ne serait pas déterministe, la matrice de validation ne le couvrirait donc pas,
+et il agrandirait la surface de conflit de `copier update` (R-11).
+
 ### Questions ouvertes
 
 | # | Question | Proposition du PO | Qui tranche |
 | --- | --- | --- | --- |
-| Q1 | Que couvrent les 15 minutes ? | Section 7 : plan GCP et CI dedans, apply mesuré à part, images comprises | Lucas |
-| Q2 | Qui lance `tofu apply` dans le produit ? | L'utilisateur, jamais l'agent : principe X transposé aux utilisateurs | Lucas |
 | Q3 | Qui crée le dépôt GitHub distant et pousse ? | CELIAN, avec les droits de l'utilisateur et après confirmation | Lucas, [DEV] |
 | Q4 | Langue de la documentation générée ? | Question de l'entretien, français par défaut | Lucas |
 | Q5 | Systèmes d'exploitation du PC ? | macOS et Linux, Windows à évaluer par [OPS] | Lucas, [OPS] |
 | Q6 | Environnements déployés sur GCP ? | Un seul, structure Argo CD prête pour staging et prod | Lucas, [FINOPS] |
-| Q7 | Quel code métier écrit l'agent ? | Les ADR et les textes du projet ; le code métier se limite à l'exemple du blueprint | Lucas, [ARCHI] |
 | Q8 | Où publier et signer les images avant que GCP existe ? | À instruire par [OPS] et [SECU] avant la phase 2 | [ARCHI] |
 | Q9 | Un serveur Dependency-Track dans le MVP ? | Non : SBOM archivé par la CI, serveur plus tard | Lucas, [SECU] |
 | Q10 | BENCH-006 reste-t-il utile, la CLI Python étant retenue ? | Le garder court, pour tracer le pourquoi dans un ADR | Lucas |

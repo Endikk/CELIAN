@@ -10,7 +10,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | --- | --- | --- | --- | --- | --- |
 | R-01 | Protection de `main` non appliquée | Certaine | Fort dès la phase 2 | OPS | Décision attendue |
 | R-02 | Plugins tiers et utilisateur non figés ni relus | Moyenne | Fort | SECU | Ouvert |
-| R-03 | Contexte d'agent surchargé, coût en tokens | Forte | Moyen | DSI, FINOPS | Décision attendue |
+| R-03 | Contexte d'agent surchargé, coût en tokens | Forte | Moyen | DSI, FINOPS | Atténué : ECC désactivé |
 | R-04 | Critère des 15 minutes hors d'atteinte | Moyenne | Fort | OPS | Ouvert |
 | R-05 | Dépense GCP non maîtrisée | Moyenne | Fort | FINOPS | Ouvert |
 | R-06 | Catalogue qui se périme | Forte | Moyen | ARCHI | Ouvert |
@@ -94,8 +94,11 @@ Mitigation proposée : désactiver ECC dans ce projet, garder ses règles de
 `~/.claude/rules/ecc/` (elles ne dépendent pas du plugin). Mesurer une tâche de
 référence avant et après. Plafonner la boucle de la phase 5 à un nombre
 d'essais, puis rendre la main à l'humain. Si un agent tourne un jour en CI, lui
-donner une clé dédiée avec plafond de dépense. Décision de Lucas attendue sur
-ECC.
+donner une clé dédiée avec plafond de dépense.
+
+Décision de Lucas du 15/11/2026 : ECC est désactivé dans ce projet (PR #4). La
+mesure avant et après sur une tâche de référence et le plafond de la boucle de
+la phase 5 restent à faire.
 
 ### R-04. Critère des 15 minutes hors d'atteinte
 

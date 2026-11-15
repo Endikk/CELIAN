@@ -27,9 +27,10 @@ CELIAN prend la forme d'un plugin Claude Code qui pilote une CLI Python.
 L'utilisateur répond à un entretien guidé sur sa cible, son type de projet et
 ses contraintes. Ses réponses deviennent une spec YAML abstraite, source de
 vérité du projet. Des blueprints testés génèrent le dépôt de façon
-déterministe, puis un agent écrit ce qui est propre au projet : le code métier
-et les ADR. Une validation automatique tourne avant la livraison et renvoie
-l'agent corriger quand elle échoue.
+déterministe, puis un agent écrit ce qui est propre au projet : les ADR et les
+textes du projet. Le code applicatif se limite à l'exemple livré par le
+blueprint, l'utilisateur écrit son métier. Une validation automatique tourne
+avant la livraison et renvoie l'agent corriger quand elle échoue.
 
 Le dépôt obtenu démarre en une commande sur un PC et se déploie sur la cible
 choisie. Il continue ensuite de recevoir les correctifs de son blueprint.

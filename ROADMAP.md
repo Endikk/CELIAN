@@ -23,16 +23,25 @@ jour à la fin de chaque session.
 - PR #3 : Spec Kit et constitution. Fait partie de la GATE 0.
 - PR #4 : sous-agents par rôle, plugins du projet, garde-fous cloud. CI verte,
   à fusionner.
-- PR de cadrage : vision, PRD, cette feuille de route, registre des risques
+- PR #5 : vision, PRD, cette feuille de route, registre des risques
   relu par [SECU] et [FINOPS]. Fait partie de la GATE 0.
+
+### Décisions de Lucas du 15/11/2026
+
+- Q1 : les 15 minutes couvrent l'entretien, la génération, le démarrage local,
+  le plan GCP et la CI du premier push. L'apply se mesure à part.
+- Q2 : l'utilisateur lance l'apply, jamais l'agent.
+- Q7 : l'agent écrit les ADR et les textes du projet. Le code métier se limite
+  à l'exemple du blueprint. Le brief est resserré sur ce point.
+- ECC est désactivé dans ce projet (R-03).
 
 ### Prochain
 
-- GATE 0 : Lucas valide la vision, le PRD (questions Q1 à Q12) et la
-  constitution.
+- GATE 0 : Lucas valide la vision, la constitution et le reste du PRD
+  (questions Q3 à Q6 et Q8 à Q12).
 - Décisions de Lucas attendues dans `docs/risques.md` : passage du dépôt en
-  public avant la phase 2 (R-01, R-16), ECC dans ce projet (R-03), règles de
-  permission et jeton `gh` sans droits admin (R-07).
+  public avant la phase 2 (R-01, R-16), règles de permission et jeton `gh` sans
+  droits admin (R-07).
 - Actions de Lucas : installer l'app GitHub Renovate, installer Pixel Agents,
   mettre Claude Code en 2.1.324 ou plus pour pouvoir figer les marketplaces
   (R-02).
