@@ -98,6 +98,12 @@ section 8 du brief), puis par un ADR (`docs/adr/ADR-XXX-sujet.md`).
 - Après un clonage : `pre-commit install`. Les mêmes hooks tournent en CI
   (`.github/workflows/ci.yml`), plus un scan gitleaks de tout l'historique.
 - Versions des hooks et des actions figées par SHA, avec le tag en commentaire.
+- release-please tient les versions et `CHANGELOG.md`. Renovate propose les
+  mises à jour, une fois la version publiée depuis au moins 7 jours.
+- Réglages GitHub en code : `scripts/github/apply-settings.sh` (fusion en
+  squash seule, permissions des workflows) et `.github/rulesets/main.json`. Le
+  dépôt est privé sur un compte GitHub Free, donc le ruleset ne s'applique
+  qu'au passage en public. En attendant, les garde-fous sont pre-commit et la CI.
 - Licence du générateur : Apache-2.0.
 
 ## Arborescence

@@ -36,6 +36,11 @@ repos:
     hooks:
       - id: actionlint
 
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: 745eface02aef23e168a8afb6b5737818efbea95  # frozen: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
   # Conventional Commits. Config: .commitlintrc.yaml
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
     rev: 1f1ac45c93d1c2ce36b71330252c489a5f4f2724  # frozen: v9.27.0
@@ -45,6 +50,8 @@ repos:
         # Upstream reads .git/COMMIT_EDITMSG only. Passing the file lets CI
         # check a PR title with --commit-msg-filename.
         pass_filenames: true
+        # Explicit language lets Renovate update additional_dependencies.
+        language: node
         additional_dependencies: ["@commitlint/config-conventional@21.2.4"]
 
   - repo: local
