@@ -1,0 +1,77 @@
+# Vision de CELIAN
+
+Sources : brief v1.0 (sections 2, 3, 4 et 12), constitution 1.0.0 et
+`CLAUDE.md`, lus le 15/11/2026. Le détail du MVP est dans le
+[PRD](prd-mvp.md).
+
+## Le problème
+
+Démarrer un projet professionnel sur une architecture propre prend des
+semaines. Il faut choisir les technos, écrire l'infrastructure as code, monter
+Kubernetes et la CI/CD, traiter la sécurité, poser des conventions Git et
+documenter. Chaque équipe refait ce socle de son côté, souvent à moitié faute
+de temps. Ensuite il dérive. Personne n'est chargé de le tenir à jour, et une
+brique peut changer de licence ou être archivée sans que l'équipe s'en
+aperçoive.
+
+## Pour qui
+
+Le dev ou le tech lead d'une PME ou d'une ESN qui lance un nouveau projet et
+veut un socle de niveau professionnel sans y passer des semaines. Il connaît
+son métier de développeur. Il n'a pas forcément de platform engineer à côté de
+lui pour l'infrastructure et la sécurité.
+
+## Ce que fait CELIAN
+
+CELIAN prend la forme d'un plugin Claude Code qui pilote une CLI Python.
+L'utilisateur répond à un entretien guidé sur sa cible, son type de projet et
+ses contraintes. Ses réponses deviennent une spec YAML abstraite, source de
+vérité du projet. Des blueprints testés génèrent le dépôt de façon
+déterministe, puis un agent écrit ce qui est propre au projet : le code métier
+et les ADR. Une validation automatique tourne avant la livraison et renvoie
+l'agent corriger quand elle échoue.
+
+Le dépôt obtenu démarre en une commande sur un PC et se déploie sur la cible
+choisie. Il continue ensuite de recevoir les correctifs de son blueprint.
+
+## Ce qui le distingue
+
+1. L'IA assemble des briques déjà testées et n'écrit que la partie propre au
+   projet. L'infrastructure vient des blueprints, couverts par une matrice de
+   validation.
+2. Le jour 2 est prévu : un projet généré se met à jour quand son blueprint
+   évolue, par `copier update` si le benchmark BENCH-002 confirme Copier.
+3. Parité locale : ce qui tourne sur la cible tourne aussi sur un PC, avec des
+   équivalents gratuits et open source.
+4. Le catalogue de technos est daté et vérifié. Chaque brique porte sa licence,
+   sa gouvernance, son statut et la date de sa dernière vérification.
+5. Les choix structurants passent par un benchmark réel, avec des mesures quand
+   elles ont un sens, et chaque décision est tracée dans un ADR.
+
+## Ce que CELIAN ne fera pas
+
+Le MVP se limite à un blueprint, SaaS B2B (.NET, React, Postgres, cache), et à
+deux cibles : un PC sous k3d et GCP. AWS, Azure, les serveurs on-prem et le
+cloud souverain attendront la fin du MVP, tout comme les blueprints data, IoT
+et mobile. Pendant le MVP, CELIAN n'aura ni interface web, ni application
+autonome, ni version hébergée, ni agent comparateur intégré à l'entretien.
+
+Certaines limites valent au-delà du MVP. CELIAN ne crée jamais de ressource
+cloud payante sans accord explicite, et ne met jamais de secret dans un dépôt.
+Il ne propose aucune combinaison de blueprint et de cible que sa matrice de
+validation ne couvre pas. Une fois le dépôt livré, il n'exploite pas le projet
+en production.
+
+## Le succès du MVP
+
+Le critère vient du brief. Une personne qui ne connaît pas le projet lance la
+commande, répond à une dizaine de questions, et obtient en moins de 15 minutes
+un dépôt qui démarre sur son PC et se déploie sur GCP, avec une CI qui passe.
+Il se teste en phase 6, chronomètre en main, sans aide pendant la session. Le
+PRD précise ce que couvrent les 15 minutes.
+
+Aucun objectif d'adoption ou d'usage n'est chiffré. Rien n'est encore mesuré,
+et un chiffre non mesuré ne s'écrit pas.
+
+CELIAN est publié sous licence Apache-2.0. Le dépôt reste privé pour
+l'instant.
