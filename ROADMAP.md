@@ -21,7 +21,8 @@ jour à la fin de chaque session.
 - Garde-fous contre la fuite d'identifiants et procédure de changement du
   jeton `gh` (PR #6, R-07).
 - Réglages GitHub appliqués : fusion en squash seule, titre de PR comme
-  commit, suppression des branches fusionnées.
+  commit, suppression des branches fusionnées. Ruleset de `main` actif : PR et
+  checks obligatoires, aucun contournement (R-01 fermé).
 
 ### Décisions de Lucas du 15/11/2026
 
@@ -38,8 +39,6 @@ jour à la fin de chaque session.
 
 ### Prochain
 
-- Lucas lance `scripts/github/apply-settings.sh` pour appliquer le ruleset de
-  `main`. Le DSI vérifie ensuite par l'API qu'il est actif (R-01).
 - Lucas remplace son jeton `gh` classique en suivant
   `docs/securite/jeton-github.md`, puis le révoque (R-07).
 - Actions de Lucas : installer l'app GitHub Renovate, installer Pixel Agents,
