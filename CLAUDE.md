@@ -93,6 +93,14 @@ le dépôt :
 Le plugin superpowers est désactivé dans ce projet : sa méthode de
 planification double celle de Spec Kit.
 
+Ces marketplaces ne peuvent pas être figées sur un commit : Claude Code accepte
+une branche ou un tag, pas un SHA (essai du 15/11/2026 : `Remote branch <sha>
+not found`), et wshobson/agents ne publie aucun tag. Leur contenu a été relu le
+15/11/2026 aux commits `9c61ab2` (wshobson) et `5e30fa5` (HashiCorp) : aucun
+hook, aucun serveur MCP, un seul script lancé à la demande par un skill Helm.
+La mise à jour automatique est désactivée par défaut pour les marketplaces
+tierces. Toute mise à jour volontaire passe par une relecture [SECU].
+
 ## Garde-fous
 
 `.claude/settings.json` refuse aux agents `tofu apply`, `tofu destroy`, leurs
