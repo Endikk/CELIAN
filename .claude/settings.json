@@ -9,7 +9,8 @@
     "c4-architecture@claude-code-workflows": true,
     "git-pr-workflows@claude-code-workflows": true,
     "terraform@hashicorp": true,
-    "superpowers@claude-plugins-official": false
+    "superpowers@claude-plugins-official": false,
+    "ecc@ecc": false
   },
   "extraKnownMarketplaces": {
     "claude-code-workflows": {

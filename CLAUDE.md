@@ -90,8 +90,11 @@ le dépôt :
 - marketplace `hashicorp` : `terraform`. Écrit pour Terraform, appliqué à
   OpenTofu. Toute divergence rencontrée se signale.
 
-Le plugin superpowers est désactivé dans ce projet : sa méthode de
-planification double celle de Spec Kit.
+Deux plugins utilisateur sont désactivés dans ce projet. superpowers, parce que
+sa méthode de planification double celle de Spec Kit. ECC (décision de Lucas du
+15/11/2026), pour la même raison et pour son coût : environ 48 000 tokens
+chargés à chaque session, mesurés le 15/11/2026 (R-03). Ses règles de
+`~/.claude/rules/ecc/` ne dépendent pas du plugin et restent lues.
 
 Ces marketplaces ne sont pas encore figées. Claude Code accepte un SHA complet
 comme `ref` de marketplace à partir de la version 2.1.324
