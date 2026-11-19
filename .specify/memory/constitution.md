@@ -107,7 +107,9 @@ Pourquoi : une erreur d'IaC se paie en euros, et elle ne se rembourse pas.
 ## Périmètre du MVP
 
 Le MVP comprend un seul blueprint (SaaS B2B : .NET, React, Postgres, cache) et
-deux cibles (PC sous k3d, GCP). Il couvre l'entretien guidé, la génération
+deux cibles : un PC, sous un cluster Kubernetes local, et GCP. L'outil du
+cluster local se choisit par benchmark et ADR, comme tout choix structurant :
+kind depuis l'ADR-004. Il couvre l'entretien guidé, la génération
 depuis la spec, la validation automatique et des conventions Git complètes dans
 le projet généré. Le produit prend la forme d'un plugin Claude Code qui pilote
 une CLI Python.
@@ -154,5 +156,6 @@ sur les règles.
 Chaque revue de PR vérifie la conformité aux principes. Une dérogation se
 justifie dans un ADR, avec sa durée et la condition qui la lèvera.
 
-**Version** : 1.0.0 | **Ratifiée** : 2026-11-15, par Lucas à la GATE 0 |
-**Dernier amendement** : 2026-11-15
+**Version** : 1.1.0 | **Ratifiée** : 2026-11-15, par Lucas à la GATE 0 |
+**Dernier amendement** : 2026-11-19, cluster local retiré du texte au profit
+de l'ADR-004 (kind, retenu par Lucas)

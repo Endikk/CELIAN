@@ -61,7 +61,7 @@ vérifiée et datée en phase 1 (principe VIII).
 | --- | --- | --- |
 | Format de la spec | YAML validé par un JSON Schema rangé dans `schema/` | BENCH-001 (YAML et JSON Schema, CUE, Pkl, Score) |
 | Moteur de templates | Copier | BENCH-002 (Copier, Cookiecutter, Yeoman) |
-| Cluster local | k3d | BENCH-003 (k3d, kind, minikube) |
+| Cluster local | k3d au départ ; kind retenu par Lucas le 2026-11-19 | BENCH-003 (k3d, kind, minikube), ADR-004 |
 | Gateway | Envoy Gateway | BENCH-004 (Envoy Gateway, Cilium, Traefik) |
 | Orchestration dev locale | Aspire | BENCH-005 (Aspire, Tilt, Docker Compose) |
 | Langage de la CLI | Python, retenu dans la forme du produit | BENCH-006 (Python, TypeScript) |
