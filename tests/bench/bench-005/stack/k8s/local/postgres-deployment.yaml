@@ -1,0 +1,32 @@
+# BENCH-005: local target layer (k8s/local). On GKE, Postgres and the cache
+# are managed services (principle III) and these manifests are not applied.
+# The password comes from the Secret pg-auth, created by `task up` with a
+# random value; nothing secret is versioned (principle IX).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  labels: {app: postgres}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: postgres}
+  template:
+    metadata:
+      labels: {app: postgres}
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:18.7-alpine@sha256:ff64c9e3bdf8e2120107d3559de8db314e8305f7e38c5105903c6295876738ff
+          ports: [{containerPort: 5432}]
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: pg-auth, key: password}
+          readinessProbe:
+            exec: {command: [pg_isready, -U, postgres]}
+            periodSeconds: 5
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql}
+      volumes:
+        - {name: data, emptyDir: {}}

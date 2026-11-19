@@ -37,6 +37,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-27 | Modules OpenTofu tirés sans contrôle d'intégrité | Faible | Fort | SECU, OPS | Ouvert |
 | R-28 | Secrets locaux en clair dans etcd | Moyenne | Faible, fort si un secret réel y entre | SECU, DEV | Ouvert |
 | R-29 | Synchronisation des secrets de GKE lue, jamais exécutée | Moyenne | Fort | OPS, SECU | Ouvert |
+| R-30 | Boucle locale maison portée par le Taskfile | Moyenne | Moyen | DEV, SECU | Ouvert |
 
 ## Détail
 
@@ -152,15 +153,29 @@ avec Envoy Gateway avant même les images de la stack, qui ne peuvent
 qu'ajouter. Le DSI a passé la probabilité à forte le 2026-11-19 ; décision à
 confirmer par Lucas à la GATE 1.
 
-Reste à mesurer en BENCH-005 : les images et la compilation de la stack, et la
-création du cluster sur un runner GitHub amd64.
+BENCH-005 a mesuré la stack d'essai le 2026-11-19, à chaud seulement : le
+temps à froid n'a pas pu l'être. [FINOPS] a additionné le premier `task up`
+complet en amd64 : plate-forme de base 505,8 Mo, secrets créés par `task up`
+0 Mo (BENCH-007), outil GitOps sur le PC 258,1 Mo (Flux réduit à ses quatre
+contrôleurs, BENCH-009 en relecture), stack 632,0 Mo, soit 1 395,9 Mo. À
+10 Mbit/s utiles, une hypothèse, le téléchargement seul prend 1 117 s, soit
+124 % du budget de 900 s, et encore 101 % sans GitOps sur le PC. Il faut au
+moins 12,4 Mbit/s pour le seul téléchargement, sans compter l'entretien, la
+génération, la compilation ni la CI. Le critère d'acceptation ne tient donc pas
+à 10 Mbit/s : Lucas tranche à la GATE 1 entre un débit visé écrit dans le
+critère et une réduction du volume.
 
-Mitigation : fixer après BENCH-005 un budget de temps par étape d'ENF-01, avec
-un plafond de volume pour la plate-forme de base (cluster kind, CRD Gateway API
-et gateway), périmètre à écrire dans le gabarit de benchmark après la GATE 1 ;
-précharger les images tirées à chaque création, sous le condensat du registre
-(R-25) ; préconstruire les images de la stack ; profil lite par défaut ; un
-essai de phase 6 sur une ligne lente.
+Reste à mesurer : le temps à froid, la compilation de la vraie stack (front
+Vite compris) sur le golden repo, et la création du cluster sur un runner
+GitHub amd64.
+
+Mitigation : fixer un budget de temps et de volume par étape d'ENF-01, avec un
+plafond pour la plate-forme de base (cluster kind, CRD Gateway API et gateway),
+périmètre à écrire dans le gabarit de benchmark après la GATE 1 ; écrire le
+débit visé dans le critère d'acceptation ; garder le cluster entre deux
+`task up` (R-25) ; précharger les images tirées à chaque création, sous le
+condensat du registre ; préconstruire les images de la stack ; profil lite par
+défaut, sans outil GitOps sur le PC ; un essai de phase 6 sur une ligne lente.
 
 ### R-05. Dépense GCP non maîtrisée
 
@@ -486,6 +501,13 @@ minikube est retenu, `task up` met `$MINIKUBE_HOME` en 700 : minikube 1.39.0
 y recopie à chaque démarrage la clé client du démon Docker du nœud en mode
 0777.
 
+Complément de BENCH-005, relu par [SECU] le 2026-11-20 : la couche locale
+impose un mot de passe à Valkey comme à Postgres, transmis par un Secret et
+jamais en argument de commande. Aucun objet `Secret` ni `secretGenerator` sous
+`k8s/` : les Secrets locaux naissent par `kubectl create -f -` avant
+`kubectl apply -k`. Les valeurs locales ne passent jamais par un chart Helm,
+dont les Secrets de release les garderaient, jusqu'à dix révisions par défaut.
+
 ### R-21. Application Design Center couvre le même besoin sur GCP
 
 L'analyse des outils existants
@@ -610,6 +632,19 @@ documentés comme option. Deux reculs sont refusés : revenir à des référence
 par tag, contraire à la condition 3 de l'ADR-004, et `imagePullPolicy: Never`,
 qui fait échouer le démarrage d'une image par condensat absente sous ce nom.
 
+Mesuré par BENCH-005 le 2026-11-19, relu par [SECU] le 2026-11-20 : avec Tilt,
+sans outil ou avec Aspire, chaque `task up` crée un nœud kind neuf, dont le
+containerd ne voit pas le cache Docker du poste. Postgres, Valkey et toute
+image que la stack ne construit pas sont donc retéléchargés à chaque
+lancement, depuis Docker Hub, qu'ils soient figés par condensat ou non. Le
+même jour, ces tirages sont restés bloqués 15 minutes et `task up` a échoué.
+Aspire 17.0.0 y ajoute son tableau de bord, tiré par tag depuis MCR. La cause
+vérifiée pour BENCH-004 ne fait que s'y ajouter : précharger ces images par
+`kind load docker-image` ne suffirait pas. La première piste à évaluer devient
+donc de garder le cluster entre deux `task up`. US-005 demande une commande qui
+« arrête et supprime l'environnement » : supprimer l'application en gardant le
+cluster peut s'y lire, question pour [PO] et [ARCHI].
+
 ### R-26. Moteur de conteneurs du poste sous licence payante
 
 Les trois outils de cluster local mesurés par BENCH-003 tournent sur un moteur
@@ -689,3 +724,25 @@ au compte de service Kubernetes, jamais au niveau du projet ; intervalle de
 relecture d'au moins 15 minutes pour 3 secrets ; repli sur ESO, qui ne change
 que la couche de cible, avec `scopedNamespace` et `scopedRBAC` essayés avant
 usage.
+
+### R-30. Boucle locale maison portée par le Taskfile
+
+Si l'ADR-006 retient l'option sans outil de boucle (BENCH-005), `task up` et
+`task reload` portent seuls la construction des images, leur chargement dans
+kind, la création des Secrets locaux et l'application des manifests. Ce code
+est écrit par CELIAN et copié dans chaque projet généré. Il peut dériver : un
+Secret appliqué par `kubectl apply` ou par `secretGenerator` de kustomize, qui
+recopie la valeur dans l'annotation `last-applied-configuration` ; un
+`task reload` qui s'écarte de `task up` ; un outil de boucle installé par le
+développeur sans relecture. La boucle n'a pas de rechargement à chaud : le
+front se recharge en 5,1 s au lieu de 0,6 s avec Tilt, et plus lentement avec
+un vrai build Vite. La gouvernance de Task, qui porte cette boucle, n'a encore
+été notée par aucun benchmark.
+
+Mitigation : `task up` et `task reload` couverts par la matrice de validation
+(principe I) ; Secrets créés par `kubectl create -f -` alimenté par un tube,
+avant `kubectl apply -k` ; un test ou une politique conftest refuse tout objet
+`Secret` et tout `secretGenerator` sous `k8s/` ; tâches qui manipulent un
+secret silencieuses (R-20) ; licence et gouvernance de Task relevées au
+catalogue ; procédure documentée pour ajouter un outil de boucle facultatif
+au-dessus de `k8s/`, après relecture [SECU].
