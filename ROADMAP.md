@@ -1,6 +1,6 @@
 # Feuille de route
 
-Mise à jour le 19/11/2026, pendant la session 2. Le DSI tient ce fichier à
+Mise à jour le 19/11/2026, pendant la session 2, après l'étape 3. Le DSI tient ce fichier à
 jour à la fin de chaque session.
 
 ## Phase en cours : 1, benchmarks et décisions
@@ -13,7 +13,11 @@ jour à la fin de chaque session.
   de `main` actif (PR #1 à #8).
 - Étape 1 : gabarits de benchmark et d'ADR (PR #9).
 - Étape 2 : analyse de douze outils existants (Q12). Aucun ne couvre entièrement
-  plus de deux piliers ; Copier couvre la génération et le jour 2.
+  plus de deux piliers ; Copier couvre la génération et le jour 2 (PR #10).
+- Étape 3 : BENCH-006, BENCH-001 et BENCH-002, relus par [SECU] et [FINOPS],
+  puis ADR-001 (spec en YAML et JSON Schema), ADR-002 (Copier, sous
+  conditions) et ADR-003 (CLI en Python), au statut proposé. Risques R-23 et
+  R-24 ouverts.
 
 ### Décisions de Lucas
 
@@ -22,13 +26,18 @@ jour à la fin de chaque session.
 - 19/11/2026 : Score entre dans les options de BENCH-001. BENCH-008 est créé
   pour les modules OpenTofu de GCP. Deux risques sont ajoutés (R-21, R-22). La
   section « Ce qui le distingue » de la vision parle désormais d'assemblage.
+  Copier est accepté comme seule option de BENCH-002, avec le prérequis du jour
+  2 (US-011).
 
 ### Prochain
 
-- Étape 3 : BENCH-006 en version courte, puis BENCH-001 et BENCH-002.
-- Étapes suivantes : BENCH-003 avec mesures, puis 004, 005, 007 sur le cluster
-  retenu, BENCH-008, enfin `catalog/` avec son check CI. GATE 1 : Lucas valide
-  les ADR.
+- Lucas tranche les questions de l'ADR-002 : passage de la mise à jour par la
+  CLI de CELIAN plutôt que par `copier update` à la main (US-011, avec [PO]),
+  montées de version de sécurité de Copier hors délai de 7 jours, seuils de
+  bascule vers le repli de R-22.
+- Étape 4 : BENCH-003 avec mesures (k3d, kind, minikube à installer), puis
+  004, 005, 007 sur le cluster retenu, BENCH-008, enfin `catalog/` avec son
+  check CI. GATE 1 : Lucas valide les ADR.
 - Lucas termine le changement de jeton `gh` et révoque l'ancien jeton classique
   (R-07). À reprendre : la première tentative a échoué, le presse-papiers ne
   contenait pas le jeton.
