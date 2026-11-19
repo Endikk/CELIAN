@@ -4,7 +4,7 @@
 | --- | --- |
 | Identifiant | BENCH-006 |
 | Sujet | Langage de la CLI qui valide la spec, appelle le moteur de templates et lance les vérifications |
-| Statut | brouillon |
+| Statut | relu |
 | Ouvert le | 2026-11-19 |
 | Mis à jour le | 2026-11-19 |
 | Auteur | [BENCH] |
@@ -12,7 +12,7 @@
 | Périmètre | Générateur seul : la CLI sur le PC de l'utilisateur et dans la CI du générateur. Les projets générés ne dépendent pas de CELIAN (ENF-07) |
 | Choix du PRD | « Langage de la CLI : Python, retenu dans la forme du produit », tranché par BENCH-006, en version courte (Q10) |
 | ADR lié | À écrire par [ARCHI], numéro à attribuer |
-| Verdict proposé | Python, 94/100, contre 77/100 pour TypeScript |
+| Verdict proposé | Python, 94/100, contre 76/100 pour TypeScript |
 
 ## 1. Contexte
 
@@ -50,7 +50,7 @@
 
 | Option | Licence open source | Ni archivé ni en maintenance | Release de moins de 12 mois | Vérifié le | Résultat |
 | --- | --- | --- | --- | --- | --- |
-| Python | Oui : licence de Python (PSF License version 2 et licences historiques), approuvée par l'OSI sous l'identifiant Python-2.0 [S3, S4, S5] | Oui : 3.15 et 3.14 en phase de correctifs, support jusqu'en 2031-10 et 2030-10 [S1, S2] | Oui, 3.15.2 le 2026-10-25 [S1] | 2026-11-19 | Retenue |
+| Python | Oui : licence de Python (PSF License version 2, BeOpen, CNRI, CWI), approuvée par l'OSI sous Python-2.0, catégorie Superseded ; la PSF License seule (SPDX PSF-2.0) n'est pas sur la liste de l'OSI [S3, S4, S34] | Oui : 3.15 et 3.14 en phase de correctifs, support jusqu'en 2031-10 et 2030-10 [S1, S2] | Oui, 3.15.2 le 2026-10-25 [S1] | 2026-11-19 | Retenue |
 | TypeScript sur Node.js | Oui : TypeScript sous Apache-2.0, Node.js sous MIT, deux licences approuvées par l'OSI [S4, S9, S14] | Oui : dépôts non archivés, TypeScript 7.1 bêta le 2026-10-20, Node.js 26 en LTS [S9, S10, S16] | Oui, TypeScript 7.0.2 le 2026-08-20, Node.js 26.13.1 le 2026-11-11 [S10, S17] | 2026-11-19 | Retenue |
 
 [BENCH] Options éliminées : aucune.
@@ -112,7 +112,7 @@ l'autre.
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Python | 4/5 | 8 | Une équipe de réponse dédiée (PSRT), la PSF autorité de numérotation CVE, des avis publiés sur une liste publique et au format OSV. Une seule chaîne de paquets, PyPI. Réserve : aucun délai de réponse publié. | [S7] |
+| Python | 4/5 | 8 | Une équipe de réponse dédiée (PSRT), la PSF autorité de numérotation CVE, des avis publiés sur une liste publique et au format OSV. Une seule chaîne de paquets, PyPI. Réserves : aucun délai de réponse publié ; l'installation depuis PyPI exécute aussi du code quand elle construit une distribution source (« build backends may run arbitrary Python code »). Parade à évaluer par [DEV] : `--no-build`, si toutes les dépendances publient des roues. | [S7, S36] |
 | TypeScript sur Node.js | 3/5 | 6 | Réponse sous 24 h promise par le MSRC pour TypeScript, accusé de réception sous 5 jours pour Node.js. Mais l'option cumule deux runtimes et deux registres, npm pour la CLI et PyPI pour Copier. `npm install` lance les scripts d'installation des paquets, le vecteur du ver Shai-Hulud en septembre 2025. Un registre compromis menace aussi PyPI : l'écart vient du cumul. | [S13, S18, S21, S29, S30] |
 
 ### 5.6 Empreinte sur PC (RAM, CPU, démarrage), poids 10
@@ -144,12 +144,12 @@ l'autre.
 
 ### 5.9 Coût (managé ou opérationnel), poids 5
 
-[BENCH] Ce critère ne départage pas. Le temps de maintenance de deux chaînes de dépendances, propre à TypeScript, est déjà compté en sécurité et en empreinte, et ne l'est pas une deuxième fois ici.
+[BENCH] Ce critère compte le temps des mainteneurs de CELIAN, qu'aucun autre ne compte : la sécurité mesure la surface des registres, l'empreinte ce que l'utilisateur installe. Note de TypeScript corrigée de 5 à 4 après la relecture [FINOPS] (section 10).
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Python | 5/5 | 5 | Licence permissive, aucune redevance. | [S5] |
-| TypeScript sur Node.js | 5/5 | 5 | Licences permissives, aucune redevance. | [S4] |
+| Python | 5/5 | 5 | Licence sans redevance. Une seule chaîne d'outils en CI, un fichier de verrouillage, un flux Renovate. L'image Ubuntu 24.04 des runners GitHub (20261111.370.1) a Python 3.15.2 en cache et pipx 1.16.7 installé. | [S5, S35] |
+| TypeScript sur Node.js | 4/5 | 4 | Licences sans redevance, mais deux chaînes d'outils en CI, deux fichiers de verrouillage, deux flux Renovate et deux runtimes à suivre. La même image n'a pas Node.js 26, seulement 22.23.4 et 24.22.2. | [S4, S35] |
 
 ## 6. Grille pondérée
 
@@ -164,22 +164,22 @@ l'autre.
 | Empreinte sur PC (RAM, CPU, démarrage) | 10 | 4/5, 8 pts | 2/5, 4 pts |
 | Portabilité multi-cloud | 10 | 5/5, 10 pts | 5/5, 10 pts |
 | Expérience dev et documentation | 10 | 4/5, 8 pts | 3/5, 6 pts |
-| Coût (managé ou opérationnel) | 5 | 5/5, 5 pts | 5/5, 5 pts |
-| Total | 100 | 94 / 100 | 77 / 100 |
+| Coût (managé ou opérationnel) | 5 | 5/5, 5 pts | 4/5, 4 pts |
+| Total | 100 | 94 / 100 | 76 / 100 |
 
 ## 7. Verdict proposé
 
-[BENCH] Python, avec 94/100, devance TypeScript sur Node.js, à 77/100, de 17 points.
+[BENCH] Python, avec 94/100, devance TypeScript sur Node.js, à 76/100, de 18 points.
 
-[BENCH] Pourquoi. Copier est une bibliothèque Python [S21, S22]. Choisir TypeScript ajoute Node.js sans retirer Python : deux runtimes en prérequis pour US-001, deux registres de paquets à surveiller, et Copier appelé par sa commande au lieu de son API (sections 5.5, 5.6 et 5.8). La gouvernance creuse l'écart : une fondation et un comité élu, à employeurs plafonnés, pour Python [S3, S6], un compilateur tenu par Microsoft seule pour TypeScript [S9, S12]. Quatre critères donnent la même note aux deux options.
+[BENCH] Pourquoi. Copier est une bibliothèque Python [S21, S22]. Choisir TypeScript ajoute Node.js sans retirer Python : deux runtimes en prérequis pour US-001, deux registres de paquets à surveiller, deux chaînes d'outils à maintenir, et Copier appelé par sa commande au lieu de son API (sections 5.5, 5.6, 5.8 et 5.9). La gouvernance creuse l'écart : une fondation et un comité élu, à employeurs plafonnés, pour Python [S3, S6], un compilateur tenu par Microsoft seule pour TypeScript [S9, S12]. Trois critères donnent la même note aux deux options.
 
-[BENCH] Sensibilité. Aucun cran isolé ne renverse le classement : un cran vaut au plus 3 points, il en faudrait au moins six. Le verdict repose en revanche sur une hypothèse, celle d'un moteur de templates écrit en Python. Si BENCH-002 retenait Yeoman, qui s'installe par npm [S32], les notes d'empreinte, de sécurité et d'expérience dev s'échangeraient entre les deux options. Calcul fait sur cette hypothèse : Python 86, TypeScript 85, et seule la gouvernance les départagerait. Dans ce cas, BENCH-006 se rouvre.
+[BENCH] Sensibilité. Aucun cran isolé ne renverse le classement : un cran vaut au plus 3 points, six crans ne feraient qu'égaliser, il en faudrait sept. Le verdict repose en revanche sur une hypothèse, celle d'un moteur de templates écrit en Python. Si BENCH-002 retenait Yeoman, qui s'installe par npm [S32], les notes d'empreinte, de sécurité, d'expérience dev et de coût s'échangeraient entre les deux options. Calcul fait sur cette hypothèse : égalité à 85, l'avance de Python en gouvernance et en maturité compensant tout juste ses pertes. Dans ce cas, BENCH-006 se rouvre.
 
-[BENCH] Gouvernance du canal d'installation. Le langage est porté par une fondation, l'écart au principe V ne se pose donc pas pour lui. Il se pose pour uv, le chemin le plus court vers la CLI : un éditeur unique, Astral, qui a annoncé le 2026-03-19 rejoindre OpenAI et continuer à soutenir ses outils open source [S26, S27]. Parade proposée : publier la CLI comme un paquet Python standard, installable aussi par pipx, dont le dépôt appartient à l'organisation PyPA [S28], et ne jamais faire d'uv une dépendance de la CLI elle-même.
+[BENCH] Gouvernance du canal d'installation. Le langage est porté par une fondation, l'écart au principe V ne se pose donc pas pour lui. Il se pose pour uv, le chemin le plus court vers la CLI : un éditeur unique, Astral, qui a annoncé le 2026-03-19 rejoindre OpenAI et continuer à soutenir ses outils open source [S26, S27]. Avec uv, l'interpréteur vient aussi d'Astral, par son projet python-build-standalone [S25]. Parade proposée : publier la CLI comme un paquet Python standard, installable aussi par pipx, dont le dépôt appartient à l'organisation PyPA [S28], et ne jamais faire d'uv une dépendance de la CLI elle-même. La parade couvre l'interpréteur : Python de python.org ou de la distribution, et l'option `--no-python-downloads` pour qui garde uv [S25, S36].
 
 [BENCH] Réserves. Copier accepte encore Python 3.10 [S21], en fin de vie depuis le 2026-10-01 [S1]. La CLI doit exiger une version supportée : 3.11 sort du support en 2027-10, 3.12 en 2028-10 [S1]. [DEV] et [ARCHI] fixent ce plancher. Le temps de démarrage reste à mesurer. L'issue de l'accord entre Astral et OpenAI est à suivre. Prochaine vérification : à la clôture de BENCH-002, puis au plus tard le 2027-05-19.
 
-[BENCH] Suites. [ARCHI] écrit l'ADR, qui cite ce rapport et sa dépendance à BENCH-002. Aucune entrée de `catalog/` à créer : la CLI n'est pas une brique des projets générés. En phase 5, [DEV] fixe le mode d'installation de US-001 (uv seul en prérequis, ou Python et pipx) et le plancher de version dans la configuration du paquet. Pour `docs/risques.md`, le DSI décide d'ouvrir ou non un risque « canal d'installation tenu par un éditeur unique (uv) », de probabilité faible.
+[BENCH] Suites. [ARCHI] écrit l'ADR, qui cite ce rapport et sa dépendance à BENCH-002. Aucune entrée de `catalog/` à créer : la CLI n'est pas une brique des projets générés. En phase 5, [DEV] fixe le mode d'installation de US-001 (uv seul en prérequis, ou Python et pipx) et le plancher de version dans la configuration du paquet. Il évalue aussi deux options de uv [S36]. `uv tool run --exclude-newer "7 days"` applique à l'installation de la CLI la règle des 7 jours du principe VI ; en contrepartie, un correctif publié depuis moins de 7 jours n'est pas pris, et `--exclude-newer-package` permet une exception par paquet. `--no-build` refuse les distributions sources (section 5.5). Si [DEV] choisit un jour un binaire autonome qui embarque CPython, il joint les avis de licence de Python et de ses composants tiers, et [SECU] relit à nouveau. Pour `docs/risques.md`, le DSI décide d'ouvrir ou non un risque « canal d'installation tenu par un éditeur unique (uv) », de probabilité faible.
 
 ## 8. Limites et biais
 
@@ -188,8 +188,7 @@ l'autre.
 | Temps de démarrage non mesuré | Un import lent de Copier pèserait sur chaque commande. Python perdrait au plus un cran d'empreinte, soit 2 points, sans changer le classement | Un script `tests/bench/bench-006-startup.sh` qui chronomètre `--version` sur un prototype dans chaque langage, trois exécutions, quand [DEV] aura un squelette |
 | Expérience dev notée sans essai, installation exclue de cette version courte | Les notes 4 et 3 peuvent bouger d'un cran | Un prototype minimal qui appelle Copier depuis chaque langage |
 | Verdict conditionné à BENCH-002, en cours | Renversement possible avec un moteur pour Node.js (section 7) | Rouvrir BENCH-006 si BENCH-002 ne retient pas un moteur écrit en Python |
-| Option pressentie par le brief et la constitution | Biais de confirmation | Même grille pour les deux options ; l'argument décisif, Copier écrit pour Python, est un fait sourcé [S21] ; relecture par [SECU] |
-| L'OSI approuve « Python-2.0 », la licence complète de Python ; la PSF License seule n'a pas d'entrée distincte sur sa liste [S4, S5] | Aucun sur le classement | Confirmation de la lecture par [SECU] |
+| Option pressentie par le brief et la constitution | Biais de confirmation | Même grille pour les deux options ; l'argument décisif, Copier écrit pour Python, est un fait sourcé [S21] ; relu par [SECU], avis favorable |
 | Gouvernance de TypeScript lue sur les pages des dépôts, sans statistiques de contribution | La note 3 peut être sévère ou généreuse d'un cran | Lire le guide de contribution et les statistiques de contributeurs du dépôt |
 
 ## 9. Sources
@@ -201,7 +200,7 @@ l'autre.
 | S1 | <https://www.python.org/downloads/> | 2026-11-19 | Python 3.15.2 le 2026-10-25, 3.15.0 le 2026-10-09 ; fin de support de 3.10 (2026-10-01), 3.11 (2027-10), 3.12 (2028-10), 3.14 (2030-10), 3.15 (2031-10) | Oui |
 | S2 | <https://devguide.python.org/versions/> | 2026-11-19 | Phases de support, binaires environ tous les deux mois, correctifs de sécurité seuls après deux ans, fin de support à cinq ans | Oui |
 | S3 | <https://docs.python.org/3/license.html> | 2026-11-19 | PSF License version 2, PSF propriétaire de la propriété intellectuelle depuis 2001, création au début des années 1990 au CWI | Oui |
-| S4 | <https://opensource.org/licenses> | 2026-11-19 | Python-2.0, Apache-2.0 et MIT approuvées par l'OSI ; aucune entrée distincte PSF-2.0 | Oui |
+| S4 | <https://opensource.org/licenses> | 2026-11-19 | Python-2.0 (catégorie Superseded), Apache-2.0 et MIT approuvées par l'OSI ; aucune entrée PSF-2.0 | Oui |
 | S5 | <https://opensource.org/license/python-2-0> | 2026-11-19 | Licence Python-2.0 approuvée par l'OSI, PSF comme gardienne | Oui |
 | S6 | <https://peps.python.org/pep-0013/> | 2026-11-19 | Comité de pilotage de cinq membres, élu après chaque version majeure, deux membres au plus par employeur | Oui |
 | S7 | <https://www.python.org/dev/security/> | 2026-11-19 | PSRT, PSF autorité de numérotation CVE, avis publiés sur liste publique et au format OSV, aucun délai de réponse annoncé | Oui |
@@ -222,7 +221,7 @@ l'autre.
 | S22 | <https://copier.readthedocs.io/en/stable/reference/api/> | 2026-11-19 | API Python : `run_copy`, `run_recopy`, `run_update`, qui rendent un `Worker` | Oui |
 | S23 | <https://code.claude.com/docs/en/setup> | 2026-11-19 | Installateur natif de Claude Code sans Node.js ; le paquet npm demande Node.js 22, mais le binaire ne l'utilise pas ; Git optionnel | Oui |
 | S24 | <https://docs.astral.sh/uv/guides/tools/> | 2026-11-19 | `uvx` lance un outil dans un environnement isolé, `uv tool install` l'installe, source Git figeable sur une étiquette ou un commit | Oui |
-| S25 | <https://docs.astral.sh/uv/concepts/python-versions/> | 2026-11-19 | uv télécharge Python s'il est absent, sur macOS, Linux et Windows | Oui |
+| S25 | <https://docs.astral.sh/uv/concepts/python-versions/> | 2026-11-19 | uv télécharge Python s'il est absent, sur macOS, Linux et Windows, depuis le projet python-build-standalone d'Astral ; `--no-python-downloads` et le réglage `python-downloads` limitent ces téléchargements | Oui |
 | S26 | <https://github.com/astral-sh/uv> | 2026-11-19 | uv sous Apache-2.0 ou MIT, développé par Astral, macOS, Linux et Windows | Oui |
 | S27 | <https://astral.sh/blog/openai> | 2026-11-19 | Annonce du 2026-03-19 : Astral rejoint OpenAI et continue de soutenir ses outils open source | Oui |
 | S28 | <https://github.com/pypa/pipx> | 2026-11-19 | pipx installe des applications Python isolées, MIT, dépôt de l'organisation PyPA | Oui |
@@ -231,14 +230,17 @@ l'autre.
 | S31 | [docs/brief-v1.0.md](../brief-v1.0.md) | 2026-11-19 | Section 1 : le rôle [DEV] couvre la CLI et TypeScript ; section 4 : CLI Python ; section 7.1 : `uv tool install specify-cli` | Non, document interne |
 | S32 | <https://github.com/yeoman/yo> | 2026-11-19 | `yo` s'installe par `npm install --global yo`, projet JavaScript pour Node.js | Oui |
 | S33 | <https://devblogs.microsoft.com/typescript/> | 2026-11-19 | Annonces de TypeScript 6.0 le 2026-03-23, 7.0 le 2026-07-08, 7.1 bêta le 2026-10-20 | Oui |
+| S34 | <https://spdx.org/licenses/> | 2026-11-19 | Liste SPDX 3.29.0 du 2026-09-16 : Python-2.0 marquée approuvée par l'OSI, PSF-2.0 sans cette mention | Oui |
+| S35 | <https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md> | 2026-11-19 | Image Ubuntu 24.04 20261111.370.1 : Python 3.11 à 3.15.2 en cache, pipx 1.16.7, Node.js 22.23.4 et 24.22.2 en cache, pas de Node.js 26 | Oui |
+| S36 | <https://docs.astral.sh/uv/reference/cli/> | 2026-11-19 | `uv tool run` : options `--exclude-newer`, qui accepte une durée comme « 30 days », `--exclude-newer-package`, `--no-build` et `--no-python-downloads` ; les backends de construction « may run arbitrary Python code » | Oui |
 
 ## 10. Relectures
 
 | Relecteur | Porte sur | Date | Avis |
 | --- | --- | --- | --- |
-| [SECU] | Licences, critères éliminatoires, sécurité | à venir | à venir |
-| [FINOPS] | Coût | à venir | à venir |
+| [SECU] | Licences, critères éliminatoires, sécurité | 2026-11-19 | Favorable |
+| [FINOPS] | Coût | 2026-11-19 | Réservé, levé par la correction de la note 5.9 |
 
-[SECU] Remarques et suite donnée : à venir.
+[SECU] Aucune note à changer. Cinq remarques, toutes intégrées. La cellule licence de Python (section 3) précise la pile de licences, la catégorie Superseded de l'OSI et l'absence de PSF-2.0 sur sa liste ; la limite correspondante sort de la section 8. La section 5.5 note, pour l'équilibre, que l'installation depuis PyPI exécute aussi du code quand elle construit une distribution source, avec `--no-build` comme parade à évaluer. Le paragraphe sur le canal d'installation (section 7) étend la parade pipx à l'interpréteur, qu'uv tire de python-build-standalone. Les suites citent `--exclude-newer "7 days"` et son exception par paquet, et la règle des avis de licence pour un éventuel binaire autonome.
 
-[FINOPS] Remarques et suite donnée : à venir.
+[FINOPS] Le temps des mainteneurs n'était compté dans aucun critère : la section 5.9 l'écartait comme déjà compté, alors que 5.5 et 5.6 portent sur autre chose. Avec TypeScript, il faudrait tenir deux chaînes d'outils en CI, deux fichiers de verrouillage, deux flux Renovate et deux runtimes, et l'image Ubuntu 24.04 des runners n'a pas Node.js 26 [S35]. Suite donnée : coût de TypeScript passé de 5/5 à 4/5, total de 77 à 76, écart de 17 à 18 points ; grille, verdict, sensibilité et en-tête mis à jour.

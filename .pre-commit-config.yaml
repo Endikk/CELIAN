@@ -18,6 +18,9 @@ repos:
     hooks:
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
+        # Third-party files copied byte for byte (Apache-2.0 section 4(b)):
+        # fixing them would turn them into modified files.
+        exclude: ^tests/bench/[^/]+/vendor/
       - id: end-of-file-fixer
       - id: mixed-line-ending
         args: [--fix=lf]

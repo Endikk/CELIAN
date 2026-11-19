@@ -1,6 +1,5 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://celian.invalid/schema/spec-score-section-0.1.json",
   "title": "CELIAN project spec with a Score section (BENCH-001 trial)",
   "type": "object",
   "additionalProperties": false,
@@ -35,7 +34,7 @@
       "minProperties": 1,
       "additionalProperties": {
         "allOf": [
-          { "$ref": "https://raw.githubusercontent.com/score-spec/spec/0.4.1/score-v1b1.json" },
+          { "$ref": "../vendor/score-spec/score-v1b1.json" },
           {
             "properties": {
               "resources": {

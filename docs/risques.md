@@ -415,8 +415,8 @@ Copier a publié 15 avis de sécurité du 2025-08-18 au 2026-10-12, dont 8
 élevés, tous corrigés vite (BENCH-002, relu par [SECU]). Trois classes : dix
 évasions du mode « gabarit sûr », quatre contournements du préfixe de
 confiance, et une injection d'argument Git qui exécute une commande sans
-aucune confiance accordée, par un `_src_path` piégé dans `.copier-answers.yml`
-au moment de `copier update`. Un correctif a lui-même introduit une faille. Le
+aucune confiance accordée ; l'avis cite comme vecteur un `_src_path` piégé dans
+`.copier-answers.yml` au moment de `copier update`, sans l'avoir reproduit. Un correctif a lui-même introduit une faille. Le
 mode sûr et la confiance ne tiennent donc pas comme barrière. Le projet généré
 étant modifiable par tout contributeur, son fichier de réponses est une entrée
 non fiable. De plus, 8 des 15 avis manquent à la base globale GitHub Advisory

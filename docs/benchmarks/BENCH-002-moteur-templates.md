@@ -4,7 +4,7 @@
 | --- | --- |
 | Identifiant | BENCH-002 |
 | Sujet | Moteur qui génère le dépôt depuis le blueprint et le met à jour ensuite |
-| Statut | brouillon |
+| Statut | relu |
 | Ouvert le | 2026-11-19 |
 | Mis à jour le | 2026-11-19 |
 | Auteur | [BENCH] |
@@ -12,7 +12,7 @@
 | Périmètre | Générateur (CLI Python) et mise à jour des projets générés. Le moteur tourne sur le poste qui génère : les cibles PC et GCP ne le voient pas |
 | Choix du PRD | Moteur de templates, option pressentie Copier (`docs/prd-mvp.md`, section 1) |
 | ADR lié | À écrire par [ARCHI], numéro à attribuer |
-| Verdict proposé | Copier, 82/100. Seule option qui passe les critères éliminatoires et le prérequis du jour 2 |
+| Verdict proposé | Copier, 80/100. Seule option qui passe les critères éliminatoires et le prérequis du jour 2 |
 
 ## 1. Contexte
 
@@ -42,12 +42,19 @@ la mise à jour passe par un outil tiers, cruft, auquel s'appliquent aussi les
 critères éliminatoires. Le prérequis est vérifié par un essai pratique (M4),
 lancé trois fois.
 
+[BENCH] Origine et validation du prérequis. Il vient de US-011 et de sa
+mention de BENCH-002 (`docs/prd-mvp.md`, section 4). Le DSI l'a accepté le
+2026-11-19 ; Lucas le valide avec l'ADR. Tout le verdict repose sur lui :
+sans ce prérequis, Cookiecutter et Yeoman resteraient en lice et seraient
+notés.
+
 [BENCH] Option pressentie par le PRD : Copier. Elle est notée comme les
 autres, avec les mêmes sources et le même essai.
 
 [BENCH] Hors champ : la découpe du blueprint entre socle et code de l'équipe
-(mitigation de R-11, phase 3), l'usage des tâches et migrations de Copier dans
-le blueprint, le langage de la CLI (BENCH-006) et la matrice de la phase 4.
+(mitigation de R-11, phase 3), le langage de la CLI (BENCH-006) et la matrice
+de la phase 4. L'usage des tâches et migrations de Copier est tranché par les
+conditions de [SECU] reprises à la section 7.
 
 ## 2. Options étudiées
 
@@ -163,6 +170,14 @@ Pour refaire la mesure :
 tests/bench/bench-002-day2.sh /chemin/vers/un/dossier/vide
 ```
 
+[BENCH] Sans argument, le script crée un dossier temporaire privé. Un dossier
+passé en argument doit être absent ou vide. `OPTIONS="copier cruft"` limite
+l'essai aux options nommées. Depuis la relecture de [SECU], le script fige
+aussi l'interpréteur Python (3.13) et la date limite de résolution
+(`--exclude-newer 2026-11-19T00:00:00Z`), lance `npx` sans scripts
+d'installation et sans version publiée depuis moins de 7 jours, et écrit les
+versions résolues de chaque environnement dans `resolved-*.txt` [S35], [S38].
+
 ### 4.4 Résultats
 
 [BENCH] Mesures lancées le 2026-11-19, sur la machine de la section 4.2. Les
@@ -260,7 +275,7 @@ noté. Les notes se lisent donc dans l'absolu, sans comparaison.
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Copier | 3/5 | 6 | Signalement privé activé. 15 avis publiés du 2025-08-18 au 2026-10-12 (8 élevés, 7 moyens), chacun avec une version corrigée sortie entre zéro et deux jours avant l'avis. Réserve : la même classe de faille revient, évasion du mode « gabarit sûr » et contournement de la confiance, cinq fois pour la seule confiance en 2026. Action : CELIAN ne rend que ses propres blueprints, depuis une adresse qu'il contrôle, et exige Copier 9.19.0 au minimum. Le délai entre signalement et correctif n'est pas public | [S2], [S7], [S14] |
+| Copier | 2/5 | 4 | Réactivité excellente : signalement privé activé, et chacun des 15 avis publiés du 2025-08-18 au 2026-10-12 (8 élevés, 7 moyens) a sa version corrigée, sortie entre zéro et deux jours avant l'avis. Mais ni le mode « gabarit sûr » ni la confiance ne tiennent comme barrière. Les avis se rangent en trois classes : dix évasions du mode sûr, quatre contournements du préfixe de confiance, une injection d'argument Git. Trois exécutions de code sans confiance en dix semaines (GHSA-v9wr-3fjh-hg69 et GHSA-7537-j7hq-f8p9 le 2026-08-04, GHSA-g3fv-fhjg-54xh le 2026-10-12), et un correctif qui a ouvert une nouvelle faille (GHSA-v846-q23v-m9gj). 8 avis sur 15, dont 6 élevés, manquent à la base mondiale de GitHub et à OSV : les outils qui lisent ces bases voient les versions 9.15.2 à 9.18.2 comme saines. Le contournement passe par les conditions de [SECU] (section 7). Le délai entre signalement et correctif n'est pas public | [S2], [S7], [S14], [S30], [S31], [S34] |
 
 ### 5.6 Empreinte sur PC (RAM, CPU, démarrage), poids 10
 
@@ -284,7 +299,7 @@ noté. Les notes se lisent donc dans l'absolu, sans comparaison.
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Copier | 5/5 | 5 | Aucune licence payante, aucun service à opérer : une dépendance Python qui tourne sur le poste. Le coût réel, l'entretien du blueprint, serait le même avec tout moteur. À confirmer par [FINOPS] | [S1], [M2] |
+| Copier | 5/5 | 5 | Aucune licence payante, aucun service à opérer : une dépendance Python qui tourne sur le poste. L'entretien du blueprint coûterait autant avec tout moteur. S'y ajoute le suivi de Copier : 23 releases en 12 mois, et 15 avis du 2025-08-18 au 2026-10-12, dont 13 sur les 12 derniers mois. Chaque avis relève la version minimale exigée par la CLI, donc demande une release de la CLI. Coût conditionnel : écrire et maintenir le repli de R-22 si Copier ralentit | [S1], [S2], [S7], [M2], [M4] |
 
 ## 6. Grille pondérée
 
@@ -295,16 +310,16 @@ noté. Les notes se lisent donc dans l'absolu, sans comparaison.
 | Gouvernance (fondation, multi-vendeurs) | 15 | 2/5, 6 pts | éliminée | éliminée |
 | Maturité et adoption | 15 | 4/5, 12 pts | éliminée | éliminée |
 | Activité et maintenance | 10 | 5/5, 10 pts | éliminée | éliminée |
-| Sécurité (CVE, réactivité) | 10 | 3/5, 6 pts | éliminée | éliminée |
+| Sécurité (CVE, réactivité) | 10 | 2/5, 4 pts | éliminée | éliminée |
 | Empreinte sur PC (RAM, CPU, démarrage) | 10 | 5/5, 10 pts | éliminée | éliminée |
 | Portabilité multi-cloud | 10 | 5/5, 10 pts | éliminée | éliminée |
 | Expérience dev et documentation | 10 | 4/5, 8 pts | éliminée | éliminée |
 | Coût (managé ou opérationnel) | 5 | 5/5, 5 pts | éliminée | éliminée |
-| Total | 100 | 82 / 100 | éliminée | éliminée |
+| Total | 100 | 80 / 100 | éliminée | éliminée |
 
 ## 7. Verdict proposé
 
-[BENCH] Option proposée : Copier, 82 sur 100. Aucun écart à mesurer avec une
+[BENCH] Option proposée : Copier, 80 sur 100. Aucun écart à mesurer avec une
 suivante : Cookiecutter et Yeoman sont éliminés avant la notation.
 
 [BENCH] Pourquoi. Copier est la seule option qui met à jour un projet modifié
@@ -313,7 +328,8 @@ conflit signalé fichier par fichier ailleurs, fichiers de l'équipe conservés,
 trois exécutions sur trois [M4]. Il génère de façon reproductible (US-004)
 [M1], publie souvent [S2] et ne pèse rien sur le poste [M2], [M3]. Ses
 faiblesses sont la gouvernance, portée en pratique par une personne [S9], et
-la répétition de failles dans son modèle de confiance [S7].
+un modèle de confiance qui ne tient pas comme barrière [S7], dont la moitié
+des avis échappe aux scanneurs [S30], [S31].
 
 [BENCH] Sensibilité. Avec une seule option notée, aucun changement de note ne
 peut inverser un classement. Le verdict basculerait sur un fait nouveau : une
@@ -329,22 +345,43 @@ garder le repli de R-22, essayé avec succès en M4, comme sortie si Copier
 ralentit.
 
 [BENCH] Réserves à surveiller. Les avis de sécurité de Copier, tous corrigés
-jusqu'ici par une version sortie au plus tard le jour de l'avis [S2], [S7] : la
-version minimale exigée par la CLI suit le dernier avis. L'activité du dépôt, et la part du premier
-mainteneur dans les commits. L'activité de cruft, qui pourrait rouvrir une
-option. Prochaine vérification proposée : 2027-05-19, ou plus tôt si un avis
-de sécurité touche Copier.
+jusqu'ici par une version sortie au plus tard le jour de l'avis [S2], [S7] :
+la version minimale exigée par la CLI suit le dernier avis. Comme la moitié des
+avis manque à la base mondiale de GitHub et à OSV [S30], [S31], cette veille
+se fait sur la page des avis du dépôt. Ce que Renovate, Trivy et
+Dependency-Track signalent pour Copier reste à vérifier. L'activité du dépôt,
+et la part du premier mainteneur dans les commits. L'activité de cruft, qui
+pourrait rouvrir une option. Prochaine vérification proposée : 2027-05-19, ou
+plus tôt si un avis de sécurité touche Copier.
 
 [BENCH] Suites. L'ADR du moteur de templates, écrit par [ARCHI]. Copier est
 une dépendance de la CLI plutôt qu'un service du catalogue : [ARCHI] dira s'il
 entre dans `catalog/` ; dans tous les cas, sa version se fige dans la CLI avec
 licence, gouvernance, statut, date et source (principe IV), et Renovate la
-suit. Trois propositions pour `docs/risques.md`, que tient le DSI : compléter
-R-22 avec l'activité vérifiée de Copier et l'essai du repli ; compléter R-11
-avec le code de sortie 0 en cas de conflit, que la CLI et la matrice de la
-phase 4 doivent contrôler par Git ; créer un risque sur les failles
-récurrentes du modèle de confiance de Copier, avec pour mitigation la version
-minimale et des blueprints servis seulement depuis une source contrôlée.
+suit. L'ADR reprend les conditions posées par [SECU] pour la CLI :
+
+- refuser de tourner avec un Copier antérieur à 9.19.0, contrôlé par
+  `importlib.metadata` ;
+- figer Copier à 9.19.1 dans le verrou, avec un plafond `<10`, et exiger
+  Jinja2 3.1.6 au minimum, version qui corrige la dernière évasion du bac à
+  sable de Jinja2 [S33] et que le script résout déjà ;
+- ne rendre que les blueprints de CELIAN, avec un `vcs_ref` en SHA de commit,
+  et vérifier `_src_path` et `_commit` dans `.copier-answers.yml` avant
+  `copier update`, parce qu'un `_src_path` piégé est un vecteur de
+  GHSA-g3fv-fhjg-54xh, versions 9.14.0 à 9.18.x [S34] ;
+- jamais `--trust` ni `unsafe=True`, aucun `_tasks`, `_migrations` ni
+  `_jinja_extensions` dans le blueprint, et `COPIER_SETTINGS_PATH` pointé vers
+  un fichier de réglages sans `trust` [S14], [S32] ;
+- une veille hebdomadaire de [SECU] sur la page des avis de Copier [S7] ;
+- ne pas se fier au code de sortie 0 de `copier update` quand un conflit
+  reste, et contrôler par Git [M4].
+
+[BENCH] Trois propositions pour `docs/risques.md`, que tient le DSI :
+compléter R-22 avec l'activité vérifiée de Copier et l'essai du repli ;
+compléter R-11 avec le code de sortie 0 en cas de conflit, que la CLI et la
+matrice de la phase 4 doivent contrôler par Git ; créer un risque sur le
+modèle de confiance de Copier et sur les avis absents des bases que lisent
+les scanneurs, avec pour mitigation les conditions ci-dessus.
 
 ## 8. Limites et biais
 
@@ -357,7 +394,9 @@ minimale et des blueprints servis seulement depuis une source contrôlée.
 | Gouvernance mesurée par les identifiants des commits, robots filtrés par leur nom | Un contributeur qui signe sous plusieurs comptes fausserait la part du premier mainteneur | Relire la liste des auteurs à la main |
 | Compte GitHub de fichiers `.copier-answers.yml` approximatif, téléchargements de source tierce | La note de maturité repose en partie sur des ordres de grandeur | Une liste d'adoptants tenue par le projet, s'il en publie une |
 | Option pressentie par le PRD | Biais de confirmation possible en faveur de Copier | Même essai et mêmes sources pour les trois options ; relecture de [SECU] |
-| Une seule option notée | Le total de 82 ne se compare à rien dans ce rapport | Décision du DSI : verdict à une option, ou seconde option à instruire (repli R-22 avec Cookiecutter) |
+| Une seule option notée | Le total de 80 ne se compare à rien dans ce rapport | Décision du DSI : verdict à une option, ou seconde option à instruire (repli R-22 avec Cookiecutter) |
+| Garde-fous du script ajoutés après les mesures, à la demande de [SECU] : `npx` sans scripts d'installation et sans version de moins de 7 jours, `uvx` avec Python 3.13 et `--exclude-newer`, dossier d'essai vide exigé, `XDG_CONFIG_HOME` dans le dossier d'essai | Aucun sur les mesures du 2026-11-19, prises avec les versions de la section 4.2. Yeoman n'a pas été relancé avec ces garde-fous ; avec le plancher de 7 jours, yeoman-generator 10.3.1 (publié le 2026-11-16) ne se résout pas avant le 2026-11-23 | Relancer le script complet à partir du 2026-11-23. La partie Python, relancée le 2026-11-19 avec les garde-fous, donne les mêmes résultats en M1 et M4 |
+| Effets de bord des essais manuels qui ont précédé le script | Ils ont écrit `~/.config/configstore/update-notifier-yo.json` le 2026-11-19 vers 00:30 UTC, avant que le script ne désactive update-notifier | Aucun effet sur les mesures. Le script neutralise désormais ce chemin [S36], [S37] |
 
 ## 9. Sources
 
@@ -392,17 +431,56 @@ publique de GitHub, lue le même jour que la page citée.
 | S24 | <https://github.com/yeoman/generator/releases> | 2026-11-19 | v10.3.1 le 2026-11-16 ; dépôt sous BSD-2-Clause, non archivé | Oui |
 | S25 | <https://yeoman.io/authoring/file-system.html> | 2026-11-19 | Toute écriture sur un fichier existant passe par une résolution de conflit validée par l'utilisateur ; aucune mise à jour décrite | Oui |
 | S26 | <https://github.com/yeoman/yeoman-api/blob/main/workspaces/conflicter/src/conflicter.ts> | 2026-11-19 | Choix offerts en cas de conflit : écraser, ne pas écraser, tout écraser, différence, abandonner, recharger, éditer, ignorer | Oui |
-| S27 | <https://registry.npmjs.org/yo/7.0.1> | 2026-11-19 | yo 7.0.1 demande Node.js `^20.17.0 \|\| >=22.9.0` et dépend de yeoman-environment `^6.0.1` | Oui |
+| S27 | <https://registry.npmjs.org/yo/7.0.1> | 2026-11-19 | yo 7.0.1 demande Node.js `^20.17.0 \|\| >=22.9.0`, déclare `postinstall: yodoctor`, et a 26 dépendances, toutes en `^`, dont yeoman-environment `^6.0.1`, configstore et update-notifier | Oui |
 | S28 | <https://registry.npmjs.org/yeoman-generator/10.3.1> | 2026-11-19 | yeoman-generator 10.3.1 demande Node.js `^22.18.0 \|\| >=24.11.0`, paquet ESM | Oui |
 | S29 | <https://opensource.org/licenses> | 2026-11-19 | MIT, BSD-2-Clause et BSD-3-Clause approuvées par l'OSI | Oui |
+| S30 | <https://api.github.com/advisories/GHSA-g3fv-fhjg-54xh> | 2026-11-19 | Base mondiale des avis de GitHub, interrogée pour les 15 avis de Copier : réponse 404 pour g3fv, v846, 32vq, rg63, p86q, v9wr, 7537 et 34mv ; les 7 autres y figurent, revus | Oui |
+| S31 | <https://osv.dev/list?q=copier&ecosystem=PyPI> | 2026-11-19 | 14 entrées pour le paquet PyPI `copier`, soit 7 avis distincts : chaque entrée PYSEC est l'alias d'un des 7 avis GHSA présents dans la base de GitHub | Non, base tierce (OSV, Google) |
+| S32 | <https://copier.readthedocs.io/en/stable/settings/> | 2026-11-19 | Fichier de réglages, chemin surchargé par `COPIER_SETTINGS_PATH`, réglage `trust` par adresse exacte ou par préfixe | Oui |
+| S33 | <https://github.com/advisories/GHSA-cpwx-vrp4-4pq7> | 2026-11-19 | Jinja2 : évasion du bac à sable par le filtre `attr` (CVE-2025-27516), versions jusqu'à 3.1.5, corrigée en 3.1.6 | Oui |
+| S34 | <https://github.com/copier-org/copier/security/advisories/GHSA-g3fv-fhjg-54xh> | 2026-11-19 | Injection d'argument Git par la source du gabarit, sans confiance, versions 9.14.0 à 9.18.x ; même valeur possible par un `_src_path` piégé lors de `copier update`, chemin non reproduit par l'auteur de l'avis | Oui |
+| S35 | <https://docs.npmjs.com/cli/v11/using-npm/config> | 2026-11-19 | Clés `ignore-scripts` et `min-release-age`, et leur forme en variables d'environnement `npm_config_*` | Oui |
+| S36 | <https://github.com/yeoman/update-notifier> | 2026-11-19 | `NO_UPDATE_NOTIFIER` désactive la vérification ; état stocké dans `~/.config/configstore/update-notifier-<module>.json` | Oui |
+| S37 | <https://github.com/sindresorhus/configstore> | 2026-11-19 | Fichiers stockés dans `$XDG_CONFIG_HOME` ou `~/.config` | Oui |
+| S38 | <https://docs.astral.sh/uv/reference/cli/> | 2026-11-19 | `--exclude-newer` accepte un horodatage RFC 3339 ou une date locale résolue dans le fuseau du système ; `--python` choisit l'interpréteur. Présence des deux options dans `uv tool run` vérifiée dans l'aide intégrée de uv 0.12.23 | Oui |
 
 ## 10. Relectures
 
 | Relecteur | Porte sur | Date | Avis |
 | --- | --- | --- | --- |
-| [SECU] | Licences, critères éliminatoires, sécurité | à venir | à venir |
-| [FINOPS] | Coût | à venir | à venir |
+| [SECU] | Licences, critères éliminatoires, sécurité | 2026-11-19 | Réservé, réserve levée par les corrections ci-dessous et par l'acceptation du prérequis du jour 2 |
+| [FINOPS] | Coût | 2026-11-19 | Favorable |
 
-[SECU] Remarques et suite donnée : à venir.
+[SECU] Remarques, sources lues le 2026-11-19. La note de sécurité de Copier
+passe de 3/5 à 2/5 : ni le mode sûr ni la confiance ne tiennent comme
+barrière, trois exécutions de code sans confiance en dix semaines, un
+correctif qui a ouvert une faille, et la moitié des avis qui n'atteint pas
+les scanneurs. La réactivité reste excellente. Les 15 avis se comptent par
+classe : dix, quatre et un. 8 avis sur 15 manquent à la base mondiale de
+GitHub et à OSV. Le prérequis du jour 2 porte tout le verdict et doit dire
+d'où il vient. L'ADR doit reprendre des conditions précises pour la CLI. Le
+script doit encadrer `npx` et `uvx`, refuser un dossier d'essai non vide, et
+nuancer ce qu'il écrit hors de ce dossier.
 
-[FINOPS] Remarques et suite donnée : à venir.
+[BENCH] Suite donnée à [SECU]. Note de sécurité à 2/5, total à 80 (sections
+5.5, 6 et 7). Comptes par classe écrits tels quels en 5.5. Absence des 8 avis
+vérifiée le 2026-11-19 sur l'API de GitHub et sur OSV [S30], [S31], avec la
+réserve sur Renovate, Trivy et Dependency-Track (section 7). Origine du
+prérequis ajoutée à la section 1. Conditions pour la CLI reprises dans les
+suites de la section 7. Script modifié : variables `npm_config_*`, `uvx` avec
+Python 3.13 et `--exclude-newer`, versions résolues écrites, refus d'un dossier
+non vide, `XDG_CONFIG_HOME` dans le dossier d'essai, en-tête nuancé. Yeoman
+n'est pas relancé ; la limite est écrite à la section 8. Un écart avec l'avis :
+yo 7.0.1 a 26 dépendances en `^` sur le registre, pas 27 [S27]. Et la date
+limite de `uvx` s'écrit en horodatage UTC, parce qu'une date seule suit le
+fuseau du poste [S38].
+
+[FINOPS] Remarques. Avis favorable, aucune note à changer. En 5.9, le coût
+d'exploitation doit compter le suivi des avis de Copier, chacun faisant monter
+la version minimale de la CLI et donc sortir une release de la CLI, ainsi
+qu'un coût conditionnel : le repli de R-22 à écrire et à maintenir si Copier
+ralentit.
+
+[BENCH] Suite donnée à [FINOPS]. Justification de 5.9 complétée. Une précision
+au passage : les 15 avis couvrent la période du 2025-08-18 au 2026-10-12, dont
+13 dans les 12 derniers mois [S7].

@@ -15,18 +15,43 @@
 # NOTICE.txt, which is not touched locally.
 #
 # Usage: tests/bench/bench-002-day2.sh [TRIAL_DIR]  (default: a new mktemp -d)
-#   RUNS=3 by default. Results: TRIAL_DIR/generation.tsv and TRIAL_DIR/day2.tsv.
-# Needs: git >= 2.32, uv (uvx), Node.js >= 22.18 with npx. Writes nothing
-# outside TRIAL_DIR except the uv and npm download caches.
+#   TRIAL_DIR, if given, must be missing or empty.
+#   RUNS=3 by default. OPTIONS="copier cookiecutter cruft yeoman" by default;
+#   a subset skips the others (e.g. OPTIONS="copier cruft").
+#   Results: TRIAL_DIR/generation.tsv, TRIAL_DIR/day2.tsv, and the resolved
+#   dependency versions in TRIAL_DIR/resolved-*.txt.
+# Needs: git >= 2.32, uv (uvx), Node.js >= 22.18 with npx.
+#
+# Side effects outside TRIAL_DIR: the uv and npm download caches. yo also
+# depends on configstore and update-notifier, which write under
+# XDG_CONFIG_HOME (default ~/.config). The script disables update-notifier
+# (NO_UPDATE_NOTIFIER) and points XDG_CONFIG_HOME into TRIAL_DIR. Both
+# safeguards, like the npm and uv ones below, were added after the
+# 2026-11-19 measures, and the Yeoman path has not been run with them.
 set -euo pipefail
 
 readonly COPIER_VERSION="9.19.1"
 readonly COOKIECUTTER_VERSION="2.7.1"
 readonly CRUFT_VERSION="2.16.0"
 readonly YO_VERSION="7.0.1"
+# Published on 2026-11-16: with the 7-day npm floor below, npx cannot resolve
+# it before 2026-11-23.
 readonly YEOMAN_GENERATOR_VERSION="10.3.1"
 readonly RUNS="${RUNS:-3}"
 readonly PROJECT_NAME="demo"
+readonly ALL_OPTIONS="copier cookiecutter cruft yeoman"
+OPTIONS="${OPTIONS:-$ALL_OPTIONS}"
+readonly OPTIONS
+
+# Python side: fixed interpreter, and nothing uploaded after the measure date
+# (UTC timestamp, so the cut-off does not depend on the local time zone).
+readonly UV_PYTHON="3.13"
+readonly UV_EXCLUDE_NEWER="2026-11-19T00:00:00Z"
+
+# npm side: no install scripts (yo 7.0.1 declares postinstall: yodoctor), and
+# no version published less than 7 days ago, transitive ones included.
+export npm_config_ignore_scripts=true
+export npm_config_min_release_age=7
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
@@ -108,9 +133,10 @@ build_yeoman_generator() {
 
 # --- Tool wrappers -----------------------------------------------------------
 
-run_copier() { uvx "copier@$COPIER_VERSION" "$@"; }
-run_cookiecutter() { uvx "cookiecutter@$COOKIECUTTER_VERSION" "$@"; }
-run_cruft() { uvx "cruft@$CRUFT_VERSION" "$@"; }
+uv_run() { uvx --python "$UV_PYTHON" --exclude-newer "$UV_EXCLUDE_NEWER" "$@"; }
+run_copier() { uv_run "copier@$COPIER_VERSION" "$@"; }
+run_cookiecutter() { uv_run "cookiecutter@$COOKIECUTTER_VERSION" "$@"; }
+run_cruft() { uv_run "cruft@$CRUFT_VERSION" "$@"; }
 run_yo() {
   npx --yes -p "yo@$YO_VERSION" -p "yeoman-generator@$YEOMAN_GENERATOR_VERSION" -- yo "$@"
 }
@@ -122,6 +148,37 @@ npx_node_modules() {
   yo_bin="$(npx --yes -p "yo@$YO_VERSION" -p "yeoman-generator@$YEOMAN_GENERATOR_VERSION" \
     -c 'command -v yo')"
   dirname "$(dirname "$yo_bin")"
+}
+
+has_option() {
+  case " $OPTIONS " in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Writes the exact versions installed in each tool environment.
+record_resolved_versions() {
+  local node_modules=$1 spec name
+  # Python code run inside the uvx environment, not shell.
+  # shellcheck disable=SC2016
+  local list_dists='import importlib.metadata as m, platform
+print("python==" + platform.python_version())
+print("\n".join(sorted(d.name + "==" + d.version for d in m.distributions())))'
+  for spec in "copier==$COPIER_VERSION" "cookiecutter==$COOKIECUTTER_VERSION" \
+    "cruft==$CRUFT_VERSION"; do
+    name="${spec%%==*}"
+    has_option "$name" || continue
+    uv_run --from "$spec" python -c "$list_dists" >"$TRIAL_DIR/resolved-$name.txt"
+    log "$name: $(grep -c '==' "$TRIAL_DIR/resolved-$name.txt") entries in resolved-$name.txt"
+  done
+  if [[ -n "$node_modules" ]]; then
+    if npm ls --all --prefix "$(dirname "$node_modules")" >"$TRIAL_DIR/resolved-yeoman.txt"; then
+      log "yeoman: resolved tree in resolved-yeoman.txt"
+    else
+      log "yeoman: npm ls reported problems, see resolved-yeoman.txt"
+    fi
+  fi
 }
 
 # generate <option> <version> <project_dir> <template>
@@ -312,11 +369,13 @@ run_once() {
 
   build_copier_template "$tpl_dir/copier"
   build_cookiecutter_template "$tpl_dir/cookiecutter"
-  build_yeoman_generator "$tpl_dir/yeoman-v1" 1
-  build_yeoman_generator "$tpl_dir/yeoman-v2" 2
-  ln -s "$node_modules" "$tpl_dir/node_modules"
+  if has_option yeoman; then
+    build_yeoman_generator "$tpl_dir/yeoman-v1" 1
+    build_yeoman_generator "$tpl_dir/yeoman-v2" 2
+    ln -s "$node_modules" "$tpl_dir/node_modules"
+  fi
 
-  for option in copier cookiecutter cruft yeoman; do
+  for option in $OPTIONS; do
     tpl="$(template_for "$option" "$tpl_dir")"
     measure_generation "$run" "$option" "$tpl" "$run_dir/$option-gen"
     measure_update "$run" "$option" "$tpl" "$run_dir/$option-update" "$logs"
@@ -356,34 +415,59 @@ measure_update() {
   done
 }
 
+check_options() {
+  local option
+  for option in $OPTIONS; do
+    case " $ALL_OPTIONS " in
+      *" $option "*) ;;
+      *) log "unknown option '$option', expected a subset of: $ALL_OPTIONS"; exit 2 ;;
+    esac
+  done
+}
+
 main() {
-  local node_modules run
+  local node_modules="" run
   # Internal entry point, used by measure_generation.
   if [[ "${1:-}" == "__generate" ]]; then
     shift
     generate "$@"
     return
   fi
+  check_options
   # Default to a fresh private directory: a fixed path under /tmp could be
-  # pre-created or symlinked by another local user.
+  # pre-created or symlinked by another local user. An explicit directory must
+  # be missing or empty, so that no earlier content is mixed into the results.
   if [[ -n "${1:-}" ]]; then
     TRIAL_DIR="$1"
+    if [[ -e "$TRIAL_DIR" && -n "$(ls -A "$TRIAL_DIR")" ]]; then
+      log "refusing $TRIAL_DIR: it exists and is not empty"
+      exit 2
+    fi
     mkdir -p "$TRIAL_DIR"
   else
     TRIAL_DIR="$(mktemp -d)"
   fi
   TRIAL_DIR="$(cd "$TRIAL_DIR" && pwd)"
+  # configstore (a yo dependency) writes under XDG_CONFIG_HOME.
+  export XDG_CONFIG_HOME="$TRIAL_DIR/xdg-config"
+  mkdir -p "$XDG_CONFIG_HOME"
   log "trial directory: $TRIAL_DIR"
+  log "options: $OPTIONS"
   log "versions: copier $COPIER_VERSION, cookiecutter $COOKIECUTTER_VERSION," \
     "cruft $CRUFT_VERSION, yo $YO_VERSION, yeoman-generator $YEOMAN_GENERATOR_VERSION"
 
   # Warm the uv and npm caches so that timings exclude downloads.
-  run_copier --version >/dev/null
-  run_cookiecutter --version >/dev/null
-  run_cruft --help >/dev/null
-  node_modules="$(npx_node_modules)"
+  local node_version="not used"
+  if has_option copier; then run_copier --version >/dev/null; fi
+  if has_option cookiecutter; then run_cookiecutter --version >/dev/null; fi
+  if has_option cruft; then run_cruft --help >/dev/null; fi
+  if has_option yeoman; then
+    node_modules="$(npx_node_modules)"
+    node_version="$(node --version)"
+  fi
+  record_resolved_versions "$node_modules"
   log "git $(git --version | awk '{print $3}'), uv $(uv --version | awk '{print $2}')," \
-    "node $(node --version)"
+    "python $UV_PYTHON (exclude-newer $UV_EXCLUDE_NEWER), node $node_version"
 
   printf 'run\toption\tseconds\tmax_rss_kib\tidentical\n' >"$TRIAL_DIR/generation.tsv"
   printf 'run\tvariant\texit\tapp.conf\tpipeline.yml\tNOTICE.txt\tlocal-notes.txt\tunmerged\n' \

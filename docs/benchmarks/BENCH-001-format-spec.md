@@ -4,7 +4,7 @@
 | --- | --- |
 | Identifiant | BENCH-001 |
 | Sujet | Format et langage de validation de la spec projet, source de vérité du générateur |
-| Statut | brouillon |
+| Statut | relu |
 | Ouvert le | 2026-11-19 |
 | Mis à jour le | 2026-11-19 |
 | Auteur | [BENCH] |
@@ -12,7 +12,7 @@
 | Périmètre | Générateur (CLI et plugin). La spec est aussi versionnée dans le projet généré (US-003) |
 | Choix du PRD | Format de la spec : YAML validé par un JSON Schema rangé dans `schema/` (option pressentie) |
 | ADR lié | À écrire par [ARCHI], numéro à attribuer |
-| Verdict proposé | Option A, YAML validé par JSON Schema 2020-12 : 93/100, soit 10 points devant l'option D2 |
+| Verdict proposé | Option A, YAML validé par JSON Schema 2020-12 : 91/100, soit 8 points devant l'option D2 |
 
 ## 1. Contexte
 
@@ -47,7 +47,9 @@
 | C | Oui, Apache-2.0 [S34], [S60] | Oui [S36] | Oui, 0.33.1 le 2026-11-18 [S36] | 2026-11-19 | Retenue |
 | D1, D2 | Oui, Apache-2.0 pour la spécification et score-compose [S46], [S55], [S60] | Oui, CNCF Sandbox [S53] | Oui : spécification 0.4.1 le 2026-05-25, score-compose 0.50.0 le 2026-11-14 [S48], [S54] | 2026-11-19 | Retenue |
 
-[BENCH] Aucune option éliminée. Pour A, le critère de release s'applique au validateur : le texte de la spécification JSON Schema 2020-12 n'a pas été republié depuis le 2022-06-16 [S2], ce qui est le propre d'un standard stable, et le projet travaille à sa normalisation à l'IETF [S5], [S6]. Cette lecture du critère pour une spécification est à confirmer par [ARCHI].
+[BENCH] Aucune option éliminée. Pour A, le critère de release s'applique au validateur : le texte de la spécification JSON Schema 2020-12 n'a pas été republié depuis le 2022-06-16 [S2], ce qui est le propre d'un standard stable, et le projet travaille à sa normalisation à l'IETF [S5], [S6]. [SECU] juge cette lecture défendable ; elle reste à écrire dans l'ADR de [ARCHI].
+
+[BENCH] Deux dépendances transitives de A n'ont rien publié depuis plus de douze mois : referencing 0.37.0 le 2025-10-13 et jsonschema-specifications 2025.9.1 le 2025-09-08 [S68], [S69]. Ce sont les versions installées pendant l'essai [M4]. Le critère vise le choix de techno, pas ses dépendances transitives : l'ADR doit l'écrire.
 
 ## 4. Mesures
 
@@ -72,13 +74,13 @@
 | Système | macOS 27.2.1 (build 26B131) |
 | Moteur de conteneurs | Aucun, la mesure n'en utilise pas |
 | Ressources allouées | Sans objet |
-| Versions mesurées | check-jsonschema 0.39.0 lancé par uv 0.12.23 (CPython 3.13 géré par uv), cue 0.17.1, pkl 0.33.1, score-compose 0.50.0, figées dans le script |
-| Installation | cue et pkl par leurs formules homebrew-core [S45], [S44], documentées par les projets [S18], [S33] ; score-compose par le tap officiel `score-spec/tap` [S58], [S59] ; check-jsonschema par uvx |
-| Charge parasite | D'autres agents travaillaient en parallèle sur la machine : charge moyenne de 5,19 sur une minute au lancement (14 cœurs) |
+| Versions mesurées | check-jsonschema 0.39.0 lancé par uv 0.12.23 avec CPython 3.13.15 et les paquets publiés avant le 2026-11-19 (`--python`, `--exclude-newer`), dont jsonschema 4.26.0, referencing 0.37.0, jsonschema-specifications 2025.9.1 et ruamel-yaml 0.19.1 ; le script affiche la liste complète. cue 0.17.1, pkl 0.33.1, score-compose 0.50.0. Tout est figé dans le script |
+| Installation | cue et pkl par leurs formules homebrew-core [S45], [S44], documentées par les projets [S18], [S33] ; score-compose par le tap officiel `score-spec/tap` [S58], [S59] ; check-jsonschema par uvx. Schéma Score copié sans modification dans `tests/bench/bench-001/vendor/score-spec/`, avec son avis de licence, et contrôlé par son hash Git à chaque lancement [S75], [S76], [S77] |
+| Charge parasite | D'autres agents travaillaient en parallèle sur la machine : charge moyenne de 3,30 sur une minute au lancement (14 cœurs) |
 
 ### 4.3 Protocole
 
-1. État de départ : outils installés aux versions du script, caches chauds (environnement uvx de check-jsonschema, schéma Score téléchargé), état de score-compose initialisé dans un dossier temporaire supprimé en fin de script.
+1. État de départ : outils installés aux versions du script, caches chauds (environnement uvx de check-jsonschema), schéma Score lu sur sa copie locale, état de score-compose initialisé dans un dossier temporaire supprimé en fin de script.
 2. Commande : chaque option valide sa spec valide (`yaml/valid.yaml` pour A et B, `pkl/valid.pkl` et `yaml/valid.yaml` pour C, `score/valid.score.yaml` pour D1, `score-section/valid.yaml` pour D2).
 3. Fin de la mesure : la sortie du processus de validation.
 4. Relevé : horloge `date +%s%N` autour de `/usr/bin/time -l`, qui donne la mémoire résidente maximale. Le temps inclut le lancement de `/usr/bin/time`, le même pour toutes les options.
@@ -94,28 +96,28 @@ tests/bench/bench-001-validate.sh 5
 
 ### 4.4 Résultats
 
-[BENCH] Mesures lancées le 2026-11-19 à 00:37 UTC, sur la machine de la section 4.2. Un passage complet lancé juste avant donnait des médianes voisines : 123,3 ms pour A, 14,9 ms pour B, 16,3 ms pour C.
+[BENCH] Mesures lancées le 2026-11-19 à 01:18 UTC, sur la machine de la section 4.2, après les corrections demandées par [SECU] (section 10) : schéma Score local, Python et date de résolution figés.
 
 | Mesure | Option | Exécution 1 | Exécution 2 | Exécution 3 | Exécution 4 | Exécution 5 | Médiane | Écart |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| M1 | A0, démarrage seul (`--version`) | 131,9 | 129,8 | 126,8 | 133,5 | 136,3 | 131,9 | 9,5 |
-| M1 | A, check-jsonschema | 131,6 | 133,2 | 134,8 | 131,8 | 134,4 | 133,2 | 3,2 |
-| M1 | B, `cue vet` | 15,8 | 16,4 | 15,6 | 15,1 | 15,7 | 15,7 | 1,3 |
-| M1 | C, `pkl eval` sur la spec Pkl | 16,3 | 16,2 | 15,8 | 16,4 | 16,6 | 16,3 | 0,8 |
-| M1 | C, `pkl eval` sur la spec YAML | 16,7 | 16,4 | 17,4 | 16,7 | 16,3 | 16,7 | 1,1 |
-| M1 | D1, check-jsonschema et schéma Score | 187,3 | 214,5 | 185,9 | 199,2 | 198,8 | 198,8 | 28,6 |
-| M1 | D1, `score-compose generate` | 24,4 | 23,6 | 25,3 | 23,7 | 23,8 | 23,8 | 1,7 |
-| M1 | D2, check-jsonschema | 191,6 | 178,4 | 180,2 | 190,7 | 179,3 | 180,2 | 13,2 |
-| M2 | A0, démarrage seul | 40,6 | 40,8 | 40,7 | 40,7 | 40,8 | 40,7 | 0,2 |
-| M2 | A, check-jsonschema | 40,9 | 40,9 | 41,1 | 41,3 | 41,0 | 41,0 | 0,4 |
-| M2 | B, `cue vet` | 21,2 | 21,1 | 21,1 | 21,4 | 21,3 | 21,2 | 0,3 |
-| M2 | C, spec Pkl | 22,9 | 22,9 | 22,9 | 22,9 | 22,9 | 22,9 | 0,0 |
+| M1 | A0, démarrage seul (`--version`) | 123,2 | 116,8 | 131,9 | 131,0 | 118,6 | 123,2 | 15,1 |
+| M1 | A, check-jsonschema | 123,5 | 122,8 | 121,4 | 123,7 | 125,5 | 123,5 | 4,1 |
+| M1 | B, `cue vet` | 13,8 | 15,7 | 14,2 | 14,3 | 14,5 | 14,3 | 1,9 |
+| M1 | C, `pkl eval` sur la spec Pkl | 16,2 | 14,8 | 15,0 | 15,1 | 16,5 | 15,1 | 1,7 |
+| M1 | C, `pkl eval` sur la spec YAML | 15,4 | 15,6 | 15,9 | 16,4 | 14,9 | 15,6 | 1,5 |
+| M1 | D1, check-jsonschema et schéma Score | 129,5 | 127,5 | 129,9 | 131,6 | 126,1 | 129,5 | 5,5 |
+| M1 | D1, `score-compose generate` | 22,3 | 22,6 | 22,3 | 24,0 | 23,3 | 22,6 | 1,7 |
+| M1 | D2, check-jsonschema | 124,0 | 119,5 | 121,7 | 125,9 | 123,1 | 123,1 | 6,4 |
+| M2 | A0, démarrage seul | 40,7 | 40,6 | 40,6 | 40,8 | 40,9 | 40,7 | 0,3 |
+| M2 | A, check-jsonschema | 40,8 | 40,9 | 41,0 | 41,1 | 41,0 | 41,0 | 0,3 |
+| M2 | B, `cue vet` | 21,0 | 21,0 | 21,3 | 21,3 | 21,0 | 21,0 | 0,3 |
+| M2 | C, spec Pkl | 22,9 | 22,9 | 22,9 | 22,8 | 22,9 | 22,9 | 0,1 |
 | M2 | C, spec YAML | 24,6 | 24,6 | 24,6 | 24,6 | 24,6 | 24,6 | 0,0 |
-| M2 | D1, check-jsonschema | 46,1 | 45,9 | 46,2 | 46,0 | 46,0 | 46,0 | 0,3 |
-| M2 | D1, `score-compose generate` | 24,1 | 24,2 | 24,2 | 24,1 | 24,3 | 24,2 | 0,2 |
-| M2 | D2, check-jsonschema | 46,0 | 45,8 | 46,2 | 45,9 | 46,0 | 46,0 | 0,4 |
+| M2 | D1, check-jsonschema | 41,2 | 41,2 | 41,1 | 41,1 | 41,1 | 41,1 | 0,1 |
+| M2 | D1, `score-compose generate` | 24,1 | 24,1 | 24,4 | 24,8 | 24,1 | 24,1 | 0,7 |
+| M2 | D2, check-jsonschema | 41,0 | 40,9 | 41,3 | 41,2 | 40,9 | 41,0 | 0,4 |
 
-[BENCH] M1 en millisecondes, M2 en Mio. Pour A, presque tout le temps part dans le démarrage d'uvx et de Python : 133,2 ms contre 131,9 ms sans validation. D1 et D2 passent par un schéma distant, que check-jsonschema garde en cache d'après sa date de modification [S15] ; l'écart plus large de ces deux lignes vient probablement de cette vérification réseau, non isolée ici.
+[BENCH] M1 en millisecondes, M2 en Mio. Pour A, presque tout le temps part dans le démarrage d'uvx et de Python : 123,5 ms contre 123,2 ms sans validation. Le passage précédent, à 00:37 UTC, lisait le schéma Score en ligne : D1 prenait alors 198,8 ms et 46,0 Mio, D2 180,2 ms et 46,0 Mio. Avec la copie locale, les deux rejoignent A. L'écart venait donc de l'accès réseau, que check-jsonschema fait pour revalider son cache [S15].
 
 | M3 | Taille |
 | --- | --- |
@@ -135,7 +137,7 @@ tests/bench/bench-001-validate.sh 5
 | C, spec en Pkl | Acceptée | 1 sur 3 | Ligne et extrait du fichier fautif | Arrêt à la première erreur. Message clair (``Expected value of type `"local"\|"gcp"`, but got `"aws"`.``), contrainte affichée en diagramme de valeurs |
 | C, spec en YAML | Acceptée | 1 sur 3 | Ligne du schéma, jamais celle du YAML | Demande un module de correspondance écrit à la main (`pkl/yaml-check.pkl`) qui recopie la structure du schéma. Une clé inconnue est ignorée au lieu d'être refusée, au premier niveau comme dans une classe |
 | D1 | Acceptée par le schéma et par score-compose | 1 sur 3 | Chemin JSON | La cible n'a pas de place : `targets` est refusé (`Additional properties are not allowed`). `cloud-sql` passe le schéma, où le type est une chaîne libre, et n'échoue qu'au provisionnement : `resource 'cloud-sql.default#api.db' is not supported by any provisioner`. La région n'est pas exprimable |
-| D2 | Acceptée | 3 sur 3 | Chemin JSON | Comme A. Le schéma Score est bien appliqué par référence : retirer `containers` donne `'containers' is a required property`. La référence pointe vers une URL, récupérée à la validation |
+| D2 | Acceptée | 3 sur 3 | Chemin JSON | Comme A. Le schéma Score est bien appliqué par référence : retirer `containers` donne `'containers' is a required property`. Au premier passage, la référence pointait vers une URL récupérée à la validation ; elle vise maintenant la copie locale du schéma |
 
 [BENCH] Clés inconnues : A et B refusent une clé ajoutée au premier niveau ou dans `project` (`Additional properties are not allowed`, `field not allowed` avec sa ligne). C refuse une propriété inconnue dans une spec écrite en Pkl (``Cannot find property `owner` in object of type `Spec#Project`.``), mais l'ignore quand la spec est en YAML.
 
@@ -215,11 +217,11 @@ l'autre.
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| A | 5/5 | 10 | python-jsonschema : politique publiée, accusé de réception visé sous 48 h, aucun avis publié ni vulnérabilité dans OSV. check-jsonschema : une CVE (CVE-2024-53848, cache des schémas distants), corrigée en 0.30.0. Format déclaratif : la spec ne contient pas de code | [S11], [S14], [S61] |
+| A | 4/5 | 8 | Aucun avis publié ni vulnérabilité dans OSV pour python-jsonschema ; une CVE pour check-jsonschema (CVE-2024-53848, cache des schémas distants), corrigée en 0.30.0. referencing ne récupère aucune référence distante par défaut : la validation n'ouvre pas de requête réseau détournable (SSRF). Format déclaratif : la spec ne contient pas de code. Réserve, relevée par [SECU] : la politique tient en une adresse et « I will do my best to respond within 48 hours », et seule la dernière version est maintenue. Même niveau que CUE | [S11], [S14], [S61], [S66], [S67] |
 | B | 4/5 | 8 | Aucun avis publié, aucune vulnérabilité dans OSV. Réserve : politique réduite à une adresse de signalement, sans délai annoncé | [S27], [S28], [S29] |
 | C | 3/5 | 6 | Deux avis publiés le 2026-07-08 (sévérités modérée et faible), le premier corrigé en 0.32.0 publiée le même jour. Mais une spec Pkl est un programme : par défaut, elle peut charger des modules par `https:` et des paquets. Action : restreindre l'évaluation avec `--allowed-modules` et `--allowed-resources` | [S33], [S36], [S38], [S39] |
 | D1 | 4/5 | 8 | Politique publiée, réponse visée sous dix jours ouvrés, aucun avis publié ni vulnérabilité dans OSV. Réserve : les provisionneurs `cmd://` exécutent des commandes à la génération | [S56], [S57], [S62], [S64] |
-| D2 | 4/5 | 8 | Base de A, mais la référence au schéma Score se télécharge à la validation. Une étiquette Git se déplace : il faudra copier le schéma dans le dépôt et le figer | [S15], [S47] |
+| D2 | 4/5 | 8 | Note de A. Le schéma Score ne doit pas se télécharger à la validation, une étiquette Git pouvant se déplacer : il se copie dans le dépôt, se fige et garde son avis Apache-2.0, comme dans l'essai | [S15], [S47], [S74] |
 
 ### 5.6 Empreinte sur PC (RAM, CPU, démarrage), poids 10
 
@@ -227,11 +229,11 @@ l'autre.
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| A | 5/5 | 10 | 133,2 ms et 41,0 Mio, presque tout pour le démarrage d'uvx et de Python (131,9 ms sans validation). 15,9 Mio de paquets pour check-jsonschema, à côté de l'interpréteur Python que la CLI demande déjà | [M1], [M2], [M3] |
-| B | 5/5 | 10 | 15,7 ms et 21,2 Mio, binaire de 22,5 Mio | [M1], [M2], [M3] |
-| C | 4/5 | 8 | 16,3 ms et 22,9 Mio. Réserve : binaire de 84,9 Mio, près de quatre fois les autres | [M1], [M2], [M3] |
-| D1 | 5/5 | 10 | 23,8 ms et 24,2 Mio avec score-compose, provisionnement compris. Binaire de 23,1 Mio | [M1], [M2], [M3] |
-| D2 | 5/5 | 10 | 180,2 ms et 46,0 Mio par check-jsonschema, même pile que A | [M1], [M2] |
+| A | 5/5 | 10 | 123,5 ms et 41,0 Mio, presque tout pour le démarrage d'uvx et de Python (123,2 ms sans validation). 15,9 Mio de paquets pour check-jsonschema, à côté de l'interpréteur Python que la CLI demande déjà | [M1], [M2], [M3] |
+| B | 5/5 | 10 | 14,3 ms et 21,0 Mio, binaire de 22,5 Mio | [M1], [M2], [M3] |
+| C | 4/5 | 8 | 15,1 ms et 22,9 Mio. Réserve : binaire de 84,9 Mio, près de quatre fois les autres | [M1], [M2], [M3] |
+| D1 | 5/5 | 10 | 22,6 ms et 24,1 Mio avec score-compose, provisionnement compris. Binaire de 23,1 Mio | [M1], [M2], [M3] |
+| D2 | 5/5 | 10 | 123,1 ms et 41,0 Mio par check-jsonschema, même pile que A | [M1], [M2] |
 
 ### 5.7 Portabilité multi-cloud, poids 10
 
@@ -257,7 +259,11 @@ l'autre.
 
 ### 5.9 Coût (managé ou opérationnel), poids 5
 
-[BENCH] Le critère ne départage pas : aucune option n'a de licence payante ni de service à héberger. Le temps passé à installer un binaire supplémentaire est déjà compté en expérience dev. À relire par [FINOPS].
+[BENCH] Le critère ne départage pas : aucune option n'a de licence payante ni de service à héberger. Le temps passé à installer un binaire supplémentaire est déjà compté en expérience dev. Relu par [FINOPS], sans changement de note.
+
+[BENCH] Pour B, la partie commerciale de CUE Labs est un « Configuration Control Plane » sans licence ni prix publiés, et la page de tarifs du site renvoie une erreur 404 ; CELIAN n'utiliserait que `cue vet`, sous Apache-2.0 [S19], [S30], [S78].
+
+[BENCH] Un coût indirect, relevé par [FINOPS] : A signale les trois erreurs en une passe, B et C une seule [M4]. Une spec fautive peut donc demander jusqu'à trois tours de la boucle de correction de la phase 5 au lieu d'un, et l'utilisateur paie les tokens de chaque tour. Ce point est déjà pénalisé en 5.8 ; il ne change pas la note de coût.
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
@@ -276,30 +282,35 @@ l'autre.
 | Gouvernance (fondation, multi-vendeurs) | 15 | 4/5, 12 pts | 2/5, 6 pts | 2/5, 6 pts | 4/5, 12 pts | 4/5, 12 pts |
 | Maturité et adoption | 15 | 5/5, 15 pts | 3/5, 9 pts | 2/5, 6 pts | 2/5, 6 pts | 3/5, 9 pts |
 | Activité et maintenance | 10 | 4/5, 8 pts | 5/5, 10 pts | 5/5, 10 pts | 5/5, 10 pts | 4/5, 8 pts |
-| Sécurité (CVE, réactivité) | 10 | 5/5, 10 pts | 4/5, 8 pts | 3/5, 6 pts | 4/5, 8 pts | 4/5, 8 pts |
+| Sécurité (CVE, réactivité) | 10 | 4/5, 8 pts | 4/5, 8 pts | 3/5, 6 pts | 4/5, 8 pts | 4/5, 8 pts |
 | Empreinte sur PC (RAM, CPU, démarrage) | 10 | 5/5, 10 pts | 5/5, 10 pts | 4/5, 8 pts | 5/5, 10 pts | 5/5, 10 pts |
 | Portabilité multi-cloud | 10 | 5/5, 10 pts | 5/5, 10 pts | 4/5, 8 pts | 3/5, 6 pts | 5/5, 10 pts |
 | Expérience dev et documentation | 10 | 4/5, 8 pts | 3/5, 6 pts | 2/5, 4 pts | 1/5, 2 pts | 3/5, 6 pts |
 | Coût (managé ou opérationnel) | 5 | 5/5, 5 pts | 5/5, 5 pts | 5/5, 5 pts | 5/5, 5 pts | 5/5, 5 pts |
-| Total | 100 | 93 / 100 | 79 / 100 | 68 / 100 | 74 / 100 | 83 / 100 |
+| Total | 100 | 91 / 100 | 79 / 100 | 68 / 100 | 74 / 100 | 83 / 100 |
 
 ## 7. Verdict proposé
 
-[BENCH] Option proposée : A, une spec YAML validée par un JSON Schema 2020-12, avec 93 points. Elle devance D2 de 10 points, B de 14, D1 de 19 et C de 25.
+[BENCH] Option proposée : A, une spec YAML validée par un JSON Schema 2020-12, avec 91 points. Elle devance D2 de 8 points, B de 12, D1 de 17 et C de 23.
 
 [BENCH] Pourquoi. A est la seule option qui cumule un format mûr et une gouvernance sans éditeur unique : 27 points sur 30 pour ces deux critères, contre 15 pour CUE et 12 pour Pkl [S2], [S5], [S30], [S35]. L'essai la place aussi en tête : trois erreurs signalées en une passe, et une validation que la CLI Python fait seule, comme US-003 le demande [M4], [S9]. CUE et Pkl obligeraient la CLI à appeler un binaire externe [S31], [S41]. Score seul ne peut pas porter la spec : il n'a ni cible ni région, et son type de ressource reste une chaîne libre [S47], [M4].
 
-[BENCH] Sensibilité. Pour égaler A, D2 devrait gagner deux crans en maturité et deux en expérience dev, ce que seule une version stable du schéma Score rendrait plausible. Un cran de moins pour A en gouvernance (3 points) ou en expérience dev (2 points) la laisse devant. Le verdict ne repose pas sur une note isolée.
+[BENCH] Sensibilité. Pour égaler A, D2 devrait gagner deux crans en maturité et un en expérience dev, ce que seule une version stable du schéma Score rendrait plausible. Un cran de moins pour A sur n'importe quel critère coûte au plus 3 points et la laisse devant, à 88 contre 83. Deux crans perdus sur des critères de poids 15 la ramèneraient à 85, encore devant. Le verdict ne repose pas sur une note isolée.
 
 [BENCH] Gouvernance. A ne dépend d'aucun éditeur, sans être portée par une fondation : sa normalisation passe par l'IETF [S5], [S6]. Score est le seul projet de fondation (CNCF), mais il ne couvre que les charges de travail ; la préférence du principe V joue « à fonctionnalité comparable », ce qui n'est pas le cas ici. L'ADR doit l'écrire.
 
-[BENCH] Réserves. Le validateur Python repose sur un auteur principal et n'a publié qu'une release en douze mois [S9], [S10]. Si le projet s'arrêtait, d'autres validateurs prennent en charge 2020-12 [S65]. La spec à venir de l'IETF pourra s'écarter de 2020-12 [S5] : le schéma de CELIAN fixe `$schema` sur 2020-12. Les erreurs n'ont pas de numéro de ligne ; [DEV] jugera s'il faut le retrouver depuis le chemin JSON. Prochaine vérification : le 2027-05-19, ou au jalon IETF du 2027-05-31 [S6].
+[BENCH] Réserves. Le validateur Python repose sur un auteur principal et n'a publié qu'une release en douze mois [S9], [S10]. Si le projet s'arrêtait, d'autres validateurs prennent en charge 2020-12 [S65]. La spec à venir de l'IETF pourra s'écarter de 2020-12 [S5] : le schéma de CELIAN fixe `$schema` sur 2020-12. Les erreurs n'ont pas de numéro de ligne ; [DEV] jugera s'il faut le retrouver depuis le chemin JSON.
+
+[BENCH] Vérification datée du 2027-01-07. python-jsonschema 4.26.0 date du 2026-01-07 [S10] : sans nouvelle version à cette date, A tombe sous le critère de release, et le choix se rouvre. Prochaine vérification générale ensuite : le 2027-05-19, ou au jalon IETF du 2027-05-31 [S6].
+
+[BENCH] Parseur YAML. Il sert à A, B et D2, et ce rapport ne l'a pas évalué ; dans l'essai, check-jsonschema embarque ruamel-yaml 0.19.1 [M4]. La spec est versionnée dans le projet généré, donc la CLI doit la traiter comme une entrée non fiable. Réserve de [SECU] : avec PyYAML, `yaml.safe_load` uniquement, et PyYAML 5.4 au minimum. Quatre failles critiques permettaient d'exécuter du code depuis un YAML hostile avec `load` ou `full_load`, corrigées en 5.1, 5.2, 5.3.1 et 5.4 [S70], [S71], [S72], [S73].
 
 [BENCH] Suites.
 
 - ADR de [ARCHI] sur le format de la spec, en citant la lecture du critère de release pour une spécification (section 3).
 - Nommer les composants avec les types de Score (`postgres`, `redis`), comme le proposait l'analyse des outils (section 6.3). Cela ne coûte rien et garde ouvert un passage à D2 par une version majeure du schéma de spec, si Score publie un schéma stable.
-- Aucune référence distante dans les schémas de `schema/` : tout schéma tiers se copie dans le dépôt et se fige.
+- Aucune référence distante dans les schémas de `schema/` : tout schéma tiers se copie dans le dépôt, sans modification, et se fige. La copie garde l'avis de licence et de copyright Apache-2.0 (section 4, points a et c) [S74]. L'essai le fait pour le schéma Score : `tests/bench/bench-001/vendor/score-spec/` contient la copie, son `NOTICE.md` et son hash Git, contrôlé par le script.
+- Schéma v1 : toute chaîne qui finit dans un chemin, un nom de ressource ou une commande porte un `pattern` strict et une `maxLength` (demande de [SECU]). Le schéma de l'essai pose un `pattern` sur le nom du projet et la région, sans `maxLength`.
 - Entrées de `catalog/` à créer avec licence, gouvernance, statut, date et source : JSON Schema 2020-12, python-jsonschema, check-jsonschema s'il sert en pre-commit et en CI.
 - Risque à proposer au DSI pour `docs/risques.md` : un validateur Python porté par une personne (R-23 si le DSI le retient).
 
@@ -308,9 +319,10 @@ l'autre.
 | Limite | Effet possible sur le verdict | Ce qui la lèverait |
 | --- | --- | --- |
 | Une seule machine, Apple Silicon sous macOS | Empreinte propre à ce matériel. Linux, prévu par Q5, n'est pas mesuré | Relancer le script sur Linux ; il gère GNU time |
-| Autres agents actifs pendant la mesure (charge de 5,19) | Temps un peu gonflés, dans les mêmes proportions pour toutes les options | Relancer sur une machine au repos |
+| Autres agents actifs pendant la mesure (charge de 3,30) | Temps un peu gonflés, dans les mêmes proportions pour toutes les options | Relancer sur une machine au repos |
 | A mesurée via uvx et check-jsonschema | M1 surestime A : la CLI validera dans son propre processus, sans relancer Python | Mesurer la validation en processus quand la CLI existera |
-| D1 et D2 avec un schéma distant | Le temps inclut une vérification réseau du cache | Copier le schéma Score en local |
+| Parseur YAML de la CLI non évalué | Une faille du parseur toucherait A, B et D2 de la même façon, sans changer le classement | Choix du parseur par [DEV], avec la réserve de [SECU] (section 7) |
+| Résolution des paquets Python par date de publication | `--exclude-newer` fige ce que uvx installe, mais pas l'index lui-même | Fichier de verrouillage avec empreintes quand la CLI existera |
 | Schémas écrits par l'auteur du rapport | Un schéma CUE écrit autrement, sans la compréhension `if list.Contains`, produirait peut-être moins de cascades | Faire relire le schéma CUE par un connaisseur |
 | Note d'expérience dev fondée sur une seule spec minimale | Une spec plus grande peut changer l'écart | Refaire l'essai sur le schéma v1 en phase 3 |
 | Option pressentie par le PRD classée première | Biais de confirmation | Notes sourcées ; relecture par [SECU] et [ARCHI] |
@@ -318,7 +330,7 @@ l'autre.
 | Affiliations des membres du comité JSON Schema non trouvées | La note multi-vendeurs de A repose sur les règles, pas sur les personnes | Lire la liste des membres du comité |
 | Adoptants de Score déclarés par le projet lui-même | Adoption peut-être surestimée ou sous-estimée | Source indépendante |
 | Dates des releases CUE lues sur le proxy des modules Go | La page GitHub n'affichait pas l'année | Sans objet, le proxy est la source officielle des modules Go |
-| Critère de release appliqué au validateur et non au texte de JSON Schema | A pourrait être jugée autrement par [ARCHI] | Règle à fixer dans l'ADR |
+| Critère de release appliqué au validateur et non au texte de JSON Schema, ni aux dépendances transitives | A pourrait être jugée autrement par [ARCHI]. [SECU] juge la lecture défendable | Règle à fixer dans l'ADR |
 
 ## 9. Sources
 
@@ -389,14 +401,37 @@ l'autre.
 | S63 | <https://docs.score.dev/docs/score-implementation/score-k8s/resources-provisioners/> | 2026-11-19 | Types par défaut de score-k8s, aucun service managé de GCP | Oui |
 | S64 | <https://docs.score.dev/docs/score-implementation/score-compose/resources-provisioners/> | 2026-11-19 | Types par défaut de score-compose dont `postgres` et `redis`, provisionneurs `cmd://` | Oui |
 | S65 | <https://json-schema.org/tools?query=&sortBy=name&sortOrder=ascending&groupBy=toolingTypes&licenses=&languages=&drafts=2020-12&toolingTypes=validator> | 2026-11-19 | Validateurs JavaScript prenant en charge 2020-12, dont Ajv | Oui |
+| S66 | <https://github.com/python-jsonschema/jsonschema/blob/main/.github/SECURITY.md> | 2026-11-19 | Seule la dernière version maintenue ; « I will do my best to respond within 48 hours » | Oui |
+| S67 | <https://python-jsonschema.readthedocs.io/en/stable/referencing/> | 2026-11-19 | `referencing.Registry` ne récupère aucune référence distante par défaut | Oui |
+| S68 | <https://github.com/python-jsonschema/referencing/releases.atom> | 2026-11-19 | referencing v0.37.0 le 2025-10-13, dernière release | Oui |
+| S69 | <https://github.com/python-jsonschema/jsonschema-specifications/releases.atom> | 2026-11-19 | jsonschema-specifications v2025.9.1 le 2025-09-08, dernière release | Oui |
+| S70 | <https://github.com/advisories/GHSA-rprw-h62v-c2w7> | 2026-11-19 | PyYAML, CVE-2017-18342, critique, corrigée en 5.1 | Oui |
+| S71 | <https://github.com/advisories/GHSA-3pqx-4fqf-j49f> | 2026-11-19 | PyYAML, CVE-2019-20477, critique, corrigée en 5.2 | Oui |
+| S72 | <https://github.com/advisories/GHSA-6757-jp84-gxfx> | 2026-11-19 | PyYAML, CVE-2020-1747, critique, corrigée en 5.3.1 | Oui |
+| S73 | <https://github.com/advisories/GHSA-8q59-q68h-6hv4> | 2026-11-19 | PyYAML, CVE-2020-14343, critique, corrigée en 5.4 | Oui |
+| S74 | <https://www.apache.org/licenses/LICENSE-2.0> | 2026-11-19 | Section 4 : copie de la licence (a), avis de modification (b), avis de copyright et d'attribution conservés (c), fichier NOTICE (d) | Oui |
+| S75 | <https://github.com/score-spec/spec/blob/0.4.1/LICENSE> | 2026-11-19 | Apache-2.0, « Copyright 2022 The Score Authors », aucun fichier NOTICE | Oui |
+| S76 | <https://api.github.com/repos/score-spec/spec/contents/score-v1b1.json?ref=0.4.1> | 2026-11-19 | Blob `9acd54435984be59d653fb73b37980713d9b4d1e`, 16734 octets | Oui |
+| S77 | <https://api.github.com/repos/score-spec/spec/commits/0.4.1> | 2026-11-19 | Étiquette 0.4.1 sur le commit `f4cc3504cde3e1c664b11dbe635d90cb31a864ac` du 2026-05-25 | Oui |
+| S78 | <https://cue.dev/pricing> | 2026-11-19 | Erreur 404 : aucun tarif publié | Oui |
 
 ## 10. Relectures
 
 | Relecteur | Porte sur | Date | Avis |
 | --- | --- | --- | --- |
-| [SECU] | Licences, critères éliminatoires, sécurité | à venir | à venir |
-| [FINOPS] | Coût | à venir | à venir |
+| [SECU] | Licences, critères éliminatoires, sécurité | 2026-11-19 | Favorable |
+| [FINOPS] | Coût | 2026-11-19 | Favorable |
 
-[SECU] Remarques et suite donnée.
+[SECU] Avis favorable, six remarques. Suite donnée par [BENCH] le 2026-11-19, chaque source relue le même jour :
 
-[FINOPS] Remarques et suite donnée.
+1. Sécurité de A ramenée de 5/5 à 4/5 : la politique de python-jsonschema tient en une adresse et un délai de bonne volonté, et seule la dernière version est maintenue [S66]. L'absence de récupération distante par referencing reste écrite en positif [S67]. Total de A : 91, écart avec D2 : 8 points. En-tête, grille, verdict et sensibilité mis à jour.
+2. Critère de release appliqué au validateur : jugé défendable. Ajouté : la vérification datée du 2027-01-07 (section 7), et les dépendances transitives sans release depuis douze mois, referencing et jsonschema-specifications (section 3).
+3. Parseur YAML : réserve ajoutée en section 7 et en limite. Correction de [BENCH] sur la remarque : les quatre failles citées ne sont pas toutes corrigées en 5.4, mais en 5.1, 5.2, 5.3.1 et 5.4 [S70] à [S73]. La conclusion ne change pas, PyYAML 5.4 au minimum les couvre toutes.
+4. `pattern` strict et `maxLength` pour le schéma v1 : ajoutés aux suites.
+5. Schéma Score copié et figé avec son avis Apache-2.0 : ajouté aux suites, et fait dans l'essai.
+6. Script : le schéma Score est copié dans `tests/bench/bench-001/vendor/score-spec/`, avec `NOTICE.md`. Il provient du cache de check-jsonschema et son hash Git est identique au blob de l'étiquette 0.4.1 [S76]. Le script vérifie ce hash à chaque lancement. `uvx` reçoit `--python 3.13.15` et `--exclude-newer 2026-11-19`, syntaxe lue dans `uv help tool run` (uv 0.12.23), et le script affiche les paquets résolus par `uv pip compile`. Le hook `trailing-whitespace` exclut les dossiers `vendor/` des bancs d'essai, parce que la copie contient une espace en fin de ligne et ne doit pas être modifiée. Script relancé : section 4.4.
+
+[FINOPS] Avis favorable, aucune note changée. Suite donnée par [BENCH] le 2026-11-19 :
+
+1. Option B : la phrase sur la partie commerciale de CUE Labs, sans licence ni prix publiés, est ajoutée en 5.9. La page de tarifs renvoie bien une erreur 404 [S78].
+2. Coût des tours de la boucle de correction : ajouté en 5.9, avec renvoi à la note d'expérience dev de la section 5.8.

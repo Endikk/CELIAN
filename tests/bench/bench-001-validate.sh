@@ -9,19 +9,24 @@
 #   runs  measured runs per option, 5 by default, after one warm-up run.
 #
 # Prerequisites, with the versions pinned below and checked at start:
-#   uv (for uvx), cue, pkl, score-compose, and /usr/bin/time.
-# Network: the warm-up run lets uvx fetch check-jsonschema and lets
-# check-jsonschema fetch the pinned Score JSON Schema; both are then cached.
+#   uv (for uv and uvx), cue, pkl, score-compose, git and /usr/bin/time.
+# Network: the first run lets uvx fetch check-jsonschema, its dependencies
+# (resolved as of EXCLUDE_NEWER) and, if missing, the pinned Python. The Score
+# JSON Schema is a local copy (bench-001/vendor/score-spec), checked by hash.
 set -euo pipefail
 
 readonly CHECK_JSONSCHEMA_VERSION="0.39.0"
+readonly PYTHON_VERSION="3.13.15"
+readonly EXCLUDE_NEWER="2026-11-19"
 readonly CUE_VERSION="0.17.1"
 readonly PKL_VERSION="0.33.1"
 readonly SCORE_COMPOSE_VERSION="0.50.0"
-readonly SCORE_SCHEMA_URL="https://raw.githubusercontent.com/score-spec/spec/0.4.1/score-v1b1.json"
+# Git blob of score-v1b1.json at tag 0.4.1 of score-spec/spec.
+readonly SCORE_SCHEMA_BLOB="9acd54435984be59d653fb73b37980713d9b4d1e"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bench-001"
 readonly ROOT
+readonly SCORE_SCHEMA="$ROOT/vendor/score-spec/score-v1b1.json"
 readonly RUNS="${1:-5}"
 
 WORK="$(mktemp -d)"
@@ -67,7 +72,16 @@ peak_mib() {
 }
 
 check_jsonschema() {
-  run uvx --quiet --from "check-jsonschema==${CHECK_JSONSCHEMA_VERSION}" check-jsonschema "$@"
+  run uvx --quiet --python "$PYTHON_VERSION" --exclude-newer "$EXCLUDE_NEWER" \
+    --from "check-jsonschema==${CHECK_JSONSCHEMA_VERSION}" check-jsonschema "$@"
+}
+
+# Prints the packages uv resolves for check-jsonschema with the same Python
+# and cut-off date as check_jsonschema above. Resolution only, no install.
+print_resolved_packages() {
+  printf 'check-jsonschema==%s\n' "$CHECK_JSONSCHEMA_VERSION" |
+    uv pip compile - --quiet --no-header --no-annotate \
+      --python-version "$PYTHON_VERSION" --exclude-newer "$EXCLUDE_NEWER"
 }
 
 # One function per option. Each takes the spec file to validate.
@@ -88,7 +102,7 @@ validate_c_pkl_yaml() {
 }
 
 validate_d1_score_schema() {
-  check_jsonschema --schemafile "$SCORE_SCHEMA_URL" "$1"
+  check_jsonschema --schemafile "$SCORE_SCHEMA" "$1"
 }
 
 # score-compose has no validate-only command: generate validates, provisions
@@ -110,10 +124,12 @@ baseline_check_jsonschema() {
 
 check_prerequisites() {
   local tool
-  for tool in uvx cue pkl score-compose; do
+  for tool in uv uvx cue pkl score-compose git; do
     command -v "$tool" >/dev/null 2>&1 || die "$tool is not installed"
   done
   [ -x /usr/bin/time ] || die "/usr/bin/time is missing (package 'time' on Linux)"
+  [ "$(git hash-object "$SCORE_SCHEMA")" = "$SCORE_SCHEMA_BLOB" ] ||
+    die "$SCORE_SCHEMA differs from score-spec/spec 0.4.1"
 
   cue version | head -n 1 | grep -qx "cue version v${CUE_VERSION}" ||
     die "cue ${CUE_VERSION} expected, got: $(cue version | head -n 1)"
@@ -235,6 +251,9 @@ main() {
   check_prerequisites
   printf 'Versions: check-jsonschema %s, cue %s, pkl %s, score-compose %s\n' \
     "$CHECK_JSONSCHEMA_VERSION" "$CUE_VERSION" "$PKL_VERSION" "$SCORE_COMPOSE_VERSION"
+  printf 'Python %s, packages uploaded before %s, resolved as:\n' \
+    "$PYTHON_VERSION" "$EXCLUDE_NEWER"
+  print_resolved_packages | sed 's/^/  /'
   printf 'Machine: %s %s\n' "$(uname -s)" "$(uname -m)"
   run_functional_checks
   run_measures
