@@ -1,0 +1,22 @@
+# Same spec with the three deliberate errors of ../yaml/invalid.yaml.
+specVersion: "0.1"
+project:
+  name: demo-saas
+  blueprint: saas-b2b
+targets:
+  - local
+  - gcp
+  - aws
+workloads:
+  api:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: api
+    containers:
+      api:
+        image: .
+    resources:
+      db:
+        type: cloud-sql
+      cache:
+        type: redis

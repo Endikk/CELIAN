@@ -1,0 +1,29 @@
+/// CELIAN project spec schema, Pkl version (BENCH-001 trial).
+module Spec
+
+typealias Target = "local" | "gcp"
+
+specVersion: "0.1"
+
+project: Project
+
+targets: Listing<Target>(!isEmpty, isDistinct)
+
+/// Required when [targets] contains "gcp".
+gcp: Gcp?(this != null || !targets.toList().contains("gcp"))
+
+components: Components
+
+class Project {
+  name: String(matches(Regex(#"^[a-z][a-z0-9-]{1,38}[a-z0-9]$"#)))
+  blueprint: "saas-b2b"
+}
+
+class Gcp {
+  region: String(matches(Regex(#"^[a-z]+-[a-z]+[0-9]+$"#)))
+}
+
+class Components {
+  database: "postgres"
+  cache: "redis"?
+}

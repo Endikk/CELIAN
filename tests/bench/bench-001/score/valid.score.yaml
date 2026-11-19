@@ -1,0 +1,13 @@
+# Score workload for the API of the minimal spec (option D1, Score alone).
+# Score has no field for the project, its blueprint, its targets or a region.
+apiVersion: score.dev/v1b1
+metadata:
+  name: api
+containers:
+  api:
+    image: .
+resources:
+  db:
+    type: postgres
+  cache:
+    type: redis

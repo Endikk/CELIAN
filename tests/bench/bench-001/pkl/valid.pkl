@@ -1,0 +1,19 @@
+// Minimal CELIAN project spec used by BENCH-001 (option C, written in Pkl).
+amends "Spec.pkl"
+
+specVersion = "0.1"
+project {
+  name = "demo-saas"
+  blueprint = "saas-b2b"
+}
+targets {
+  "local"
+  "gcp"
+}
+gcp = new {
+  region = "europe-west1"
+}
+components {
+  database = "postgres"
+  cache = "redis"
+}

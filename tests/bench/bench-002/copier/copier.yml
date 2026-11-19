@@ -1,0 +1,6 @@
+# Toy Copier template for BENCH-002. No tasks, migrations or Jinja
+# extensions, so it runs without --trust.
+project_name:
+  type: str
+  default: demo
+  help: Project name

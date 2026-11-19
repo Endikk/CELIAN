@@ -1,0 +1,24 @@
+# Minimal CELIAN project spec with a Score section (option D2).
+# Project fields belong to the CELIAN schema, each workload follows Score.
+specVersion: "0.1"
+project:
+  name: demo-saas
+  blueprint: saas-b2b
+targets:
+  - local
+  - gcp
+gcp:
+  region: europe-west1
+workloads:
+  api:
+    apiVersion: score.dev/v1b1
+    metadata:
+      name: api
+    containers:
+      api:
+        image: .
+    resources:
+      db:
+        type: postgres
+      cache:
+        type: redis
