@@ -14,7 +14,7 @@
 # pipeline.yml on the very line edited locally (a conflict is expected) and
 # NOTICE.txt, which is not touched locally.
 #
-# Usage: tests/bench/bench-002-day2.sh [TRIAL_DIR]
+# Usage: tests/bench/bench-002-day2.sh [TRIAL_DIR]  (default: a new mktemp -d)
 #   RUNS=3 by default. Results: TRIAL_DIR/generation.tsv and TRIAL_DIR/day2.tsv.
 # Needs: git >= 2.32, uv (uvx), Node.js >= 22.18 with npx. Writes nothing
 # outside TRIAL_DIR except the uv and npm download caches.
@@ -364,8 +364,14 @@ main() {
     generate "$@"
     return
   fi
-  TRIAL_DIR="${1:-${TMPDIR:-/tmp}/bench-002-trial}"
-  mkdir -p "$TRIAL_DIR"
+  # Default to a fresh private directory: a fixed path under /tmp could be
+  # pre-created or symlinked by another local user.
+  if [[ -n "${1:-}" ]]; then
+    TRIAL_DIR="$1"
+    mkdir -p "$TRIAL_DIR"
+  else
+    TRIAL_DIR="$(mktemp -d)"
+  fi
   TRIAL_DIR="$(cd "$TRIAL_DIR" && pwd)"
   log "trial directory: $TRIAL_DIR"
   log "versions: copier $COPIER_VERSION, cookiecutter $COOKIECUTTER_VERSION," \
