@@ -34,6 +34,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-24 | Outils du générateur portés par une personne ou un éditeur | Faible | Moyen | ARCHI, DEV | Ouvert |
 | R-25 | Démarrage local tributaire des registres publics | Moyenne | Moyen, fort pour la CI de la matrice | OPS, SECU | Ouvert |
 | R-26 | Moteur de conteneurs du poste sous licence payante | Moyenne | Moyen | OPS, FINOPS | Ouvert |
+| R-27 | Modules OpenTofu tirés sans contrôle d'intégrité | Faible | Fort | SECU, OPS | Ouvert |
 
 ## Détail
 
@@ -317,9 +318,17 @@ et ses adresses IP
 (<https://docs.cloud.google.com/sql/docs/postgres/start-stop-restart-instance>,
 lu le 15/11/2026).
 
+La protection contre la suppression, active par défaut sur Cloud SQL et GKE
+dans les trois socles de BENCH-008 (2026-11-19), fait échouer `tofu destroy`.
+Le démontage se fait donc en deux temps : un apply qui lève la protection,
+lancé par l'utilisateur, puis le destroy. Sinon le cluster et l'instance
+restent et facturent.
+
 Mitigation : une procédure de démontage écrite (supprimer les Gateways et les
-PVC, puis `tofu destroy`), ou la suppression du projet entier. Contrôle le
-lendemain dans le rapport de facturation filtré sur le projet.
+PVC, lever la protection contre la suppression par un apply, puis
+`tofu destroy`), ou la suppression du projet entier. Contrôle le lendemain dans
+le rapport de facturation filtré sur le projet. [OPS] vérifie en phase 2 ce
+qu'un destroy partiel laisse derrière lui.
 
 ### R-16. Allocation GitHub Actions épuisée
 
@@ -350,8 +359,20 @@ Infracost est hors MVP.
 Mitigation : les 15 minutes couvrent un plan valide, l'apply réel étant mesuré
 à part, et un seul environnement est déployé sur GCP (PRD section 7, questions
 Q1 et Q6, validées à la GATE 0 le 15/11/2026). Reste à compter les apply réels
-prévus aux phases 2 et 6, à prévoir un profil démo zonal et minimal, et à faire
-valider par [FINOPS] les tailles par défaut du blueprint.
+prévus aux phases 2 et 6, et à faire valider par [FINOPS] les tailles par
+défaut du blueprint.
+
+GKE Autopilot est toujours régional (BENCH-008, 2026-11-19) : le profil démo ne
+peut pas être zonal pour GKE. Les frais de cluster restent couverts par l'offre
+gratuite, qui vise un cluster Autopilot par mois, et Autopilot facture les
+demandes de ressources des pods, pas les nœuds. Le profil démo repose donc sur
+des requêtes explicites et minimales pour chaque pod (sans requête, Autopilot
+applique 0,5 vCPU et 2 Gio), une réplique par Deployment, Cloud SQL zonal à
+cœur partagé en édition ENTERPRISE, Memorystore BASIC, une limite
+d'agrandissement du disque de Cloud SQL et une alerte budget déclarée dans le
+code. Les grilles tarifaires de Cloud SQL, Memorystore et du réseau n'ont pas
+pu être lues le 2026-11-19 : aucun budget de démo n'est validable avant leur
+lecture (R-05).
 
 ### R-18. Services GCP facturés au volume
 
@@ -379,11 +400,22 @@ passe générés (à vérifier pour OpenTofu), et le refus de `Read(**/*.tfstate
 bloque ni `tofu state pull`, ni `tofu show`, ni `tofu output`. Ce câblage
 partira ensuite dans le blueprint, donc chez chaque utilisateur.
 
-Mitigation : aucune clé de compte de service. Condition sur
-`assertion.repository` et `assertion.ref`. Compte de service en lecture seule
-pour `tofu plan`, l'apply restant manuel (principe X). Règles `ask` sur
-`tofu state`, `tofu show` et `tofu output`. Mots de passe hors de l'état, état
-chiffré : syntaxes à vérifier en phase 1.
+Vérifié le 2026-11-19 (BENCH-008, relecture [SECU]) : la chaîne AUTH de
+Memorystore (`auth_string`) est écrite en clair dans l'état dès que AUTH est
+activé, et le compte de `tofu plan` lit l'état. Le provider `google` 8.12.0
+offre `password_wo`, `root_password_wo` et `secret_data_wo`, et `random` 3.9.1
+un `random_password` éphémère, gérés par OpenTofu à partir de 1.11. Google
+déconseille de filtrer la fédération sur des noms (`repository`,
+`repository_owner`), qu'un tiers peut reprendre après un renommage, et
+recommande les champs `*_id`.
+
+Mitigation : aucune clé de compte de service. Condition de fédération sur
+`assertion.repository_id`, `assertion.repository_owner_id` et `assertion.ref`,
+`principalSet` sur `repository_id`. Compte de service en lecture seule pour
+`tofu plan`, l'apply restant manuel (principe X). Règles `ask` sur
+`tofu state`, `tofu show` et `tofu output`. État et plans chiffrés par OpenTofu
+avec `gcp_kms`, attributs `*_wo` obligatoires, aucun plan publié en artefact de
+CI (ADR-008).
 
 ### R-20. Identifiants par défaut dans le golden repo
 
@@ -525,3 +557,23 @@ que k3d exige Docker (BENCH-003, sources S4, S17 et S27).
 Mitigation : [OPS] évalue avec Q5 un moteur libre pour chaque système visé, et
 le README du projet généré le cite en premier. La matrice de validation tourne
 sur au moins un moteur libre.
+
+### R-27. Modules OpenTofu tirés sans contrôle d'intégrité
+
+Le verrou d'OpenTofu ne suit que les providers
+(<https://opentofu.org/docs/language/files/dependency-lock/>, lu le
+2026-11-19). Un module tiré par un tag Git est recloné à chaque `tofu init`,
+sans somme de contrôle : qui déplace le tag change le code qui crée
+l'infrastructure de chaque projet généré. Au plan, une source de données
+`external` exécute un programme qui reçoit l'environnement du processus,
+identifiants de la CI compris (relevé par [SECU] le 2026-11-19, BENCH-008).
+Mesuré par BENCH-008 : un clone par init pour Cloud Foundation Fabric, neuf
+pour terraform-google-modules. Les modules servis par le registre d'OpenTofu
+sont extraits par le SHA de commit qu'il a enregistré.
+
+Mitigation : aucun module tiré par tag. Modules tiers copiés dans le blueprint
+(dossiers `modules/<nom>` seuls, licence et en-têtes gardés, fichiers modifiés
+signalés), ou à défaut figés par SHA complet, sans `depth`.
+`tofu init -lockfile=readonly` dans la CI. Toute montée de version d'un module
+copié passe par une relecture [SECU]. L'ADR-008 retient des modules écrits à la
+main, ce qui écarte le risque pour le MVP tant qu'aucun module tiers n'entre.
