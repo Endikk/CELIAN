@@ -48,7 +48,7 @@ Elles reprennent les mesures de R-23, le constat de R-11 et la section 7 de BENC
 5. Aucune confiance accordée. Jamais `--trust` ni `unsafe=True`.
 6. Blueprints sans code exécuté. Aucun `_tasks`, `_migrations` ni `_jinja_extensions` dans les blueprints. Un test de la CI du générateur le vérifie.
 7. Réglages isolés. La CLI pointe `COPIER_SETTINGS_PATH` vers un fichier de réglages sans liste `trust`, pour qu'aucun réglage du poste n'accorde la confiance à un gabarit.
-8. Veille. [SECU] relit chaque semaine la page des avis de copier-org/copier, tant que la base mondiale des avis de GitHub et OSV restent en retard : 8 des 15 avis y manquent, et les scanneurs qui les lisent jugent saines des versions vulnérables. Une montée de version de sécurité se décide à la main après cette relecture. Elle n'attend pas les 7 jours que le principe VI impose aux mises à jour automatiques.
+8. Veille. [SECU] relit chaque semaine la page des avis de copier-org/copier, tant que la base mondiale des avis de GitHub et OSV restent en retard : 8 des 15 avis y manquent, et les scanneurs qui les lisent jugent saines des versions vulnérables. Une montée de version de sécurité se décide à la main après cette relecture. Elle n'attend pas les 7 jours que le principe VI impose aux mises à jour automatiques : lecture de la constitution validée par Lucas le 2026-11-19.
 9. Conflits contrôlés par Git. La CLI ne se fie pas au code de sortie : Copier 9.19.1 rend 0 même quand un conflit reste (R-11). Après chaque mise à jour, elle lit `git diff --name-only --diff-filter=U`, cherche les marqueurs de conflit et liste les fichiers concernés, comme US-011 le demande. Avant, elle vérifie que le dépôt Git est propre, ce que Copier exige. La matrice de la phase 4 fait les mêmes contrôles.
 10. Repli prêt. Le repli de R-22 reste la sortie prévue : régénérer la nouvelle version du gabarit sur une branche dédiée, partie du commit de génération, puis la fusionner par Git. Essayé trois fois avec Cookiecutter comme moteur de rendu, il a donné le même résultat que Copier, et il rend en plus le code 1 en cas de conflit. Il ne dépend d'aucun outil de mise à jour tiers, mais CELIAN devrait l'écrire et le maintenir. Le script `tests/bench/bench-002-day2.sh` le rejoue à chaque vérification de cette décision.
 
@@ -78,7 +78,7 @@ Restent hors de cette décision : la découpe du blueprint entre socle et code d
 - Coût d'exploitation relevé par [FINOPS] : la veille hebdomadaire, et une release de la CLI à chaque avis, soit 13 avis sur les 12 derniers mois.
 - Le BENCH n'a mesuré qu'un gabarit jouet de quatre fichiers. Le vrai blueprint produira d'autres conflits, que la matrice de la phase 4 rejouera.
 - Coût conditionnel : écrire et maintenir le repli si Copier ralentit.
-- Les conditions ne tiennent que si la mise à jour passe par la CLI de CELIAN (question 2 ci-dessous).
+- Les conditions ne tiennent que si la mise à jour passe par la CLI de CELIAN : Lucas l'a décidé le 2026-11-19 (voir plus bas).
 
 ### Effet sur les cibles hors MVP
 
@@ -87,7 +87,10 @@ La porte reste ouverte. Le moteur ignore la cible : une cible AWS ou Azure s'ajo
 ### Questions ouvertes
 
 1. Question de [FINOPS], non tranchée ici : le blueprint livrera-t-il un workflow planifié de `copier update` ? Sur un dépôt privé, chaque exécution consommerait des minutes décomptées de l'allocation du compte (R-16). Ce workflow lancerait aussi Copier en CI sur un fichier de réponses modifiable par tout contributeur : s'il existe, il tient les mêmes conditions que la CLI.
-2. Chemin de la mise à jour. US-011 et le parcours du PRD (section 3) font lancer `copier update` par l'utilisateur. Lancée à la main, la mise à jour échappe à la plupart des conditions : la version de Copier est celle du poste, la source n'est pas vérifiée, réglages et confiance sont ceux de l'utilisateur, et les conflits ne sont pas listés. Faire passer la mise à jour par la CLI demanderait CELIAN pour le jour 2. ENF-07 ne l'interdit pas, puisqu'il ne range pas la mise à jour parmi ce qui fonctionne sans CELIAN, mais le texte de US-011 changerait. À trancher par Lucas avec [PO].
+
+### Tranché par Lucas le 2026-11-19
+
+Chemin de la mise à jour : elle passe par la CLI de CELIAN, qui appelle Copier sous les conditions ci-dessus. US-011 et le parcours du PRD sont modifiés en conséquence. Lancer `copier update` à la main reste possible, hors des garanties de CELIAN. Contexte de la question : US-011 et le parcours du PRD (section 3) faisaient lancer `copier update` par l'utilisateur. Lancée à la main, la mise à jour échappe à la plupart des conditions : la version de Copier est celle du poste, la source n'est pas vérifiée, réglages et confiance sont ceux de l'utilisateur, et les conflits ne sont pas listés. Faire passer la mise à jour par la CLI demanderait CELIAN pour le jour 2. ENF-07 ne l'interdit pas, puisqu'il ne range pas la mise à jour parmi ce qui fonctionne sans CELIAN, mais le texte de US-011 change.
 
 ## Conformité à la constitution
 
@@ -126,7 +129,7 @@ La décision se rouvre, sans basculer d'office, dans trois cas :
 - un correctif de sécurité publié seulement en version 10 : relever le plafond `<10` passe par une relecture [SECU] ;
 - un fait nouveau sur une option éliminée, comme une release de cruft ou une fusion à trois voies dans Yeoman.
 
-Les seuils de 30 jours et de 6 mois sont proposés par [ARCHI] et se valident avec cet ADR. Sans l'un de ces faits, prochaine vérification le 2027-05-19, ou plus tôt si un avis touche Copier. Un changement de moteur rouvre aussi [ADR-003](ADR-003-langage-cli.md).
+Les seuils de 30 jours et de 6 mois, proposés par [ARCHI], sont validés par Lucas le 2026-11-19. Sans l'un de ces faits, prochaine vérification le 2027-05-19, ou plus tôt si un avis touche Copier. Un changement de moteur rouvre aussi [ADR-003](ADR-003-langage-cli.md).
 
 ## Sources
 
