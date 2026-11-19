@@ -1,0 +1,18 @@
+# Same workload with the errors of ../yaml/invalid.yaml, where Score can hold them:
+# 1. project targets have no place in Score (top-level additionalProperties is false);
+# 2. "cloud-sql" is a concrete product used as a resource type.
+apiVersion: score.dev/v1b1
+metadata:
+  name: api
+targets:
+  - local
+  - gcp
+  - aws
+containers:
+  api:
+    image: .
+resources:
+  db:
+    type: cloud-sql
+  cache:
+    type: redis

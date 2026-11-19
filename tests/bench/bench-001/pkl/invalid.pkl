@@ -1,0 +1,17 @@
+// Same spec with the three deliberate errors of ../yaml/invalid.yaml.
+amends "Spec.pkl"
+
+specVersion = "0.1"
+project {
+  name = "demo-saas"
+  blueprint = "saas-b2b"
+}
+targets {
+  "local"
+  "gcp"
+  "aws"
+}
+components {
+  database = "cloud-sql"
+  cache = "redis"
+}

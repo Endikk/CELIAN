@@ -1,0 +1,22 @@
+// Validates a YAML spec against Spec.pkl (option C, spec kept in YAML).
+// Usage: pkl eval -p input=<absolute path of the YAML file> yaml-check.pkl
+// The YAML parser yields untyped Dynamic objects: each class is mapped by
+// hand below, which duplicates the structure of Spec.pkl. Keys unknown to
+// Spec.pkl are dropped instead of rejected, at the top level and inside a
+// class alike (checked on 2026-11-19 with Pkl 0.33.1).
+import "pkl:yaml"
+import "Spec.pkl"
+
+local source = read("file:" + read("prop:input"))
+local parsed = new yaml.Parser {}.parse(source) as Dynamic
+
+output {
+  value = (Spec) {
+    specVersion = parsed.specVersion
+    project = parsed.project.toTyped(Spec.Project)
+    targets = parsed.targets
+    gcp = parsed.getPropertyOrNull("gcp")?.toTyped(Spec.Gcp)
+    components = parsed.components.toTyped(Spec.Components)
+  }
+  renderer = new YamlRenderer {}
+}

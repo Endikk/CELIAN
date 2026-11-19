@@ -1,0 +1,15 @@
+# Minimal CELIAN project spec used by BENCH-001.
+# Validated by the JSON Schema (option A), by CUE (option B) and by Pkl
+# through ../pkl/yaml-check.pkl (option C).
+specVersion: "0.1"
+project:
+  name: demo-saas
+  blueprint: saas-b2b
+targets:
+  - local
+  - gcp
+gcp:
+  region: europe-west1
+components:
+  database: postgres
+  cache: redis

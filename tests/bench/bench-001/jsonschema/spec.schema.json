@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://celian.invalid/schema/spec-0.1.json",
+  "title": "CELIAN project spec (BENCH-001 trial)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["specVersion", "project", "targets", "components"],
+  "properties": {
+    "specVersion": { "const": "0.1" },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "blueprint"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,38}[a-z0-9]$" },
+        "blueprint": { "enum": ["saas-b2b"] }
+      }
+    },
+    "targets": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "enum": ["local", "gcp"] }
+    },
+    "gcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["region"],
+      "properties": {
+        "region": { "type": "string", "pattern": "^[a-z]+-[a-z]+[0-9]+$" }
+      }
+    },
+    "components": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["database"],
+      "properties": {
+        "database": { "enum": ["postgres"] },
+        "cache": { "enum": ["redis"] }
+      }
+    }
+  },
+  "if": {
+    "properties": { "targets": { "contains": { "const": "gcp" } } },
+    "required": ["targets"]
+  },
+  "then": { "required": ["gcp"] }
+}

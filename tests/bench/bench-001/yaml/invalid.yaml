@@ -1,0 +1,15 @@
+# Same spec with three deliberate errors:
+# 1. target "aws" is outside the MVP matrix;
+# 2. "cloud-sql" is a concrete product, not an abstract component;
+# 3. target "gcp" is listed but gcp.region is missing.
+specVersion: "0.1"
+project:
+  name: demo-saas
+  blueprint: saas-b2b
+targets:
+  - local
+  - gcp
+  - aws
+components:
+  database: cloud-sql
+  cache: redis
