@@ -1,59 +1,48 @@
 # Feuille de route
 
-Mise à jour le 15/11/2026, à la fin de la session 1. Le DSI tient ce fichier à
+Mise à jour le 19/11/2026, pendant la session 2. Le DSI tient ce fichier à
 jour à la fin de chaque session.
 
-## Phase 0 terminée, phase 1 à démarrer
+## Phase en cours : 1, benchmarks et décisions
 
 ### Fait
 
-- Dépôt initialisé : arborescence, licence Apache-2.0, `CLAUDE.md`, brief
-  versionné dans `docs/brief-v1.0.md`.
-- Conventions Git et CI : pre-commit (dont gitleaks et le refus du tiret
-  cadratin), commitlint, CODEOWNERS, modèle de PR, CI qui rejoue les hooks
-  (PR #1).
-- release-please, Renovate avec délai de 7 jours, ruleset de `main` en code,
-  scan de secrets sur chaque push (PR #2).
-- Dix sous-agents par rôle, plugins du projet, refus de `tofu apply` et des
-  créations `gcloud` (PR #4).
-- Spec Kit 1.4.0 et constitution 1.0.0 ratifiée (PR #3).
-- Vision, PRD, cette feuille de route, registre de 20 risques (PR #5).
-- Garde-fous contre la fuite d'identifiants et procédure de changement du
-  jeton `gh` (PR #6, R-07).
-- Réglages GitHub appliqués : fusion en squash seule, titre de PR comme
-  commit, suppression des branches fusionnées. Ruleset de `main` actif : PR et
-  checks obligatoires, aucun contournement (R-01 fermé).
+- Phase 0 terminée le 15/11/2026 : dépôt, conventions Git et CI, release-please
+  et Renovate, sous-agents et plugins, Spec Kit et constitution 1.0.0, vision,
+  PRD, registre des risques, garde-fous contre la fuite d'identifiants, ruleset
+  de `main` actif (PR #1 à #8).
+- Étape 1 : gabarits de benchmark et d'ADR (PR #9).
+- Étape 2 : analyse de douze outils existants (Q12). Aucun ne couvre plus de
+  deux piliers ; Copier couvre la génération et le jour 2.
 
-### Décisions de Lucas du 15/11/2026
+### Décisions de Lucas
 
-- GATE 0 validée : vision, constitution 1.0.0 et PRD, avec les propositions du
-  PO pour les questions Q1 à Q12.
-- Q1 : les 15 minutes couvrent l'entretien, la génération, le démarrage local,
-  le plan GCP et la CI du premier push. L'apply se mesure à part.
-- Q2 : l'utilisateur lance l'apply, jamais l'agent.
-- Q7 : l'agent écrit les ADR et les textes du projet. Le code métier se limite
-  à l'exemple du blueprint. Le brief est resserré sur ce point.
-- ECC est désactivé dans ce projet (R-03).
-- Plan de la phase 1 validé.
-- Le dépôt est public, c'est voulu (R-01, R-16).
+- 15/11/2026 : GATE 0 validée, Q1 à Q12 tranchées, ECC désactivé, dépôt public
+  voulu, plan de la phase 1 validé.
+- 19/11/2026 : Score entre dans les options de BENCH-001. BENCH-008 est créé
+  pour les modules OpenTofu de GCP. Deux risques sont ajoutés (R-21, R-22). La
+  section « Ce qui le distingue » de la vision parle désormais d'assemblage.
 
 ### Prochain
 
-- Lucas remplace son jeton `gh` classique en suivant
-  `docs/securite/jeton-github.md`, puis le révoque (R-07).
+- Étape 3 : BENCH-006 en version courte, puis BENCH-001 et BENCH-002.
+- Étapes suivantes : BENCH-003 avec mesures, puis 004, 005, 007 sur le cluster
+  retenu, BENCH-008, enfin `catalog/` avec son check CI. GATE 1 : Lucas valide
+  les ADR.
+- Lucas termine le changement de jeton `gh` et révoque l'ancien jeton classique
+  (R-07). À reprendre : la première tentative a échoué, le presse-papiers ne
+  contenait pas le jeton.
+- Lucas valide la lecture des principes III et V pour les services managés de
+  GCP, avant l'étape 6.
 - Actions de Lucas : installer l'app GitHub Renovate, installer Pixel Agents,
-  mettre Claude Code en 2.1.324 ou plus pour pouvoir figer les marketplaces
-  (R-02).
-- Phase 1, dans une nouvelle session : gabarits de benchmark et d'ADR, analyse
-  des outils existants (Q12), puis BENCH-006, 001, 002, 003, et 004, 005, 007
-  mesurés sur le cluster retenu, enfin `catalog/` avec son check CI.
+  mettre Claude Code en 2.1.324 ou plus pour figer les marketplaces (R-02).
 
 ## Les six phases du MVP
 
 | Phase | Objectif | Rôles | Gate | État |
 | --- | --- | --- | --- | --- |
 | 0 | Installation et cadrage | DSI, PO | Vision, PRD, constitution validés | Terminée le 15/11/2026 |
-| 1 | Benchmarks BENCH-001 à 007, ADR, catalogue daté | BENCH, ARCHI | ADR validés | Plan validé, à démarrer |
+| 1 | Benchmarks BENCH-001 à 008, ADR, catalogue daté | BENCH, ARCHI | ADR validés | En cours, étapes 1 et 2 faites |
 | 2 | Golden repo SaaS B2B construit à la main | DEV, OPS, SECU | Démo du golden repo | À venir |
 | 3 | Template Copier, JSON Schema de la spec v1 | ARCHI, DEV | Génération depuis un exemple de spec | À venir |
 | 4 | Pipeline de validation blueprint et cible | QA, OPS | Matrice verte | À venir |

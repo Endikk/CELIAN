@@ -59,13 +59,14 @@ vérifiée et datée en phase 1 (principe VIII).
 
 | Choix | Option pressentie | Tranché par |
 | --- | --- | --- |
-| Format de la spec | YAML validé par un JSON Schema rangé dans `schema/` | BENCH-001 (YAML et JSON Schema, CUE, Pkl) |
+| Format de la spec | YAML validé par un JSON Schema rangé dans `schema/` | BENCH-001 (YAML et JSON Schema, CUE, Pkl, Score) |
 | Moteur de templates | Copier | BENCH-002 (Copier, Cookiecutter, Yeoman) |
 | Cluster local | k3d | BENCH-003 (k3d, kind, minikube) |
 | Gateway | Envoy Gateway | BENCH-004 (Envoy Gateway, Cilium, Traefik) |
 | Orchestration dev locale | Aspire | BENCH-005 (Aspire, Tilt, Docker Compose) |
 | Langage de la CLI | Python, retenu dans la forme du produit | BENCH-006 (Python, TypeScript) |
 | Secrets locaux | OpenBao | BENCH-007 (OpenBao et alternatives) |
+| Modules OpenTofu pour GCP | Aucune | BENCH-008 (modules écrits à la main, Cloud Foundation Fabric, terraform-google-modules) |
 
 ## 2. Personas
 
@@ -437,8 +438,10 @@ Aucune n'est validée à ce jour.
 - Une dizaine de questions suffit pour le blueprint SaaS B2B sur deux cibles.
 - GitHub convient comme forge au persona pendant le MVP.
 - Un PC de développeur fait tourner au moins le profil lite.
-- La différenciation n'a pas été confrontée aux outils existants : aucune
-  analyse concurrentielle n'a été faite.
+- La différenciation tient face aux outils existants : sur douze outils
+  examinés le 15/11/2026, aucun ne couvre plus de deux piliers
+  ([analyse](benchmarks/analyse-outils-existants.md)). Elle porte sur
+  l'assemblage, et reste à confirmer auprès de vrais utilisateurs (R-14).
 
 ### Questions tranchées
 
