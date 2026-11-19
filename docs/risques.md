@@ -11,7 +11,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-01 | Protection de `main` non appliquée | Faible | Fort dès la phase 2 | OPS | Fermé : ruleset actif |
 | R-02 | Plugins tiers et utilisateur non figés ni relus | Moyenne | Fort | SECU | Ouvert |
 | R-03 | Contexte d'agent surchargé, coût en tokens | Forte | Moyen | DSI, FINOPS | Atténué : ECC désactivé |
-| R-04 | Critère des 15 minutes hors d'atteinte | Moyenne | Fort | OPS | Ouvert |
+| R-04 | Critère des 15 minutes hors d'atteinte | Forte | Fort | OPS | Ouvert |
 | R-05 | Dépense GCP non maîtrisée | Moyenne | Fort | FINOPS | Ouvert |
 | R-06 | Catalogue qui se périme | Forte | Moyen | ARCHI | Ouvert |
 | R-07 | Agents capables de lire et d'exfiltrer des secrets | Forte | Fort | SECU | Règles en place (PR #6), jeton à changer |
@@ -32,7 +32,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-22 | Jour 2 dépendant d'un seul outil communautaire | Faible | Fort | ARCHI | Ouvert |
 | R-23 | Failles du modèle de confiance de Copier | Forte | Fort | SECU | Ouvert |
 | R-24 | Outils du générateur portés par une personne ou un éditeur | Faible | Moyen | ARCHI, DEV | Ouvert |
-| R-25 | Démarrage local tributaire des registres publics | Moyenne | Moyen, fort pour la CI de la matrice | OPS, SECU | Ouvert |
+| R-25 | Démarrage local tributaire des registres publics | Forte | Moyen, fort pour la CI de la matrice | OPS, SECU | Ouvert |
 | R-26 | Moteur de conteneurs du poste sous licence payante | Moyenne | Moyen | OPS, FINOPS | Ouvert |
 | R-27 | Modules OpenTofu tirés sans contrôle d'intégrité | Faible | Fort | SECU, OPS | Ouvert |
 
@@ -137,12 +137,27 @@ le cache plein : `task up` dépend alors du réseau et de la limite de Docker
 Hub (R-25). La probabilité passe à forte si l'outil retenu télécharge plus de
 500 Mo à la première création.
 
+BENCH-004 a mesuré la gateway le 2026-11-19 sur le même poste. Avec Envoy
+Gateway, cluster et gateway téléchargent 466,5 Mo en arm64 et 505,8 Mo en
+amd64 à la première création, soit 41 et 45 % du budget à 10 Mbit/s utiles
+(hypothèse). À froid, la création jusqu'à la première réponse prend environ
+123 s, calcul de [FINOPS] qui combine BENCH-003 et BENCH-004. Chaque création
+interroge Docker Hub pour 2 images, même préchargées (R-25).
+
+Le déclencheur se lit sur le premier `task up` complet, et sur le pire cas des
+systèmes visés par Q5, qui comprennent Linux amd64. Lu ainsi, il est franchi
+avec Envoy Gateway avant même les images de la stack, qui ne peuvent
+qu'ajouter. Le DSI a passé la probabilité à forte le 2026-11-19 ; décision à
+confirmer par Lucas à la GATE 1.
+
 Reste à mesurer en BENCH-005 : les images et la compilation de la stack, et la
 création du cluster sur un runner GitHub amd64.
 
 Mitigation : fixer après BENCH-005 un budget de temps par étape d'ENF-01, avec
-un plafond de volume pour le cluster ; précharger les images tirées à chaque
-création ; préconstruire les images de la stack ; profil lite par défaut ; un
+un plafond de volume pour la plate-forme de base (cluster kind, CRD Gateway API
+et gateway), périmètre à écrire dans le gabarit de benchmark après la GATE 1 ;
+précharger les images tirées à chaque création, sous le condensat du registre
+(R-25) ; préconstruire les images de la stack ; profil lite par défaut ; un
 essai de phase 6 sur une ligne lente.
 
 ### R-05. Dépense GCP non maîtrisée
@@ -537,10 +552,41 @@ cluster par combinaison, peuvent atteindre la limite : `task up` échoue ou
 dépasse les 15 minutes (R-04). Les images du blueprint ajoutent leurs propres
 tirages au premier lancement.
 
-Mitigation : retenir un outil qui ne tire rien à la création, ou précharger ce
-qu'il tire ; images du cluster et du blueprint figées par condensat ; un test
-de la matrice qui relance `task up` hors réseau après un premier lancement ; un
-cache d'images dans la CI, et les tirages authentifiés documentés comme option.
+BENCH-004 a trouvé la cause le 2026-11-19, et [SECU] l'a vérifiée sur
+l'archive. `kind load docker-image` passe par `docker save`. Avec un moteur à
+magasin d'images classique, l'archive ne garde pas le condensat de l'index du
+registre (<https://docs.docker.com/engine/storage/containerd/>, lu le
+2026-11-19). Une image désignée par condensat et préchargée ainsi est donc
+résolue de nouveau au registre à chaque création. Le dernier maillon, le
+passage par containerd dans le nœud, est déduit et n'a pas été observé.
+L'intégrité tient, puisque le runtime tire par condensat et vérifie le contenu.
+
+« kind n'en tire aucune » reste vrai pour le nœud seul, et devient faux pour la
+stack. Toute image du blueprint désignée par condensat (ENF-03) repasse par le
+registre à chaque `task up`. Docker Hub compte un GET de manifest comme un
+tirage : on attend un tirage compté par image Docker Hub et par création, chiffre
+à mesurer. La condition 7 de l'ADR-004, relancer `task up` hors réseau,
+échouera en l'état. Le DSI a passé la probabilité à forte le 2026-11-19, parce
+que la dépendance ne tient plus à k3d ou minikube : elle touche chaque `task up`
+avec kind. Décision à confirmer par Lucas à la GATE 1.
+
+Mitigation : retenir un outil qui ne tire rien à la création, et précharger
+sous le condensat du registre, pas seulement sous le tag. [OPS] essaie avant le
+golden repo trois pistes :
+
+- un registre miroir local, en boucle locale et figé par condensat (conditions
+  1 et 3 de l'ADR-004) ;
+- une archive OCI qui garde l'index du registre, chargée par
+  `kind load image-archive` ;
+- le magasin containerd du moteur, par défaut sur les installations neuves de
+  Docker Engine 29.0 et plus, alors que les mesures ont tourné en overlay2.
+
+Le reste de la mitigation : images du cluster et du blueprint figées par
+condensat ; un test de la matrice qui relance `task up` hors réseau après un
+premier lancement ; un cache d'images dans la CI, et les tirages authentifiés
+documentés comme option. Deux reculs sont refusés : revenir à des références
+par tag, contraire à la condition 3 de l'ADR-004, et `imagePullPolicy: Never`,
+qui fait échouer le démarrage d'une image par condensat absente sous ce nom.
 
 ### R-26. Moteur de conteneurs du poste sous licence payante
 
