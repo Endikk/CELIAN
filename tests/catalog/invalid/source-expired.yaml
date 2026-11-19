@@ -1,0 +1,48 @@
+# Must fail: one source read more than six calendar months ago, while
+# verified_on moved with another source read again (ADR-009, section 3, as
+# extended after the [SECU] review). The tests run it with today injected as
+# 2026-11-19.
+# Based on tests/catalog/valid/minimal.yaml, with the id set to the file name
+# and a second, older source added to targets.local.
+# Expected error, and only this one:
+#   path: targets/local/sources/1/read_on   rule: stale-source
+#   message: source read on 2026-05-19, expired on 2026-11-19 (six calendar months): re-read it, then update read_on and verified_on
+schema_version: 1
+id: source-expired
+summary: Brique fictive pour les tests du contrôle du catalogue.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-01"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+      - url: https://example.invalid/oss/changelog
+        read_on: "2026-05-19"
+  gcp:
+    type: managed
+    service: Example Managed
+    provider: google
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: active
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-19"

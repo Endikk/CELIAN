@@ -1,0 +1,44 @@
+# Must fail: a license on a managed service, which runs under the provider
+# terms (ADR-009, section 2, point 5).
+# Based on tests/catalog/valid/minimal.yaml, with targets.gcp.license added.
+# Expected error, and only this one:
+#   path: targets/gcp   validator: additionalProperties
+#   message: Additional properties are not allowed ('license' was unexpected)
+schema_version: 1
+id: minimal
+summary: Brique fictive pour les tests du contrôle du catalogue.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-01"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+  gcp:
+    type: managed
+    service: Example Managed
+    provider: google
+    license: Apache-2.0
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: active
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-19"

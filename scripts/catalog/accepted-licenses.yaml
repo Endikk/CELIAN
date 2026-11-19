@@ -1,0 +1,60 @@
+# Licenses an oss target of the catalog may carry (ADR-009, principle III).
+#
+# Written by CELIAN: an allowlist, not a copy of an upstream list. Each id is
+# an SPDX short identifier whose page on opensource.org showed the "Open
+# Source Initiative Approved License" badge on read_on. Adding a license or an
+# exception takes a pull request reviewed by [SECU]. network_copyleft marks a
+# license whose obligations reach the users of a modified version over a
+# network: the catalog check warns, and the ADR of the brick says how the
+# generated project complies.
+#
+# Attribution. Approval status and page addresses come from opensource.org,
+# by the Open Source Initiative: "The content on this website, of which
+# Opensource.org is the author, is licensed under a Creative Commons
+# Attribution 4.0 International License",
+# https://creativecommons.org/licenses/by/4.0/ (read on 2026-11-19).
+# Changes: only the approval status and the page address of each license are
+# kept, nothing of the license texts or pages is reproduced, and the notes are
+# CELIAN's own.
+licenses:
+  - id: AGPL-3.0-only
+    osi_page: https://opensource.org/license/agpl-3-0
+    read_on: "2026-11-19"
+    network_copyleft: true
+    note: >-
+      La page de l'OSI porte l'identifiant AGPL-3.0, déprécié par SPDX depuis
+      la version 3.0 de sa liste ; SPDX nomme la version 3.0 seule
+      AGPL-3.0-only (https://spdx.org/licenses/AGPL-3.0.html, lu le
+      2026-11-19).
+  - id: AGPL-3.0-or-later
+    osi_page: https://opensource.org/license/agpl-3-0
+    read_on: "2026-11-19"
+    network_copyleft: true
+    note: >-
+      Même page de l'OSI que AGPL-3.0-only ; SPDX nomme la version 3.0 ou une
+      version ultérieure AGPL-3.0-or-later
+      (https://spdx.org/licenses/AGPL-3.0-or-later.html, lu le 2026-11-19).
+  - id: Apache-2.0
+    osi_page: https://opensource.org/license/apache-2-0
+    read_on: "2026-11-19"
+  - id: BSD-2-Clause
+    osi_page: https://opensource.org/license/bsd-2-clause
+    read_on: "2026-11-19"
+  - id: BSD-3-Clause
+    osi_page: https://opensource.org/license/bsd-3-clause
+    read_on: "2026-11-19"
+  - id: ISC
+    osi_page: https://opensource.org/license/isc
+    read_on: "2026-11-19"
+  - id: MIT
+    osi_page: https://opensource.org/license/mit
+    read_on: "2026-11-19"
+  - id: MPL-2.0
+    osi_page: https://opensource.org/license/mpl-2-0
+    read_on: "2026-11-19"
+  - id: PostgreSQL
+    osi_page: https://opensource.org/license/postgresql
+    read_on: "2026-11-19"
+# SPDX exceptions accepted after WITH. None yet: each one takes an ADR and a
+# pull request reviewed by [SECU], like a license.
+exceptions: []

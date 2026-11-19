@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://celian.invalid/schema/catalog-entry-1.json",
+  "title": "CELIAN catalog entry",
+  "description": "One abstract brick and, for each target, the concrete service that implements it. One file per brick: catalog/<id>.yaml. Rules the schema cannot express (dates against today, file name, links to ADR and BENCH files, SPDX list) belong to the catalog check. Decision: docs/adr/ADR-009-catalogue.md.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "id", "summary", "declared_by", "targets"],
+  "properties": {
+    "schema_version": {
+      "description": "Version of this schema that the entry follows.",
+      "const": 1
+    },
+    "id": {
+      "description": "Abstract brick name, also the file name without .yaml.",
+      "$ref": "#/$defs/brickId"
+    },
+    "summary": {
+      "description": "What the brick provides, in one line.",
+      "$ref": "#/$defs/line200"
+    },
+    "declared_by": {
+      "description": "spec: the project spec declares the brick. target: the brick follows from the target and the spec never names it.",
+      "enum": ["spec", "target"]
+    },
+    "targets": {
+      "description": "Every MVP target is required (ENF-02). A target outside the MVP is added by a new schema version once Lucas opens it.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["local", "gcp"],
+      "properties": {
+        "local": { "$ref": "#/$defs/localTarget" },
+        "gcp": { "$ref": "#/$defs/gcpTarget" }
+      }
+    }
+  },
+  "$defs": {
+    "brickId": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 40,
+      "pattern": "^[a-z][a-z0-9-]{0,38}[a-z0-9]$"
+    },
+    "line80": {
+      "description": "Single line of text, no leading or trailing blank.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 80,
+      "pattern": "^\\S(?:[^\\n\\r]*\\S)?$"
+    },
+    "line200": {
+      "description": "Single line of text, no leading or trailing blank.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200,
+      "pattern": "^\\S(?:[^\\n\\r]*\\S)?$"
+    },
+    "line300": {
+      "description": "Single line of text, no leading or trailing blank.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 300,
+      "pattern": "^\\S(?:[^\\n\\r]*\\S)?$"
+    },
+    "text500": {
+      "description": "Free text, possibly on several lines.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "date": {
+      "description": "Calendar date YYYY-MM-DD, written as a quoted YAML string. The catalog check rejects impossible dates and dates in the future.",
+      "type": "string",
+      "format": "date",
+      "maxLength": 10,
+      "pattern": "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$"
+    },
+    "httpsUrl": {
+      "type": "string",
+      "minLength": 9,
+      "maxLength": 500,
+      "pattern": "^https://[^\\s]+$"
+    },
+    "version": {
+      "description": "Exact version, never a range or a tag such as latest.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^[0-9]+(\\.[0-9]+){0,3}([-+][0-9A-Za-z.-]{1,40})?$"
+    },
+    "spdxExpression": {
+      "description": "SPDX license expression without parentheses. The catalog check matches each identifier against scripts/catalog/accepted-licenses.yaml, the license allowlist written by CELIAN.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9.+-]*( (AND|OR|WITH) [A-Za-z0-9][A-Za-z0-9.+-]*)*$"
+    },
+    "status": {
+      "description": "Upstream status. The schema accepts the three values so that a change can be written down; the catalog check fails on anything but active (principle VI).",
+      "enum": ["active", "maintenance", "archived"]
+    },
+    "governance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["model", "body"],
+      "properties": {
+        "model": {
+          "description": "foundation: carried by a foundation. community: community organisation without a foundation. single-vendor: one company.",
+          "enum": ["foundation", "community", "single-vendor"]
+        },
+        "body": {
+          "description": "Name of the foundation, organisation or company.",
+          "$ref": "#/$defs/line80"
+        },
+        "detail": {
+          "description": "Where the project sits in that body, in one line.",
+          "$ref": "#/$defs/line200"
+        }
+      }
+    },
+    "standards": {
+      "description": "Open standards or protocols the service exposes. They hold principle II. An empty list means the target layer carries the whole difference. A new value is added here, with its source in catalog/README.md.",
+      "type": "array",
+      "uniqueItems": true,
+      "maxItems": 10,
+      "items": {
+        "enum": ["kubernetes-api", "gateway-api", "postgresql-protocol", "resp", "otlp"]
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "read_on"],
+      "properties": {
+        "url": {
+          "description": "Official source: project repository or site, foundation page, provider documentation.",
+          "$ref": "#/$defs/httpsUrl"
+        },
+        "read_on": { "$ref": "#/$defs/date" },
+        "establishes": {
+          "description": "The facts this source establishes for the entry.",
+          "$ref": "#/$defs/line300"
+        }
+      }
+    },
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 20,
+      "items": { "$ref": "#/$defs/source" }
+    },
+    "decisions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["adr"],
+      "properties": {
+        "adr": {
+          "description": "ADR that put this service in the catalog.",
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": { "type": "string", "maxLength": 7, "pattern": "^ADR-[0-9]{3}$" }
+        },
+        "bench": {
+          "description": "Benchmark behind the ADR. A managed service imposed by principle III may have none.",
+          "type": "array",
+          "maxItems": 10,
+          "uniqueItems": true,
+          "items": { "type": "string", "maxLength": 9, "pattern": "^BENCH-[0-9]{3}$" }
+        }
+      }
+    },
+    "artifact": {
+      "description": "Digest of a downloaded binary, recorded in CELIAN so that a later substitution upstream is caught.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["platform", "sha256", "source", "read_on"],
+      "properties": {
+        "platform": { "enum": ["darwin-amd64", "darwin-arm64", "linux-amd64", "linux-arm64"] },
+        "sha256": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[a-f0-9]{64}$" },
+        "source": { "$ref": "#/$defs/httpsUrl" },
+        "read_on": { "$ref": "#/$defs/date" }
+      }
+    },
+    "pendingItem": {
+      "description": "A field still open. A target with pending items is a valid catalog entry that no blueprint may use yet (principle IV).",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["topic", "owner", "note"],
+      "properties": {
+        "topic": { "type": "string", "maxLength": 41, "pattern": "^[a-z][a-z0-9-]{1,40}$" },
+        "owner": {
+          "enum": ["DSI", "PO", "ARCHI", "DATA", "DEV", "OPS", "SECU", "FINOPS", "QA", "BENCH", "DOC", "Lucas"]
+        },
+        "note": { "$ref": "#/$defs/line200" }
+      }
+    },
+    "ossTarget": {
+      "description": "Free and open source component, run by the generated project.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type", "service", "version", "license", "governance", "status",
+        "last_release_on", "verified_on", "standards", "sources", "decisions"
+      ],
+      "properties": {
+        "type": { "const": "oss" },
+        "service": { "$ref": "#/$defs/line80" },
+        "version": { "$ref": "#/$defs/version" },
+        "license": { "$ref": "#/$defs/spdxExpression" },
+        "governance": { "$ref": "#/$defs/governance" },
+        "status": { "$ref": "#/$defs/status" },
+        "last_release_on": {
+          "description": "Date of the latest upstream release. The catalog check fails 12 months after it (principle VI).",
+          "$ref": "#/$defs/date"
+        },
+        "verified_on": {
+          "description": "Date of the latest full verification. Equals the most recent read_on of the sources.",
+          "$ref": "#/$defs/date"
+        },
+        "standards": { "$ref": "#/$defs/standards" },
+        "sources": { "$ref": "#/$defs/sources" },
+        "decisions": { "$ref": "#/$defs/decisions" },
+        "artifacts": {
+          "type": "array",
+          "maxItems": 8,
+          "items": { "$ref": "#/$defs/artifact" }
+        },
+        "pending": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/pendingItem" }
+        },
+        "notes": { "$ref": "#/$defs/text500" },
+        "managed_gap": {
+          "description": "Cloud targets only: why no managed service of the provider covers the need (principle III).",
+          "$ref": "#/$defs/text500"
+        }
+      }
+    },
+    "managedTarget": {
+      "description": "Managed service of the cloud provider. No license field: the service is proprietary and runs under the provider terms.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type", "service", "provider", "governance", "status",
+        "verified_on", "standards", "sources", "decisions"
+      ],
+      "properties": {
+        "type": { "const": "managed" },
+        "service": { "$ref": "#/$defs/line80" },
+        "provider": { "enum": ["google"] },
+        "version": {
+          "description": "Engine version when the provider offers several, such as a database major version.",
+          "$ref": "#/$defs/version"
+        },
+        "governance": {
+          "allOf": [
+            { "$ref": "#/$defs/governance" },
+            { "properties": { "model": { "const": "single-vendor" } } }
+          ]
+        },
+        "status": { "$ref": "#/$defs/status" },
+        "verified_on": {
+          "description": "Date of the latest full verification. Equals the most recent read_on of the sources.",
+          "$ref": "#/$defs/date"
+        },
+        "standards": { "$ref": "#/$defs/standards" },
+        "sources": { "$ref": "#/$defs/sources" },
+        "decisions": { "$ref": "#/$defs/decisions" },
+        "pending": {
+          "type": "array",
+          "maxItems": 20,
+          "items": { "$ref": "#/$defs/pendingItem" }
+        },
+        "notes": { "$ref": "#/$defs/text500" }
+      }
+    },
+    "localTarget": {
+      "description": "PC target: free and open source only (principle III).",
+      "allOf": [
+        { "$ref": "#/$defs/ossTarget" },
+        { "not": { "required": ["managed_gap"] } }
+      ]
+    },
+    "gcpTarget": {
+      "description": "GCP target: the provider managed service, or an open source component with the reason no managed service covers the need (principle III).",
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "enum": ["managed", "oss"] }
+      },
+      "allOf": [
+        {
+          "if": {
+            "required": ["type"],
+            "properties": { "type": { "const": "managed" } }
+          },
+          "then": { "$ref": "#/$defs/managedTarget" }
+        },
+        {
+          "if": {
+            "required": ["type"],
+            "properties": { "type": { "const": "oss" } }
+          },
+          "then": {
+            "allOf": [
+              { "$ref": "#/$defs/ossTarget" },
+              { "required": ["managed_gap"] }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

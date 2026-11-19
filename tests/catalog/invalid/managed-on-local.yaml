@@ -1,0 +1,49 @@
+# Must fail: a managed service on the local target (principle III).
+# Based on tests/catalog/valid/minimal.yaml, with targets.local replaced by a
+# copy of targets.gcp.
+# Expected errors, and only these:
+#   path: targets/local   validator: additionalProperties
+#   message: Additional properties are not allowed ('provider' was unexpected)
+#   path: targets/local   validator: required
+#   message: 'last_release_on' is a required property
+#   path: targets/local   validator: required
+#   message: 'license' is a required property
+#   path: targets/local   validator: required
+#   message: 'version' is a required property
+#   path: targets/local/type   validator: const
+#   message: 'oss' was expected
+schema_version: 1
+id: minimal
+summary: Brique fictive pour les tests du contrôle du catalogue.
+declared_by: spec
+targets:
+  local:
+    type: managed
+    service: Example Managed
+    provider: google
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: active
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-19"
+  gcp:
+    type: managed
+    service: Example Managed
+    provider: google
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: active
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-19"

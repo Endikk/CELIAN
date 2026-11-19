@@ -13,6 +13,9 @@ permissions:
 env:
   # renovate: datasource=pypi depName=pre-commit
   PRE_COMMIT_VERSION: 4.7.0
+  # pre-commit builds its Python hooks with its own minor version: 3.12, the
+  # floor proposed by ADR-003, keeps the catalog check honest about it.
+  UV_PYTHON: "3.12"
 
 concurrency:
   group: ci-${{ github.ref }}

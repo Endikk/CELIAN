@@ -1,0 +1,93 @@
+# Catalog entry. Format and procedure: catalog/README.md.
+# Schema: schema/catalog-entry.schema.json. Decision: docs/adr/ADR-004-cluster-local.md.
+schema_version: 1
+id: kubernetes-cluster
+summary: Cluster Kubernetes qui porte la stack du projet généré, sur le PC comme sur le cloud.
+declared_by: target
+targets:
+  local:
+    type: oss
+    service: kind
+    version: "0.33.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: CNCF
+      detail: Sous-projet de SIG Testing, dans le projet Kubernetes, gradué à la CNCF le 2018-03-06.
+    status: active
+    last_release_on: "2026-08-26"
+    verified_on: "2026-11-19"
+    standards: [kubernetes-api]
+    decisions:
+      adr: [ADR-004]
+      bench: [BENCH-003]
+    sources:
+      - url: https://github.com/kubernetes-sigs/kind
+        read_on: "2026-11-19"
+        establishes: Licence Apache-2.0, dépôt non archivé, installation documentée en v0.33.0.
+      - url: https://github.com/kubernetes-sigs/kind/releases/tag/v0.33.0
+        read_on: "2026-11-19"
+        establishes: Release v0.33.0 marquée Latest.
+      - url: https://api.github.com/repos/kubernetes-sigs/kind/releases
+        read_on: "2026-11-19"
+        establishes: v0.33.0 publiée le 2026-08-26, relevé de BENCH-003 (S11).
+      - url: https://github.com/kubernetes/community/blob/master/sig-testing/README.md
+        read_on: "2026-11-19"
+        establishes: kind est un sous-projet de SIG Testing, relevé de BENCH-003 (S18).
+      - url: https://www.cncf.io/projects/kubernetes/
+        read_on: "2026-11-19"
+        establishes: Kubernetes gradué à la CNCF le 2018-03-06.
+    artifacts:
+      - platform: darwin-arm64
+        sha256: "0c8c7dbe5e23594a198b786c4bc13dacc101fa6196b0cb0b23a1ca44e61f4b4f"
+        source: https://api.github.com/repos/kubernetes-sigs/kind/releases/tags/v0.33.0
+        read_on: "2026-11-19"
+      - platform: darwin-amd64
+        sha256: "5a99f26f57246dc9319dd294803313197a0f34d33c525b3ea8b655db5916ece0"
+        source: https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-darwin-amd64.sha256sum
+        read_on: "2026-11-19"
+      - platform: linux-amd64
+        sha256: "aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d"
+        source: https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-amd64.sha256sum
+        read_on: "2026-11-19"
+      - platform: linux-arm64
+        sha256: "20022bee6cfcd5086cb7234d218e3454e6090022f2a8f55d1fa7fcf42c3867a2"
+        source: https://github.com/kubernetes-sigs/kind/releases/download/v0.33.0/kind-linux-arm64.sha256sum
+        read_on: "2026-11-19"
+    notes: >-
+      L'image de nœud et la mineure de Kubernetes suivent la règle de version
+      de l'ADR-004. Elles vivent dans la couche local du blueprint, figées par
+      condensat, et non dans le catalogue.
+  gcp:
+    type: managed
+    service: Google Kubernetes Engine (GKE)
+    provider: google
+    governance:
+      model: single-vendor
+      body: Google
+      detail: Service managé de Google Cloud, implémentation managée de Kubernetes.
+    status: active
+    verified_on: "2026-11-19"
+    standards: [kubernetes-api]
+    decisions:
+      adr: [ADR-004]
+    sources:
+      - url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
+        read_on: "2026-11-19"
+        establishes: Implémentation managée de Kubernetes, pilotée par l'API Kubernetes ; modes Autopilot, recommandé par la page, et Standard.
+      - url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/release-channels
+        read_on: "2026-11-19"
+        establishes: Canal Regular par défaut ; mises à jour automatiques des clusters d'un canal, mineure comprise.
+      - url: https://docs.cloud.google.com/kubernetes-engine/docs/release-notes-regular
+        read_on: "2026-11-19"
+        establishes: Nouvelles versions dans le canal Regular les 2026-11-10 et 2026-11-13.
+    pending:
+      - topic: cluster-mode
+        owner: OPS
+        note: Autopilot ou Standard, fixé par la conception de la cible gcp, avec FINOPS pour le dimensionnement.
+      - topic: release-channel
+        owner: OPS
+        note: Canal du cluster. Regular sert de référence à la règle de version de l'ADR-004 tant que ce choix n'est pas fait.
+    notes: >-
+      La mineure de Kubernetes suit la règle de version de l'ADR-004 et n'est
+      pas tenue ici.

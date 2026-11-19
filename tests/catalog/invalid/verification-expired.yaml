@@ -1,0 +1,47 @@
+# Must fail: verified_on and its only source six calendar months old or more
+# (ADR-009, section 3).
+# The tests run it with today injected as 2026-11-19.
+# Based on tests/catalog/valid/minimal.yaml, with the id set to the file name
+# and targets.local verified, last released and read on older dates.
+# Expected errors, and only these:
+#   path: targets/local/sources/0/read_on   rule: stale-source
+#   message: source read on 2026-05-19, expired on 2026-11-19 (six calendar months): re-read it, then update read_on and verified_on
+#   path: targets/local/verified_on   rule: stale-verification
+#   message: verified on 2026-05-19, expired on 2026-11-19 (six calendar months): re-read the sources, then update read_on and verified_on
+schema_version: 1
+id: verification-expired
+summary: Brique fictive pour les tests du contrôle du catalogue.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-05-01"
+    verified_on: "2026-05-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-05-19"
+  gcp:
+    type: managed
+    service: Example Managed
+    provider: google
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: active
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-19"
