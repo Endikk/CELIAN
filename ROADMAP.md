@@ -1,7 +1,7 @@
 # Feuille de route
 
-Mise à jour le 19/11/2026, pendant la session 2, après l'étape 3. Le DSI tient ce fichier à
-jour à la fin de chaque session.
+Mise à jour le 19/11/2026, pendant la session 2, après l'étape 4. Le DSI tient
+ce fichier à jour à la fin de chaque session.
 
 ## Phase en cours : 1, benchmarks et décisions
 
@@ -18,6 +18,11 @@ jour à la fin de chaque session.
   puis ADR-001 (spec en YAML et JSON Schema), ADR-002 (Copier, sous
   conditions) et ADR-003 (CLI en Python), au statut proposé. Risques R-23 et
   R-24 ouverts.
+- Étape 4 : BENCH-003 mesuré sur le poste (k3d, kind, minikube), relu par
+  [SECU] et [FINOPS], puis ADR-004 (kind, sous conditions), au statut proposé.
+  Règle d'empreinte à seuils absolus entrée dans le gabarit de benchmark.
+  R-04 et R-20 complétés par les mesures, R-25 et R-26 ouverts. Amendement de
+  la constitution en 1.1.0 dans une PR dédiée (#13).
 
 ### Décisions de Lucas
 
@@ -29,13 +34,18 @@ jour à la fin de chaque session.
   Copier est accepté comme seule option de BENCH-002, avec le prérequis du jour
   2 (US-011). La mise à jour d'un projet généré passe par la CLI de CELIAN ; les
   montées de version de sécurité de Copier échappent au délai de 7 jours ; les
-  seuils de bascule vers le repli de R-22 sont validés (ADR-002).
+  seuils de bascule vers le repli de R-22 sont validés (ADR-002). Pour BENCH-003,
+  la règle d'empreinte de [FINOPS] est validée et kind est retenu pour la cible
+  PC ; la clé en 0777 relevée chez minikube n'est pas signalée. Lucas autorise
+  le DSI à avancer seul pendant son absence, sans poser de question, les points
+  à trancher étant gardés pour son retour.
 
 ### Prochain
 
-- Étape 4 : BENCH-003 avec mesures (k3d, kind, minikube à installer), puis
-  004, 005, 007 sur le cluster retenu, BENCH-008, enfin `catalog/` avec son
-  check CI. GATE 1 : Lucas valide les ADR.
+- Étape 5, en cours : BENCH-004 (gateway), BENCH-005 (orchestration locale) et
+  BENCH-007 (secrets locaux) mesurés sur kind, BENCH-008 (modules OpenTofu de
+  GCP, sans `plan` ni `apply`). Puis l'étape 6 : `catalog/` avec son check CI.
+  GATE 1 : Lucas valide les ADR et l'amendement de la constitution.
 - Lucas termine le changement de jeton `gh` et révoque l'ancien jeton classique
   (R-07). À reprendre : la première tentative a échoué, le presse-papiers ne
   contenait pas le jeton.
@@ -49,7 +59,7 @@ jour à la fin de chaque session.
 | Phase | Objectif | Rôles | Gate | État |
 | --- | --- | --- | --- | --- |
 | 0 | Installation et cadrage | DSI, PO | Vision, PRD, constitution validés | Terminée le 15/11/2026 |
-| 1 | Benchmarks BENCH-001 à 008, ADR, catalogue daté | BENCH, ARCHI | ADR validés | En cours, étapes 1 et 2 faites |
+| 1 | Benchmarks BENCH-001 à 008, ADR, catalogue daté | BENCH, ARCHI | ADR validés | En cours, étapes 1 à 4 faites |
 | 2 | Golden repo SaaS B2B construit à la main | DEV, OPS, SECU | Démo du golden repo | À venir |
 | 3 | Template Copier, JSON Schema de la spec v1 | ARCHI, DEV | Génération depuis un exemple de spec | À venir |
 | 4 | Pipeline de validation blueprint et cible | QA, OPS | Matrice verte | À venir |
