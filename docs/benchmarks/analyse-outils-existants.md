@@ -2,7 +2,7 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | brouillon |
+| Statut | suites validées par Lucas le 2026-11-19 |
 | Date | 2026-11-15 |
 | Auteur | [BENCH] |
 | Demandé par | [DSI], phase 1, étape 2 |

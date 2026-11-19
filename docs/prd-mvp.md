@@ -439,7 +439,7 @@ Aucune n'est validée à ce jour.
 - GitHub convient comme forge au persona pendant le MVP.
 - Un PC de développeur fait tourner au moins le profil lite.
 - La différenciation tient face aux outils existants : sur douze outils
-  examinés le 15/11/2026, aucun ne couvre plus de deux piliers
+  examinés le 15/11/2026, aucun ne couvre entièrement plus de deux piliers
   ([analyse](benchmarks/analyse-outils-existants.md)). Elle porte sur
   l'assemblage, et reste à confirmer auprès de vrais utilisateurs (R-14).
 

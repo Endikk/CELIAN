@@ -238,7 +238,8 @@ licence dans le catalogue et dans l'ADR généré.
 
 ### R-11. `copier update` en conflit avec le code métier
 
-Le « jour 2 » est un point de différenciation. Sur un projet où l'équipe a
+Le « jour 2 » est un pilier de CELIAN, même si Copier le fournit (R-22). Sur
+un projet où l'équipe a
 modifié des fichiers du socle, une mise à jour du blueprint produira des
 conflits.
 

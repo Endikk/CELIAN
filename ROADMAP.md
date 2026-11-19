@@ -12,8 +12,8 @@ jour à la fin de chaque session.
   PRD, registre des risques, garde-fous contre la fuite d'identifiants, ruleset
   de `main` actif (PR #1 à #8).
 - Étape 1 : gabarits de benchmark et d'ADR (PR #9).
-- Étape 2 : analyse de douze outils existants (Q12). Aucun ne couvre plus de
-  deux piliers ; Copier couvre la génération et le jour 2.
+- Étape 2 : analyse de douze outils existants (Q12). Aucun ne couvre entièrement
+  plus de deux piliers ; Copier couvre la génération et le jour 2.
 
 ### Décisions de Lucas
 
