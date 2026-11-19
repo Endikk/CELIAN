@@ -30,6 +30,8 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-20 | Identifiants par défaut dans le golden repo | Forte | Fort si atteint GCP | SECU, DEV | Ouvert |
 | R-21 | Application Design Center couvre le même besoin sur GCP | Moyenne | Moyen | PO | Ouvert |
 | R-22 | Jour 2 dépendant d'un seul outil communautaire | Faible | Fort | ARCHI | Ouvert |
+| R-23 | Failles du modèle de confiance de Copier | Forte | Fort | SECU | Ouvert |
+| R-24 | Outils du générateur portés par une personne ou un éditeur | Faible | Moyen | ARCHI, DEV | Ouvert |
 
 ## Détail
 
@@ -98,7 +100,10 @@ planification, qui doublonnent Spec Kit).
 Le coût fixe se répète à chaque délégation : un sous-agent reçoit lui aussi les
 règles globales et la liste des skills. La boucle de correction de la phase 5
 (« l'agent corrige et relance ») n'a pas encore de nombre d'essais maximal, et
-elle consommera des tokens chez chaque utilisateur du produit. Le mode de
+elle consommera des tokens chez chaque utilisateur du produit. Le nombre de
+tours dépend aussi du validateur : d'après BENCH-001 (2026-11-19), JSON Schema
+signale trois erreurs en une passe là où CUE et Pkl n'en remontent qu'une,
+soit jusqu'à trois tours au lieu d'un ([FINOPS]). Le mode de
 facturation de Lucas (abonnement plafonné ou clé API à l'usage) reste à
 confirmer.
 
@@ -220,7 +225,9 @@ les outils du poste (Claude Code, plugins, `uv tool`).
 Mitigation : versions figées partout, Renovate attend 7 jours après chaque
 publication pour ce qu'il gère, les benchmarks écartent les projets sans recul.
 Les outils du poste se mettent à jour à la main, en notant la version dans
-`ROADMAP.md`.
+`ROADMAP.md`. Relevé par [SECU] le 2026-11-19 : `uv tool run --exclude-newer
+"7 days"` et la clé npm `min-release-age` appliquent aussi la règle des 7 jours
+aux outils lancés par `uvx` et `npx`.
 
 ### R-10. Artefacts AGPL copiés dans le générateur
 
@@ -246,6 +253,11 @@ conflits.
 Mitigation : séparer dans le blueprint ce qui relève du socle et ce qui
 appartient à l'équipe. Tester `copier update` dans la matrice de la phase 4,
 sur un projet généré puis modifié.
+
+Constat de BENCH-002 (2026-11-19) : Copier 9.19.1 rend le code de sortie 0
+même quand un conflit reste à résoudre. La CLI et la matrice ne doivent pas
+s'y fier : elles vérifient `git diff --name-only --diff-filter=U` et cherchent
+les marqueurs de conflit.
 
 ### R-12. Dérive du périmètre
 
@@ -391,3 +403,49 @@ Mitigation : BENCH-002 mesure le jour 2 de chaque option et vérifie l'activité
 de Copier. Version de Copier figée dans la CLI et mise à jour par Renovate.
 Repli documenté dans l'ADR : le mécanisme de JHipster, une branche dédiée au
 gabarit puis une fusion Git, qui ne dépend d'aucun outil tiers.
+
+Constat de BENCH-002 (2026-11-19) : Copier reste actif, 23 releases en 12
+mois. 76 % des commits humains de l'année viennent d'un seul mainteneur, et
+aucune fondation ne le porte. Le repli par branche Git dédiée puis fusion a été
+essayé trois fois : même résultat que `copier update`, conflit compris.
+
+### R-23. Failles du modèle de confiance de Copier
+
+Copier a publié 15 avis de sécurité du 2025-08-18 au 2026-10-12, dont 8
+élevés, tous corrigés vite (BENCH-002, relu par [SECU]). Trois classes : dix
+évasions du mode « gabarit sûr », quatre contournements du préfixe de
+confiance, et une injection d'argument Git qui exécute une commande sans
+aucune confiance accordée, par un `_src_path` piégé dans `.copier-answers.yml`
+au moment de `copier update`. Un correctif a lui-même introduit une faille. Le
+mode sûr et la confiance ne tiennent donc pas comme barrière. Le projet généré
+étant modifiable par tout contributeur, son fichier de réponses est une entrée
+non fiable. De plus, 8 des 15 avis manquent à la base globale GitHub Advisory
+Database et à OSV : les scanneurs qui les lisent jugent saines des versions
+vulnérables (comportement exact de Renovate, Trivy et Dependency-Track à
+vérifier).
+
+Mitigation, conditions reprises dans l'ADR du moteur de templates : la CLI
+refuse Copier antérieur à 9.19.0 et Jinja2 antérieur à 3.1.6 ; Copier figé
+dans le verrou avec un plafond `<10` ; la CLI ne rend que les blueprints de
+CELIAN, par un `vcs_ref` en SHA, et vérifie `_src_path` et `_commit` avant
+toute mise à jour ; jamais `--trust` ni `unsafe=True`, aucun `_tasks`,
+`_migrations` ou `_jinja_extensions` dans les blueprints, vérifié par un test ;
+`COPIER_SETTINGS_PATH` pointe vers un fichier sans liste de confiance. [SECU]
+relit chaque semaine la page des avis de copier-org/copier tant que la base
+globale reste en retard.
+
+### R-24. Outils du générateur portés par une personne ou un éditeur
+
+Deux briques pressenties dépendent d'une seule personne ou d'un seul éditeur
+(BENCH-001 et BENCH-006, relus par [SECU] le 2026-11-19).
+python-jsonschema, le validateur de la spec : 135 des 145 commits humains des
+12 derniers mois viennent de l'auteur principal, qui porte aussi ses
+dépendances `referencing` et `jsonschema-specifications`. Sa dernière version
+date du 2026-01-07 : sans nouvelle version au 2027-01-07, il tombe sous le
+critère de release. uv, pressenti pour installer la CLI : Astral a annoncé le
+2026-03-19 rejoindre OpenAI, sans rien dire de la licence ni de la gouvernance,
+et uv fournit aussi l'interpréteur Python.
+
+Mitigation : un validateur remplaçable, puisque JSON Schema est une norme ;
+une vérification datée du 2027-01-07 ; aucune dépendance de la CLI à uv ; une
+voie d'installation par pipx, avec un Python hors uv, documentée.

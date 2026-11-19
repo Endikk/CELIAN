@@ -80,6 +80,11 @@ rapport [Sn]. Sans objet pour un service managé de la cible cloud
 Statut : ni archivé, ni annoncé en maintenance par le dépôt, le site ou la
 fondation.
 Release : la dernière date de moins de 12 mois au jour de la vérification.
+Pour une norme stable (JSON Schema, OpenAPI, OCI), le critère porte sur
+l'outil maintenu qui la met en œuvre, pas sur le texte de la norme. Il ne
+s'applique pas aux dépendances transitives, qui se signalent dans les limites.
+Une exigence fonctionnelle du PRD peut éliminer une option ; elle s'écrit dans
+le contexte avec sa référence (US-xxx), et le DSI l'accepte par écrit.
 Une option éliminée n'est pas notée. S'il reste moins de deux options, le
 signaler au DSI avant de continuer.
 -->
