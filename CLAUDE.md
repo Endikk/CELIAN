@@ -43,10 +43,11 @@ en cas d'écart, il l'emporte sur ce résumé.
 ## Périmètre du MVP
 
 Dans le MVP : un blueprint SaaS B2B (.NET, React, Postgres, cache) et deux
-cibles, un PC sous k3d et GCP. Entretien guidé, génération depuis la spec,
-validation automatique, conventions Git complètes dans le projet généré. Le
-produit prend la forme d'un plugin Claude Code (skills et sous-agents) qui
-pilote une petite CLI Python. Les projets générés restent en .NET et React.
+cibles, un PC sous un cluster Kubernetes local (kind, ADR-004) et GCP.
+Entretien guidé, génération depuis la spec, validation automatique,
+conventions Git complètes dans le projet généré. Le produit prend la forme
+d'un plugin Claude Code (skills et sous-agents) qui pilote une petite CLI
+Python. Les projets générés restent en .NET et React.
 
 Hors MVP, à refuser poliment jusqu'à nouvel ordre : AWS, Azure, on-prem
 serveurs, cloud souverain, blueprints data, IoT et mobile, agent comparateur
