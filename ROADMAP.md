@@ -27,14 +27,12 @@ jour à la fin de chaque session.
   pour les modules OpenTofu de GCP. Deux risques sont ajoutés (R-21, R-22). La
   section « Ce qui le distingue » de la vision parle désormais d'assemblage.
   Copier est accepté comme seule option de BENCH-002, avec le prérequis du jour
-  2 (US-011).
+  2 (US-011). La mise à jour d'un projet généré passe par la CLI de CELIAN ; les
+  montées de version de sécurité de Copier échappent au délai de 7 jours ; les
+  seuils de bascule vers le repli de R-22 sont validés (ADR-002).
 
 ### Prochain
 
-- Lucas tranche les questions de l'ADR-002 : passage de la mise à jour par la
-  CLI de CELIAN plutôt que par `copier update` à la main (US-011, avec [PO]),
-  montées de version de sécurité de Copier hors délai de 7 jours, seuils de
-  bascule vers le repli de R-22.
 - Étape 4 : BENCH-003 avec mesures (k3d, kind, minikube à installer), puis
   004, 005, 007 sur le cluster retenu, BENCH-008, enfin `catalog/` avec son
   check CI. GATE 1 : Lucas valide les ADR.

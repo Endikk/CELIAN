@@ -101,8 +101,9 @@ projet généré fonctionne sans CELIAN (ENF-07).
 
 ## 3. Parcours utilisateur du MVP
 
-Les noms de commandes autres que `task up` et `copier update` se fixent en
-phase 5.
+Les noms de commandes autres que `task up` se fixent en phase 5. La mise à
+jour d'un projet généré passe par la CLI de CELIAN, qui appelle Copier
+(ADR-002, décision de Lucas du 19/11/2026).
 
 1. Installation. L'utilisateur installe le plugin et la CLI. Le mode de
    distribution se décide avec [DEV].
@@ -294,13 +295,15 @@ En tant que tech lead, je veux recevoir les correctifs du blueprint, afin que
 mon socle ne vieillisse pas sans moi.
 
 - Étant donné un projet généré avec la version N du blueprint et une version
-  N+1 publiée, quand l'utilisateur lance `copier update` (si BENCH-002 confirme
-  Copier), alors les changements s'appliquent sans repasser par l'entretien.
+  N+1 publiée, quand l'utilisateur lance la mise à jour par la CLI de CELIAN,
+  alors les changements s'appliquent sans repasser par l'entretien. La CLI
+  appelle Copier sous les conditions de l'ADR-002. Lancer `copier update` à la
+  main reste possible, hors des garanties de CELIAN (R-23).
 - Les modifications de l'utilisateur sont conservées hors conflit, et les
   conflits sont listés fichier par fichier.
 - Les vérifications de US-007 sont relancées après la mise à jour.
-- La matrice de la phase 4 couvre une mise à jour de N à N+1. BENCH-002 doit
-  vérifier ce parcours pour chaque option.
+- La matrice de la phase 4 couvre une mise à jour de N à N+1. BENCH-002 a
+  vérifié ce parcours sur un gabarit jouet, pour chaque option.
 
 ### US-012 Ne trouver aucun secret dans le dépôt généré
 
