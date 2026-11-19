@@ -11,8 +11,8 @@
 | Relecteurs | [SECU] pour les licences, les CVE et les adresses d'écoute, [FINOPS] pour les coûts |
 | Périmètre | Projet généré sur PC (macOS et Linux, Q5). La cible GCP passe par GKE et ne voit pas ce choix |
 | Choix du PRD | Cluster local, option pressentie k3d (`docs/prd-mvp.md`, section 1) |
-| ADR lié | À écrire par [ARCHI], numéro à attribuer |
-| Verdict proposé | kind, 90/100, devant minikube (87) et k3d (64), avec la règle d'empreinte proposée par [FINOPS], recommandée par le DSI, à valider par Lucas. Avec l'ancienne règle et le tirage de kindnetd compté une seule fois, minikube passerait à 91 (section 7) |
+| ADR lié | [ADR-004](../adr/ADR-004-cluster-local.md), écrit par [ARCHI] |
+| Verdict proposé | kind, 90/100, devant minikube (87) et k3d (64), avec la règle d'empreinte de [FINOPS], validée par Lucas le 2026-11-19. Avec l'ancienne règle et le tirage de kindnetd compté une seule fois, minikube passerait à 91 (section 7). kind retenu par Lucas le 2026-11-19 |
 
 ## 1. Contexte
 
@@ -365,8 +365,8 @@ contre la substitution [S66], [S67]. Ce point ne départage pas les options.
 
 ### 5.6 Empreinte sur PC (RAM, CPU, démarrage), poids 10
 
-[BENCH] Règle appliquée : proposée par [FINOPS], recommandée par le DSI, à
-valider par Lucas. Elle remplace la règle de la première version de ce
+[BENCH] Règle appliquée : proposée par [FINOPS], recommandée par le DSI,
+validée par Lucas le 2026-11-19 et reprise dans `TEMPLATE.md`. Elle remplace la règle de la première version de ce
 rapport, qui comparait chaque option à la meilleure ; celle-ci et ses notes
 restent dans la section 7, au titre de la sensibilité. Les deux règles ont
 été posées après lecture des chiffres, et ni [BENCH] ni [FINOPS] ne peut
@@ -452,7 +452,8 @@ du champ de ce benchmark (R-26).
 
 [BENCH] Option proposée : kind, 90 sur 100. minikube suit à 87, soit 3 points
 derrière, et k3d, l'option pressentie, finit à 64. Ce classement suppose la
-règle d'empreinte de [FINOPS], recommandée par le DSI et soumise à Lucas.
+règle d'empreinte de [FINOPS], que Lucas a validée le 2026-11-19 en même
+temps qu'il retenait kind.
 
 [BENCH] Pourquoi. kind et minikube partagent l'essentiel : sous-projets de
 Kubernetes, gradué à la CNCF [S18], [S23], [S32], licence Apache-2.0, API en
@@ -527,9 +528,9 @@ le sens de kind, à reprendre dans l'ADR :
 
 [BENCH] Suites :
 
-- l'ADR du cluster local, écrit par [ARCHI] : il tranche entre les deux règles
-  d'empreinte, et la règle retenue par Lucas entre dans `TEMPLATE.md` avant
-  BENCH-005, pour être fixée avant les chiffres la prochaine fois. Il fixe
+- l'ADR du cluster local, écrit par [ARCHI] (ADR-004). La règle d'empreinte
+  de [FINOPS], validée par Lucas, est entrée dans `TEMPLATE.md` avant
+  BENCH-005, pour être fixée avant les chiffres la prochaine fois. L'ADR fixe
   aussi la politique de version de Kubernetes (v1.36.4 alignée ici, v1.37.0
   par défaut dans kind 0.33.0 [S12]) ;
 - une entrée de `catalog/` pour l'outil de la cible PC, si l'ADR suit ce
@@ -539,8 +540,8 @@ le sens de kind, à reprendre dans l'ADR :
   `0c8c7dbe5e23594a198b786c4bc13dacc101fa6196b0cb0b23a1ca44e61f4b4f` [S66] ;
 - la constitution (périmètre du MVP, « PC sous k3d »), `CLAUDE.md`,
   `docs/vision.md`, `docs/prd-mvp.md` et les fiches des agents `bench`, `ops`
-  et `qa` nomment k3d. Si l'ADR retient un autre outil, amender la
-  constitution revient à Lucas ;
+  et `qa` nomment k3d. Lucas ayant retenu kind, une PR dédiée amende la
+  constitution et ces fichiers ;
 - exigences de [SECU] pour le blueprint : `task up` vérifie la version exacte
   de l'outil et refuse de démarrer si elle diffère ; l'image de nœud et les
   images du blueprint sont figées par condensat, Renovate les met à jour avec
@@ -555,9 +556,8 @@ le sens de kind, à reprendre dans l'ADR :
 - un miroir ou une archive d'images publiés par CELIAN, piste de R-04 et
   R-25, serait une redistribution : les licences du contenu des images sont à
   relire avant, selon [SECU] ;
-- suite possible, qui revient à Lucas : signaler la clé client recopiée en
-  0777 par minikube 1.39.0 [S58] au processus de sécurité de Kubernetes
-  [S31], plutôt que par une issue publique. [BENCH] ne l'a pas fait ;
+- clé client recopiée en 0777 par minikube 1.39.0 [S58] : Lucas a décidé le
+  2026-11-19 de ne pas la signaler, minikube n'étant pas retenu ;
 - côté risques, le DSI a déjà repris R-04, R-20, R-25 et R-26 dans
   `docs/risques.md`. Volumes de la première création : 352 à 853 Mo
   compressés en arm64. Pour un projet généré privé, la création du cluster
@@ -576,7 +576,7 @@ le sens de kind, à reprendre dans l'ADR :
 | Limites de ressources différentes : minikube se borne à 2 CPU et 6 100 Mio pour un nœud (`Memory:3072` par nœud à deux nœuds), rien n'est demandé à kind ni à k3d | CPU et mémoire au repos pas tout à fait comparables, minikube pourrait ralentir sous charge | Mesurer avec des limites identiques, puis avec la stack du blueprint (BENCH-005) |
 | Configuration par défaut de chaque outil : Traefik, servicelb et metrics-server pour k3d, rien de tel pour kind | L'empreinte de k3d baisserait sans ces composants, que le blueprint désactiverait | Mesurer la configuration retenue par le blueprint |
 | Mesure au repos seulement, cluster seul | Ne dit rien de la tenue sous la charge du projet, ni de la tenue sur 8 Gio | Mesurer `task up` sur le golden repo de la phase 2 et en BENCH-005 |
-| Deux règles de notation de l'empreinte, posées l'une et l'autre après lecture des chiffres | Le classement de tête change selon la règle retenue (section 7) | Décision de Lucas dans l'ADR ; la règle retenue entre dans `TEMPLATE.md` avant BENCH-005 |
+| Deux règles de notation de l'empreinte, posées l'une et l'autre après lecture des chiffres | Le classement de tête change selon la règle retenue (section 7) | Règle de [FINOPS] validée par Lucas le 2026-11-19 et entrée dans `TEMPLATE.md` avant BENCH-005 |
 | Option pressentie par le PRD | Biais possible en faveur de k3d ; le résultat va à l'inverse | Même script et mêmes sources pour les trois options |
 | Notes de jugement : gouvernance et maturité de kind et de minikube, sécurité de minikube | Le verdict de tête repose sur elles (section 7) | Relectures de [SECU] et [FINOPS] faites ; avis de Lucas dans l'ADR |
 | Gouvernance mesurée par les identifiants des commits, robots filtrés par leur nom ; employeurs déclaratifs | Un compte multiple ou un profil faux fausserait les parts | Relire la liste des auteurs à la main |
