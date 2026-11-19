@@ -28,6 +28,8 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-18 | Services GCP facturés au volume | Moyenne | Faible | FINOPS | Ouvert |
 | R-19 | Identité GCP de la CI et état OpenTofu | Moyenne | Fort | SECU, OPS | Ouvert |
 | R-20 | Identifiants par défaut dans le golden repo | Forte | Fort si atteint GCP | SECU, DEV | Ouvert |
+| R-21 | Application Design Center couvre le même besoin sur GCP | Moyenne | Moyen | PO | Ouvert |
+| R-22 | Jour 2 dépendant d'un seul outil communautaire | Faible | Fort | ARCHI | Ouvert |
 
 ## Détail
 
@@ -236,7 +238,8 @@ licence dans le catalogue et dans l'ADR généré.
 
 ### R-11. `copier update` en conflit avec le code métier
 
-Le « jour 2 » est un point de différenciation. Sur un projet où l'équipe a
+Le « jour 2 » est un pilier de CELIAN, même si Copier le fournit (R-22). Sur
+un projet où l'équipe a
 modifié des fichiers du socle, une mise à jour du blueprint produira des
 conflits.
 
@@ -361,3 +364,30 @@ Mitigation : `task up` génère des secrets aléatoires au premier lancement, da
 un `.env` ignoré par Git. Les ports se lient à `127.0.0.1`. Un test de la
 matrice et une politique conftest échouent si un identifiant par défaut atteint
 la cible GCP.
+
+### R-21. Application Design Center couvre le même besoin sur GCP
+
+L'analyse des outils existants
+([benchmarks/analyse-outils-existants.md](benchmarks/analyse-outils-existants.md),
+15/11/2026) relève Application Design Center de Google, avec Gemini : il
+touche cinq des six piliers de CELIAN, chacun en partie. Il est propriétaire,
+limité à Google Cloud d'après les pages lues, sans équivalent sur PC, et nomme
+des produits concrets au lieu d'une spec abstraite. Un tech lead qui ne vise
+que GCP pourrait s'en contenter.
+
+Mitigation : tenir la différence là où il ne va pas, la parité PC et la
+spec abstraite indépendante du fournisseur. Revoir son périmètre avant la
+GATE 1 et avant la démo de la phase 6, sources datées à l'appui.
+
+### R-22. Jour 2 dépendant d'un seul outil communautaire
+
+Le jour 2 de CELIAN repose sur `copier update`. D'après l'analyse, Copier est
+sous licence MIT et porté par l'organisation copier-org, sans entreprise ni
+fondation citée. Si le projet ralentit ou change de cap, le pilier 5 tombe
+avec lui. Cookiecutter n'offre pas de repli : cruft, son outil de mise à jour,
+n'a rien publié depuis plus de 12 mois.
+
+Mitigation : BENCH-002 mesure le jour 2 de chaque option et vérifie l'activité
+de Copier. Version de Copier figée dans la CLI et mise à jour par Renovate.
+Repli documenté dans l'ADR : le mécanisme de JHipster, une branche dédiée au
+gabarit puis une fusion Git, qui ne dépend d'aucun outil tiers.

@@ -1,6 +1,7 @@
 # Vision de CELIAN
 
-Statut : validée par Lucas à la GATE 0 le 15/11/2026.
+Statut : validée par Lucas à la GATE 0 le 15/11/2026. Section « Ce qui le
+distingue » révisée le 19/11/2026, après l'analyse des outils existants.
 
 Sources : brief v1.0 (sections 2, 3, 4 et 12), constitution 1.0.0 et
 `CLAUDE.md`, lus le 15/11/2026. Le détail du MVP est dans le
@@ -39,17 +40,18 @@ choisie. Il continue ensuite de recevoir les correctifs de son blueprint.
 
 ## Ce qui le distingue
 
-1. L'IA assemble des briques déjà testées et n'écrit que la partie propre au
-   projet. L'infrastructure vient des blueprints, couverts par une matrice de
-   validation.
-2. Le jour 2 est prévu : un projet généré se met à jour quand son blueprint
-   évolue, par `copier update` si le benchmark BENCH-002 confirme Copier.
-3. Parité locale : ce qui tourne sur la cible tourne aussi sur un PC, avec des
-   équivalents gratuits et open source.
-4. Le catalogue de technos est daté et vérifié. Chaque brique porte sa licence,
-   sa gouvernance, son statut et la date de sa dernière vérification.
-5. Les choix structurants passent par un benchmark réel, avec des mesures quand
-   elles ont un sens, et chaque décision est tracée dans un ADR.
+Aucune brique technique n'est neuve : Copier met à jour un projet généré, la
+parité locale existe ailleurs. Mais aucun des douze outils
+[analysés](benchmarks/analyse-outils-existants.md) ne couvre entièrement plus
+de deux des six piliers de CELIAN. La différence tient à l'assemblage et à la
+curation. Le catalogue est daté : la CI du générateur rejette toute entrée
+incomplète. La règle « open source sur PC, managé sur GCP » vise une stack
+.NET et React.
+L'agent n'écrit que les ADR et les textes, et la validation le renvoie
+corriger. Aucun des douze ne le fait ; c'est le point le moins éprouvé.
+
+Le risque : une équipe outillée peut tout assembler elle-même. CELIAN ne vaut
+que s'il lui épargne ce travail et sa maintenance.
 
 ## Ce que CELIAN ne fera pas
 
