@@ -658,6 +658,14 @@ un correctif, puisque 8 de ses conteneurs sont en `imagePullPolicy: Always`,
 sauf si la mitigation retenue est un miroir local déclaré à containerd.
 Revenir aux tags pour faire marcher `kind load` est refusé.
 
+Complément de BENCH-007, relu par [SECU] le 2026-11-19 : un miroir local
+alimenté sur le poste ne redistribue rien. Un miroir publié par CELIAN, lui,
+redistribuerait chaque image avec toutes ses couches. Pour OpenBao, la
+MPL-2.0 demanderait d'indiquer où trouver le source, et sa base Alpine
+contient busybox sous GPL-2.0-only. La question vaut pour toutes les images du
+blueprint. Avant tout miroir publié : licences relevées couche par couche
+(SBOM), et source indiqué pour les couches sous MPL ou GPL.
+
 ### R-26. Moteur de conteneurs du poste sous licence payante
 
 Les trois outils de cluster local mesurés par BENCH-003 tournent sur un moteur

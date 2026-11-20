@@ -61,6 +61,9 @@ ne commence avant.
   PC ; la clé en 0777 relevée chez minikube n'est pas signalée. Lucas autorise
   le DSI à avancer seul pendant son absence, sans poser de question, les points
   à trancher étant gardés pour son retour.
+- 20/11/2026 : Lucas fusionne les PR #13 à #20. La constitution 1.1.0 est sur
+  `main` ; les ADR-004 à ADR-010 y sont au statut proposé, en attente de la
+  GATE 1.
 
 ### Décisions du DSI pendant l'absence de Lucas, à confirmer à la GATE 1
 
@@ -80,9 +83,8 @@ ne commence avant.
 
 ### Prochain
 
-GATE 1. Lucas valide les ADR-001 à ADR-010, l'amendement de la constitution
-(#13) et la lecture des principes III et V (ADR-009). Points les plus lourds,
-dans l'ordre :
+GATE 1. Lucas valide les ADR-001 à ADR-010 et la lecture des principes III et
+V (ADR-009). Points les plus lourds, dans l'ordre :
 
 1. La lecture des principes III et V. La ligne `gcp` de l'ADR-005, l'ADR-007
    et l'ADR-010 en dépendent ; sans elle, ESO et Flux passeraient devant sur
@@ -108,10 +110,6 @@ dans l'ordre :
 8. Les grilles tarifaires de GKE, Cloud SQL, Memorystore, du réseau et de
    Cloud Monitoring restent illisibles pour les agents : qui les lit, pour
    quelle région, avant la GATE 2 (R-05).
-
-Ordre de fusion proposé : #14, #13, puis #15, #16, #17, #18, #19, #20 et
-celle-ci. Les PR sont empilées ; le DSI les rebase après chaque fusion, et
-reporte alors dans R-25 les compléments de BENCH-007 et BENCH-009.
 
 Actions de Lucas, hors GATE :
 
