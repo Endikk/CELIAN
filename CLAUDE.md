@@ -173,7 +173,9 @@ section 8 du brief), puis par un ADR (`docs/adr/ADR-XXX-sujet.md`).
   (`.github/workflows/ci.yml`), plus un scan gitleaks de tout l'historique.
 - Versions des hooks et des actions figées par SHA, avec le tag en commentaire.
 - release-please tient les versions et `CHANGELOG.md`. Renovate propose les
-  mises à jour, une fois la version publiée depuis au moins 7 jours.
+  mises à jour, une fois la version publiée depuis au moins 7 jours. Un
+  correctif de sécurité passe sans ce délai si sa PR passe toute la matrice
+  (principe VI, constitution 1.2.0).
 - Réglages GitHub en code : `scripts/github/apply-settings.sh` (fusion en
   squash seule, permissions des workflows) et `.github/rulesets/main.json`. Le
   dépôt est public depuis le 15/11/2026, par décision de Lucas. Le script

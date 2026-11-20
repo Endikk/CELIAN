@@ -61,7 +61,9 @@ Une techno entre au catalogue seulement si elle est maintenue activement et
 déjà adoptée en production. Les critères éliminatoires du benchmark
 s'appliquent : projet archivé ou en maintenance, aucune release depuis 12 mois,
 licence non open source pour une cible on-prem. Les mises à jour automatiques
-attendent qu'une version soit publiée depuis au moins 7 jours.
+attendent qu'une version soit publiée depuis au moins 7 jours. Exception : une
+version qui corrige un avis de sécurité publié (CVE ou avis du projet) passe
+sans ce délai, à condition que sa PR passe toute la matrice de validation.
 
 Pourquoi : l'utilisateur hérite de nos choix pendant des années. Il ne doit pas
 essuyer les plâtres.
@@ -156,6 +158,6 @@ sur les règles.
 Chaque revue de PR vérifie la conformité aux principes. Une dérogation se
 justifie dans un ADR, avec sa durée et la condition qui la lèvera.
 
-**Version** : 1.1.0 | **Ratifiée** : 2026-11-15, par Lucas à la GATE 0 |
-**Dernier amendement** : 2026-11-19, cluster local retiré du texte au profit
-de l'ADR-004 (kind, retenu par Lucas)
+**Version** : 1.2.0 | **Ratifiée** : 2026-11-15, par Lucas à la GATE 0 |
+**Dernier amendement** : 2026-11-20, exception de sécurité au délai de 7 jours
+du principe VI, décidée par Lucas à la GATE 1
