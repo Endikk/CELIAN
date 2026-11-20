@@ -1,15 +1,17 @@
 # PRD du MVP de CELIAN
 
 Statut : validé par Lucas à la GATE 0 le 15/11/2026, questions Q1 à Q12
-comprises. Rédigé par [PO] le même jour.
+comprises. Rédigé par [PO] le même jour. Aligné par [PO] sur les décisions de
+la GATE 1 du 2026-11-20 : ADR-001 à ADR-010 acceptés, débit visé et profil lite
+(R-04).
 
 Sources : brief v1.0 (sections 2 à 4, 6, 8, 9 et 12), constitution 1.0.0
 (branche `chore/speckit`) et `CLAUDE.md`, lus le 15/11/2026. La vision tient en
 une page dans [vision.md](vision.md).
 
 Ce document dit ce que le MVP doit faire et comment vérifier qu'il le fait. Les
-choix de technos reviennent à [ARCHI] et [BENCH] ; un choix encore ouvert est
-signalé avec le benchmark de phase 1 qui le tranchera.
+choix de technos reviennent à [ARCHI] et [BENCH] ; chacun renvoie à l'ADR qui
+le porte.
 
 ## 1. Contexte et problème
 
@@ -52,21 +54,27 @@ Validation automatique                                si échec, retour à l'age
 Dépôt livré, mis à jour ensuite depuis le blueprint
 ```
 
-Les choix suivants restent ouverts. L'option pressentie vient du brief et ne
-vaut décision qu'après le benchmark et son ADR. Le reste de la stack du
-blueprint (brief, section 6) sert de point de départ, chaque version étant
-vérifiée et datée en phase 1 (principe VIII).
+Les choix suivants sont tranchés depuis la GATE 1 du 2026-11-20 : les dix ADR
+y ont été acceptés, Lucas ayant délégué la décision au DSI. L'option
+pressentie venait du brief. Quand le benchmark en a retenu une autre, la ligne
+garde sa trace. Chaque ADR porte ses conditions et les questions qui restent
+ouvertes. L'ADR-009 fixe en plus le format du catalogue et la
+lecture des principes III et V sur le cloud, dont dépendent les choix GCP de la
+gateway, des secrets et du GitOps. Le reste de la stack du blueprint (brief,
+section 6) sert de point de départ, chaque version étant vérifiée et datée
+avant usage (principe VIII).
 
-| Choix | Option pressentie | Tranché par |
+| Choix | Option retenue | Tranché par |
 | --- | --- | --- |
-| Format de la spec | YAML validé par un JSON Schema rangé dans `schema/` | BENCH-001 (YAML et JSON Schema, CUE, Pkl, Score) |
-| Moteur de templates | Copier | BENCH-002 (Copier, Cookiecutter, Yeoman) |
+| Format de la spec | YAML validé par un JSON Schema 2020-12 rangé dans `schema/`, pressenti et retenu | BENCH-001 (YAML et JSON Schema, CUE, Pkl, Score), ADR-001 |
+| Moteur de templates | Copier, pressenti et retenu | BENCH-002 (Copier, Cookiecutter, Yeoman), ADR-002 |
 | Cluster local | k3d au départ ; kind retenu par Lucas le 2026-11-19 | BENCH-003 (k3d, kind, minikube), ADR-004 |
-| Gateway | Envoy Gateway | BENCH-004 (Envoy Gateway, Cilium, Traefik) |
-| Orchestration dev locale | Aspire | BENCH-005 (Aspire, Tilt, Docker Compose) |
-| Langage de la CLI | Python, retenu dans la forme du produit | BENCH-006 (Python, TypeScript) |
-| Secrets locaux | OpenBao | BENCH-007 (OpenBao et alternatives) |
-| Modules OpenTofu pour GCP | Aucune | BENCH-008 (modules écrits à la main, Cloud Foundation Fabric, terraform-google-modules) |
+| Gateway | Envoy Gateway au départ ; Envoy Gateway sur le PC, contrôleur Gateway de GKE sur GCP | BENCH-004 (Envoy Gateway, Cilium, Traefik), ADR-005 |
+| Orchestration dev locale | Aspire au départ ; aucun outil de boucle retenu, `task up` enchaîne `docker build`, `kind load` et `kubectl apply -k` | BENCH-005 (Aspire, Tilt, Docker Compose, sans outil), ADR-006 |
+| Langage de la CLI | Python, retenu dans la forme du produit | BENCH-006 (Python, TypeScript), ADR-003 |
+| Secrets | OpenBao au départ ; Secrets Kubernetes créés par `task up` sur le PC, synchronisés depuis Secret Manager par GKE sur GCP | BENCH-007 (OpenBao et alternatives), ADR-007 |
+| Modules OpenTofu pour GCP | Aucune option au départ ; ressources du provider `hashicorp/google` écrites par CELIAN, sans module tiers, sur un cluster GKE Autopilot | BENCH-008 (modules écrits à la main, Cloud Foundation Fabric, terraform-google-modules), ADR-008 |
+| GitOps | Argo CD au départ (brief, Q6) ; Flux sur le PC, Config Sync sur GKE | BENCH-009 (Argo CD, Flux, Config Sync), ADR-010 |
 
 ## 2. Personas
 
@@ -209,6 +217,9 @@ commande, afin de travailler dans un environnement proche de la cible.
   comme la page d'accueil du front répondent.
 - Le profil lite, standard ou full suit la RAM disponible. Seuils à mesurer en
   phase 1 (BENCH-003, BENCH-005).
+- Le profil lite n'embarque pas l'outil GitOps : après `task up` dans ce
+  profil, aucun de ses contrôleurs ne tourne dans le cluster (décision de la
+  GATE 1 du 2026-11-20, R-04).
 - Une commande documentée arrête et supprime l'environnement.
 
 ### US-006 Déployer sur GCP avec un accord explicite
@@ -313,8 +324,10 @@ et de le partager sans risque.
 - Un scan de secrets sur le dépôt généré, historique compris, ne trouve rien.
 - Les identifiants GCP et GitHub de l'utilisateur n'apparaissent ni dans la
   spec ni dans aucun fichier généré.
-- Les secrets de l'application viennent du gestionnaire de secrets de la cible
-  (OpenBao en local si BENCH-007 le confirme, Secret Manager sur GCP).
+- Les secrets de l'application arrivent par des Secrets Kubernetes de même nom
+  et de mêmes clés sur les deux cibles (ADR-007). Sur le PC, `task up` les crée
+  avec des valeurs aléatoires. Sur GCP, GKE les synchronise depuis Secret
+  Manager. OpenBao au départ ; BENCH-007 ne l'a pas confirmé.
 - Étant donné un développeur qui tente de committer une clé, quand le hook
   pre-commit tourne, alors il refuse le commit.
 
@@ -322,9 +335,25 @@ et de le partager sans risque.
 
 ### ENF-01 Délai
 
-Le parcours défini à la section 7 tient en moins de 15 minutes. La durée de
-chaque étape est mesurée et affichée à la fin. Les budgets de temps par étape
-sont à définir après les mesures de phase 1.
+Le parcours défini à la section 7 tient en moins de 15 minutes, au débit visé
+par le critère d'acceptation (section 7), que [FINOPS] fixe après le golden
+repo. La durée de chaque étape est mesurée et affichée à la fin. Les budgets de
+temps par étape restent à définir (R-04).
+
+Le volume téléchargé pèse lourd dans ce délai. D'après le calcul de [FINOPS]
+repris dans R-04, le premier `task up` complet télécharge 1 395,9 Mo en amd64,
+pire cas des systèmes de Q5 : 505,8 Mo pour la plate-forme de base, 258,1 Mo
+pour l'outil GitOps (Flux réduit à ses quatre contrôleurs), 632,0 Mo pour la
+stack, rien pour les secrets. À 10 Mbit/s utiles, une hypothèse et non une
+mesure, ce téléchargement prend 1 117 s, soit 124 % du budget de 900 s. Sans
+outil GitOps, il en prend encore 101 %. Il faut au moins 12,4 Mbit/s pour
+télécharger les 1 395,9 Mo, sans compter l'entretien, la génération, la
+compilation ni la CI. Restent à mesurer sur le golden repo le temps à froid et
+la compilation de la vraie stack.
+
+D'où les deux décisions de Lucas à la GATE 1 du 2026-11-20 : un débit visé
+écrit dans le critère d'acceptation, et un profil lite sans outil GitOps
+(US-005).
 
 ### ENF-02 Parité locale et empreinte
 
@@ -406,6 +435,11 @@ L'apply réel a lieu dans la même session, après accord, mais sa durée se mes
 managées. Le premier téléchargement des images compte dans les 15 minutes,
 parce qu'une personne extérieure ne les aura pas en cache.
 
+Décision de Lucas à la GATE 1 du 2026-11-20 (R-04) : le critère se juge à un
+débit visé, écrit ici. Débit visé : à fixer par [FINOPS] après le golden repo
+(GATE 1, 2026-11-20). À 10 Mbit/s utiles, une hypothèse, le seul
+téléchargement du premier `task up` dépasse déjà le budget (ENF-01).
+
 ### Comment le tester en phase 6
 
 [QA] écrit le protocole détaillé. Le PRD en fixe le cadre.
@@ -415,7 +449,8 @@ parce qu'une personne extérieure ne les aura pas en cache.
 - Elle suit une consigne écrite, sans aide. Un observateur note les blocages
   sans intervenir.
 - On mesure la durée totale et par étape, le nombre de questions, le résultat
-  de chaque vérification, l'état de la CI et celui du déploiement.
+  de chaque vérification, l'état de la CI et celui du déploiement, ainsi que
+  le débit de la connexion, à comparer au débit visé.
 - L'apply se fait sur un projet GCP de Lucas, avec son accord et un budget
   validé par [FINOPS]. Les ressources sont détruites en fin de session.
 - Le critère est atteint quand toutes les conditions passent dans une même
@@ -449,15 +484,17 @@ Aucune n'est validée à ce jour.
 ### Questions tranchées
 
 Lucas a retenu les propositions du PO pour les douze questions, le 15/11/2026.
+La GATE 1 du 2026-11-20 complète Q1 (débit visé, R-04) et reformule Q6
+(ADR-010).
 
 | # | Question | Décision |
 | --- | --- | --- |
-| Q1 | Que couvrent les 15 minutes ? | Section 7 : plan GCP et CI dedans, apply mesuré à part, images comprises |
+| Q1 | Que couvrent les 15 minutes ? | Section 7 : plan GCP et CI dedans, apply mesuré à part, images comprises ; débit visé ajouté à la GATE 1 (R-04) |
 | Q2 | Qui lance `tofu apply` dans le produit ? | L'utilisateur, jamais l'agent : principe X transposé aux utilisateurs |
 | Q3 | Qui crée le dépôt GitHub distant et pousse ? | CELIAN, avec les droits de l'utilisateur et après confirmation |
 | Q4 | Langue de la documentation générée ? | Question de l'entretien, français par défaut |
 | Q5 | Systèmes d'exploitation du PC ? | macOS et Linux, Windows à évaluer par [OPS] |
-| Q6 | Environnements déployés sur GCP ? | Un seul, structure Argo CD prête pour staging et prod |
+| Q6 | Environnements déployés sur GCP ? | Un seul. Structure Kustomize prête pour staging et prod, une base et un overlay par environnement, synchronisée par Config Sync sur GKE. Argo CD au départ, remplacé par l'ADR-010 |
 | Q7 | Quel code métier écrit l'agent ? | Les ADR et les textes du projet. Le code métier se limite à l'exemple du blueprint |
 | Q8 | Où publier et signer les images avant que GCP existe ? | À instruire par [OPS] et [SECU] avant la phase 2, arbitré par [ARCHI] |
 | Q9 | Un serveur Dependency-Track dans le MVP ? | Non : SBOM archivé par la CI, serveur plus tard |
