@@ -56,9 +56,9 @@ que s'il lui épargne ce travail et sa maintenance.
 ## Ce que CELIAN ne fera pas
 
 Le MVP se limite à un blueprint, SaaS B2B (.NET, React, Postgres, cache), et à
-deux cibles : un PC sous k3d et GCP. AWS, Azure, les serveurs on-prem et le
-cloud souverain attendront la fin du MVP, tout comme les blueprints data, IoT
-et mobile. Pendant le MVP, CELIAN n'aura ni interface web, ni application
+deux cibles : un PC, sous un cluster Kubernetes local (kind, ADR-004), et GCP.
+AWS, Azure, les serveurs on-prem et le cloud souverain attendront la fin du
+MVP, tout comme les blueprints data, IoT et mobile. Pendant le MVP, CELIAN n'aura ni interface web, ni application
 autonome, ni version hébergée, ni agent comparateur intégré à l'entretien.
 
 Certaines limites valent au-delà du MVP. CELIAN ne crée jamais de ressource
