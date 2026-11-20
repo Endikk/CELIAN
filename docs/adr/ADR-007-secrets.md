@@ -11,7 +11,7 @@
 
 ## Contexte et problème
 
-Le projet généré a besoin de secrets : les mots de passe de Postgres et du cache, les clés de l'application. Ils doivent arriver aux pods du cluster kind de la cible `local` ([ADR-004](ADR-004-cluster-local.md)) comme à ceux du cluster GKE Autopilot de la cible `gcp` (ADR-008, proposé, pas encore fusionné), sans que les manifests de l'application changent d'une cible à l'autre. Le choix doit précéder le golden repo de la phase 2. Le PRD pressentait OpenBao (section 1), et la section 6 du brief le couple à External Secrets Operator, ESO dans la suite (BENCH-007, section 1).
+Le projet généré a besoin de secrets : les mots de passe de Postgres et du cache, les clés de l'application. Ils doivent arriver aux pods du cluster kind de la cible `local` ([ADR-004](ADR-004-cluster-local.md)) comme à ceux du cluster GKE Autopilot de la cible `gcp` ([ADR-008](ADR-008-modules-opentofu-gcp.md), proposé), sans que les manifests de l'application changent d'une cible à l'autre. Le choix doit précéder le golden repo de la phase 2. Le PRD pressentait OpenBao (section 1), et la section 6 du brief le couple à External Secrets Operator, ESO dans la suite (BENCH-007, section 1).
 
 Les exigences viennent du PRD. US-005 veut que `task up` démarre toute la stack sans autre étape (principe VII). US-012 veut qu'aucun scan ne trouve de secret dans le dépôt généré, historique compris, et que les secrets de l'application viennent du gestionnaire de secrets de la cible, « OpenBao en local si BENCH-007 le confirme, Secret Manager sur GCP ». ENF-02 veut que seule la couche de cible change (principe II), et que le README liste les écarts restants. ENF-03 veut des dépendances figées et le délai de publication du principe VI ; ENF-04 reprend le principe IX. Côté constitution, les principes II, III, V, VI, VIII, IX et X. Côté risques : R-05 (dépense GCP non maîtrisée), R-07 (agents capables de lire et d'exfiltrer des secrets), R-18 (services GCP facturés au volume), R-20 (« Identifiants par défaut dans le golden repo »), R-28 (secrets locaux en clair dans etcd) et R-29 (synchronisation des secrets de GKE lue, jamais exécutée).
 
@@ -19,7 +19,7 @@ BENCH-007 pose la question en deux couches : où vivent les valeurs sur le PC, e
 
 Deux faits mesurés bornent ce que le choix peut apporter sur le PC. etcd y garde les Secrets en clair : l'API du cluster kind ne porte aucune option `--encryption-provider-config` (M8). Et le kubeconfig d'administration que kind écrit, dans `~/.kube/config` par défaut, lit tous les Secrets du cluster ; tout processus de l'utilisateur peut le lire, agent compris (R-07). La condition 9 de l'ADR-004 garde ce kubeconfig hors du dépôt, sans le soustraire à ces processus. Aucune des options étudiées ne protège donc mieux la valeur sur le PC (BENCH-007, section 5.5, confirmé par [SECU]).
 
-Sur `gcp`, le choix suit la lecture des principes III et V que propose l'ADR-009 (branche du catalogue, PR #15, pas encore fusionnée) : le principe III fixe les candidats d'une cible, le principe V les départage. La synchronisation de GKE est le service managé qui produit des Secrets Kubernetes depuis Secret Manager. ESO sur GKE serait un composant libre exploité par l'équipe du projet, qui demanderait un `managed_gap`. Lucas n'a pas encore validé cette lecture (question 1). BENCH-007 juge le côté GCP sur sa documentation, sans aucune ressource créée (principe X).
+Sur `gcp`, le choix suit la lecture des principes III et V que propose l'[ADR-009](ADR-009-catalogue.md) (proposé) : le principe III fixe les candidats d'une cible, le principe V les départage. La synchronisation de GKE est le service managé qui produit des Secrets Kubernetes depuis Secret Manager. ESO sur GKE serait un composant libre exploité par l'équipe du projet, qui demanderait un `managed_gap`. Lucas n'a pas encore validé cette lecture (question 1). BENCH-007 juge le côté GCP sur sa documentation, sans aucune ressource créée (principe X).
 
 ## Options considérées
 
@@ -139,7 +139,7 @@ La porte reste ouverte. Toute cible capable de produire un Secret Kubernetes de 
 
 ### Suites
 
-- Entrée de catalogue `secrets`, après la fusion de la PR #15 (section « Entrée au catalogue »).
+- Entrée de catalogue `secrets`, dans une PR qui suit la GATE 1 (section « Entrée au catalogue »).
 - Pour [PO], si Lucas suit : une PR dédiée corrige la ligne « Secrets locaux » de la section 1 du PRD et le troisième critère de US-012, qui nomment OpenBao. BENCH-007 cite aussi la section 6 du brief.
 - Pour le DSI : compléter R-18 avec l'intervalle de la condition 2, comme le demande [FINOPS] (BENCH-007, section 5.9).
 - Pour [OPS] : les attributs OpenTofu de l'activation et de l'intervalle ; la version minimale de la condition 2 dans la règle de version de l'ADR-004 ; la préparation du test de la condition 3 et la question 3.
@@ -187,14 +187,14 @@ Si V prime, l'écart ne se justifie plus : O2 passe devant, et un nouvel ADR rem
 
 ## Entrée au catalogue
 
-Brique abstraite : `secrets`, nom proposé par le DSI, à confirmer en phase 3 avec le schéma de spec. L'entrée s'écrit au format de l'ADR-009 une fois la PR #15 fusionnée.
+Brique abstraite : `secrets`, nom proposé par le DSI, à confirmer en phase 3 avec le schéma de spec. L'entrée s'écrit au format de l'ADR-009, dans une PR qui suit la GATE 1.
 
 | Cible | Service | Type | Licence | Gouvernance | Statut | Vérifié le | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `local` | API Secret de Kubernetes, portée par le cluster de la brique `kubernetes-cluster` ; valeurs créées par `task up` | `oss` | Apache-2.0 | Fondation : Kubernetes, gradué à la CNCF le 2018-03-06 | actif | 2026-11-20 | <https://kubernetes.io/docs/concepts/configuration/secret/>, <https://github.com/kubernetes/kubernetes>, <https://kubernetes.io/releases/> |
 | `gcp` | Secret Manager, synchronisé en Secrets Kubernetes par GKE (`SecretProviderClass`, `SecretSync`) | `managed` | service propriétaire du fournisseur | Éditeur unique : Google | actif | 2026-11-20 | <https://docs.cloud.google.com/secret-manager/docs/sync-k8-secrets>, <https://docs.cloud.google.com/secret-manager/docs/release-notes> |
 
-Les deux lignes exposent le standard `kubernetes-api`, présent dans la liste fermée de la PR #15 : l'application lit un objet Secret de cette API sur les deux cibles. La ligne `gcp` n'a pas de `managed_gap`.
+Les deux lignes exposent le standard `kubernetes-api`, présent dans la liste fermée du catalogue : l'application lit un objet Secret de cette API sur les deux cibles. La ligne `gcp` n'a pas de `managed_gap`.
 
 Pour `local`, `version` vaut 1.36.4, la version de l'image de nœud fixée par la règle de version de l'ADR-004, qu'elle suit sans tenir sa propre valeur. `last_release_on` vaut 2026-09-15 : 1.37.1 et 1.36.5, dernières releases de Kubernetes, sont datées de ce jour sur la page des releases relue le 2026-11-20. `verified_on` suit cette lecture, la plus récente des sources de la ligne.
 
@@ -232,9 +232,9 @@ Ce que BENCH-007 établit se cite par lui ; ses propres sources sont dans sa sec
 | Relectures de BENCH-007 par [SECU] et par [FINOPS], résumées en section 10 du rapport | 2026-11-19 | Préférence de [SECU] pour O3 et ses motifs ; tâche `task secret:set` proposée pour des identifiants tiers ; silence de la documentation sur le suivi d'une nouvelle version sans rotation ; hypothèse d'une franchise que rien d'autre ne consomme |
 | [docs/risques.md](../risques.md), R-05, R-07, R-17, R-18, R-19, R-20, R-26, R-28, R-29 | 2026-11-20 | Mitigations reprises dans les conditions 1 à 4 ; apply réels prévus aux phases 2 et 6 ; budget prêt avant la GATE 2 |
 | [ADR-004](ADR-004-cluster-local.md), condition 9 et règle de version | 2026-11-20 | Kubeconfig hors du dépôt ; mineure 1.36, image v1.36.4 ; défaut de Regular à 1.36.4-gke.2377000 |
-| ADR-005, proposé, branche de BENCH-004, non fusionné : condition 5, conséquences, question 2 | 2026-11-20 | Modèle de la condition de parité ; contrôleurs d'entrée qui lisent tous les Secrets ; volume noté en amd64 ; règle provisoire du périmètre |
-| ADR-008, proposé, branche de BENCH-008, non fusionné : conditions 3 et 9, mode du cluster | 2026-11-20 | GKE Autopilot, toujours régional, fédération d'identité préconfigurée ; `secret_data_wo` ; requêtes explicites, 23,4 USD par pod sans requête ; chaîne AUTH de Memorystore hors de sa portée |
-| ADR-009, branche du catalogue (PR #15), non fusionné | 2026-11-20 | Lecture des principes III et V ; `managed_gap` ; format d'une entrée, types `oss` et `managed`, `pending`, standard `kubernetes-api` ; règles de fraîcheur |
+| [ADR-005](ADR-005-gateway.md), proposé : condition 5, conséquences, question 2 | 2026-11-20 | Modèle de la condition de parité ; contrôleurs d'entrée qui lisent tous les Secrets ; volume noté en amd64 ; règle provisoire du périmètre |
+| [ADR-008](ADR-008-modules-opentofu-gcp.md), proposé : conditions 3 et 9, mode du cluster | 2026-11-20 | GKE Autopilot, toujours régional, fédération d'identité préconfigurée ; `secret_data_wo` ; requêtes explicites, 23,4 USD par pod sans requête ; chaîne AUTH de Memorystore hors de sa portée |
+| [ADR-009](ADR-009-catalogue.md), proposé | 2026-11-20 | Lecture des principes III et V ; `managed_gap` ; format d'une entrée, types `oss` et `managed`, `pending`, standard `kubernetes-api` ; règles de fraîcheur |
 | [docs/adr/TEMPLATE.md](TEMPLATE.md) | 2026-11-20 | Un service managé imposé par III ne demande pas la justification du principe V |
 | [docs/prd-mvp.md](../prd-mvp.md), section 1, US-005, US-012, ENF-02, ENF-03, ENF-04 | 2026-11-20 | OpenBao pressenti ; démarrage en une commande ; aucun secret, gestionnaire de la cible ; parité ; dépendances figées |
 | [Constitution](../../.specify/memory/constitution.md), version 1.0.0 | 2026-11-20 | Principes I à X ; dérogation par ADR |
