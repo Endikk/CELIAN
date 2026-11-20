@@ -61,6 +61,17 @@
 # Side effects outside TRIAL_DIR: the "kind" Docker network, removed at the
 #   end if the script created it and nothing uses it. The node pulls the
 #   images from docker.io and ghcr.io at every run.
+# Commands that create, change or remove a container or a network,
+# reviewed by [SECU] before the first run:
+#   kind create cluster      (create_cluster) starts the node with
+#                            "docker run --privileged", creates the "kind"
+#                            network if missing
+#   kind delete cluster      (delete_cluster, cleanup) removes the node
+#   docker network rm kind   (cleanup) only if this run created it and it
+#                            is empty
+#   docker stop/docker start (NODE_RESTART=1 only) the node container
+# Every other docker call only reads: ps, stats, manifest inspect,
+# network inspect, version, info.
 set -euo pipefail
 umask 077
 
