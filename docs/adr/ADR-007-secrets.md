@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-20 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, en attente de la GATE 1 |
+| Décideur | DSI, sur délégation de Lucas à la GATE 1 du 2026-11-20 |
 | BENCH lié | [BENCH-007](../benchmarks/BENCH-007-secrets-locaux.md) |
 | Remplace | aucun |
 
@@ -69,7 +69,7 @@ La validation d'ensemble se fait à la GATE 1, et trois points y demandent l'avi
 
 Les raisons de l'arbitrage du DSI, dans son ordre (BENCH-007, section 7) :
 
-1. Sur `gcp`, le principe III, dans la lecture de l'ADR-009 qui attend Lucas, fait de la synchronisation managée de GKE le candidat de la cible. ESO sur GKE serait un composant libre exploité par l'équipe du projet, qui demanderait un `managed_gap`.
+1. Sur `gcp`, le principe III, dans la lecture de l'ADR-009 validée par Lucas à la GATE 1, fait de la synchronisation managée de GKE le candidat de la cible. ESO sur GKE serait un composant libre exploité par l'équipe du projet, qui demanderait un `managed_gap`.
 2. Sur le PC, O3 n'ajoute aucun composant, et aucune option ne protège mieux le secret : etcd est en clair, et le kubeconfig d'administration que kind écrit dans `~/.kube/config` lit tous les Secrets.
 3. [SECU] préfère O3 sur les deux cibles. Sur le PC, O3 n'ajoute ni port, ni compte, ni contrôleur aux droits de cluster. Sur GKE, la synchronisation est tenue et corrigée par Google, alors qu'ESO tournerait chez l'utilisateur avec un `ClusterRole` sur tous les Secrets du cluster, et a publié un avis critique en douze mois (BENCH-007, sections 5.5 et 10).
 4. [FINOPS] : sur Autopilot, les trois pods d'ESO sont facturés, 0,5 vCPU et 2 Gio chacun tant que leurs requêtes restent vides. Sur le PC, la mesure M10, faite après sa relecture, montre qu'ESO ajoute environ 100 Mio au serveur d'API, avec ses 25 CRD : 232 Mio en moyenne avec O3, 332 à 339 Mio avec ESO.
@@ -152,6 +152,14 @@ La porte reste ouverte. Toute cible capable de produire un Secret Kubernetes de 
 2. Identifiants de services tiers sur le PC, pour Lucas et [PO]. Le blueprint du MVP a-t-il besoin d'un vrai identifiant tiers en local, SMTP, paiement ou client OAuth d'un fournisseur ? La condition 1 ne couvre que les valeurs que le projet tire lui-même, et un identifiant tiers n'aurait pas d'autre chemin qu'un fichier ou une commande tapée à la main. Si oui, [SECU] propose une tâche `task secret:set NOM` qui lit l'entrée standard sans écho, et des clés de test seulement (R-28).
 3. Contrainte « same region as the cluster », pour Lucas. La page ne dit pas si un secret global convient, et un cluster Autopilot est toujours régional (ADR-008). Deux voies : le trancher au test de la condition 3, la ligne `gcp` restant d'ici là en `pending` et inutilisable par un blueprint, ou demander à [OPS] de ranger d'emblée les secrets dans la région du cluster, si Secret Manager le permet, ce que cet ADR n'a pas vérifié.
 
+### Réponses de la GATE 1 (2026-11-20)
+
+- Lecture de l'ADR-009 (question 1) : Lucas la retient, et confirme
+  l'arbitrage du DSI qui départage O2 et O3.
+- Restent ouvertes : les identifiants de services tiers sur le PC
+  (question 2, R-28) et la contrainte « same region as the cluster »
+  (question 3), que lèvera le test de la condition 3.
+
 ## Conformité à la constitution
 
 Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en version 1.0.0. L'amendement 1.1.0 (PR #13) ne touche que la section « Périmètre du MVP ».
@@ -160,7 +168,7 @@ Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en ve
 | --- | --- | --- |
 | I. Rien sans test automatique | respecté | La matrice porte les contrôles des conditions 1, 2 et 5, et le test sur GKE de la condition 3 ; sans lui, la combinaison `gcp` n'est pas proposée |
 | II. Spec abstraite, catalogue concret | respecté | La spec ne nomme que la brique `secrets` ; `task up` et la synchronisation vivent dans leurs couches de cible, et la condition 5 vérifie que les manifests de l'application ne changent pas |
-| III. Managé sur le cloud, open source ailleurs | respecté | Sur `local`, l'API Secret de Kubernetes, sous Apache-2.0, sans rien d'ajouté ; sur `gcp`, Secret Manager et la synchronisation de GKE, services managés, dans la lecture de l'ADR-009 qui attend Lucas |
+| III. Managé sur le cloud, open source ailleurs | respecté | Sur `local`, l'API Secret de Kubernetes, sous Apache-2.0, sans rien d'ajouté ; sur `gcp`, Secret Manager et la synchronisation de GKE, services managés, dans la lecture de l'ADR-009 validée par Lucas à la GATE 1 |
 | IV. Catalogue traçable | respecté | Les deux lignes de l'entrée portent licence ou fournisseur, gouvernance, statut, date et sources ; la ligne `gcp` garde ses `pending` jusqu'au test de la condition 3 |
 | V. Gouvernance ouverte d'abord | respecté dans la lecture de l'ADR-009 | Sur `local`, Kubernetes, gradué à la CNCF. Sur `gcp`, service managé imposé par III, sans justification à fournir (gabarit d'ADR, ADR-009) ; l'écart est tout de même écrit ci-dessous, pour le cas où Lucas retiendrait une autre lecture |
 | VI. Récent mais éprouvé | respecté | Aucun critère éliminatoire touché (BENCH-007, section 3) ; la synchronisation est GA depuis le 2026-04-16, et la branche 1.36 de Kubernetes est maintenue jusqu'au 2027-06-28 |

@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-19 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, en attente de la GATE 1 |
+| Décideur | DSI, sur délégation de Lucas à la GATE 1 du 2026-11-20 |
 | BENCH lié | [BENCH-004](../benchmarks/BENCH-004-gateway.md) |
 | Remplace | aucun |
 
@@ -17,7 +17,7 @@ Les exigences viennent du PRD. US-005 veut que `task up` démarre toute la stack
 
 Sur `gcp`, le choix suit la lecture des principes III et V que propose l'[ADR-009](ADR-009-catalogue.md) (proposé) : le principe III fixe les candidats d'une cible, le principe V les départage. Le contrôleur Gateway de GKE est le service managé qui implémente Gateway API. L'option de BENCH-004 vaut donc pour `local`, et ne vaudrait pour `gcp` qu'avec un `managed_gap`. Lucas n'a pas encore validé cette lecture. BENCH-004 ne note que les options de la cible `local`, et juge le côté GKE sur sa documentation et son rapport de conformité, sans cluster réel (principe X).
 
-Deux décisions du DSI du 2026-11-19 pèsent sur ce choix, à confirmer par Lucas à la GATE 1. R-04 passe en probabilité forte : son déclencheur se lit désormais sur le premier `task up` complet et sur le pire cas des systèmes de Q5, et la plate-forme de base le franchit avec Envoy Gateway en amd64. R-25 passe aussi en probabilité forte : une image désignée par condensat et préchargée par `kind load` repasse par le registre à chaque création, ce qui touche chaque `task up` avec kind.
+Deux décisions du DSI du 2026-11-19 pèsent sur ce choix, confirmées par Lucas à la GATE 1 le 2026-11-20. R-04 passe en probabilité forte : son déclencheur se lit désormais sur le premier `task up` complet et sur le pire cas des systèmes de Q5, et la plate-forme de base le franchit avec Envoy Gateway en amd64. R-25 passe aussi en probabilité forte : une image désignée par condensat et préchargée par `kind load` repasse par le registre à chaque création, ce qui touche chaque `task up` avec kind.
 
 Le total d'Envoy Gateway a changé pendant la relecture. BENCH-004 notait d'abord le volume sur l'arm64 du poste de mesure, d'où 88. La relecture de [FINOPS] et la décision du DSI le notent sur linux_amd64, pire cas des systèmes de Q5, comme BENCH-008 : l'empreinte d'Envoy Gateway passe de 4 à 3, et son total à 86.
 
@@ -91,7 +91,7 @@ Le scan Trivy de [SECU] trouve une CVE élevée dans le contrôleur 1.10.0 : CVE
 ### Mises à jour
 
 1. Mineure maintenue. D'après la matrice d'Envoy Gateway, 1.10 est maintenue jusqu'au 2027-05-05 et couvre Kubernetes 1.34 à 1.37, dont la mineure 1.36 de la règle de version de l'ADR-004. Le passage à la mineure suivante se fait à la main, avant cette date, dans une release du blueprint qui passe toute la matrice.
-2. Correctifs. Renovate propose dans une seule PR le chart et le condensat du contrôleur d'une même release, une fois celle-ci publiée depuis 7 jours (principe VI). La configuration de Renovate qui tient cette paire n'a pas été vérifiée dans sa documentation : [OPS] la vérifie. À défaut, chaque release donne lieu à une PR manuelle, avec le même délai. Le cas des correctifs de sécurité attend Lucas (question 1).
+2. Correctifs. Renovate propose dans une seule PR le chart et le condensat du contrôleur d'une même release, une fois celle-ci publiée depuis 7 jours (principe VI). La configuration de Renovate qui tient cette paire n'a pas été vérifiée dans sa documentation : [OPS] la vérifie. À défaut, chaque release donne lieu à une PR manuelle, avec le même délai. Lucas a tranché le cas des correctifs de sécurité à la GATE 1 : amendement du principe VI (question 1).
 3. CRD Gateway API. Leur version change à la main, dans une release du blueprint qui passe la matrice, après lecture de la matrice d'Envoy Gateway et de la version que sert GKE.
 
 ### Portée
@@ -115,9 +115,9 @@ Restent hors de cette décision : les certificats réels du projet (cert-manager
 
 ### Négatives
 
-- La plate-forme de base télécharge 505,8 Mo à la première création en amd64, 1,2 % au-dessus du seuil de 500 Mo, et 466,5 Mo en arm64. À 10 Mbit/s utiles, une hypothèse, c'est 45 % du budget de 900 s d'ENF-01, avant les images de la stack. La création à froid jusqu'à la première réponse prend environ 123 s, calcul de [FINOPS] qui combine BENCH-003 et BENCH-004. R-04 passe en probabilité forte, décision du DSI à confirmer à la GATE 1.
+- La plate-forme de base télécharge 505,8 Mo à la première création en amd64, 1,2 % au-dessus du seuil de 500 Mo, et 466,5 Mo en arm64. À 10 Mbit/s utiles, une hypothèse, c'est 45 % du budget de 900 s d'ENF-01, avant les images de la stack. La création à froid jusqu'à la première réponse prend environ 123 s, calcul de [FINOPS] qui combine BENCH-003 et BENCH-004. R-04 passe en probabilité forte, décision du DSI confirmée par Lucas à la GATE 1.
 - La mémoire au repos monte à 948,8 Mio en médiane, et l'exécution 1 a dépassé le seuil (1 078,3 Mio). Les CRD d'Envoy Gateway pèsent plus que son contrôleur et son proxy réunis (99,7 Mio) : le serveur d'API passe de 231,5 à 469,6 Mio en médiane, les deux tiers des 357,2 Mio qui séparent la plate-forme de kind seul.
-- Chaque création interroge Docker Hub pour les 2 images de la gateway, même préchargées, et Docker Hub compte un GET de manifest comme un tirage. R-25 passe en probabilité forte, décision du DSI à confirmer à la GATE 1.
+- Chaque création interroge Docker Hub pour les 2 images de la gateway, même préchargées, et Docker Hub compte un GET de manifest comme un tirage. R-25 passe en probabilité forte, décision du DSI confirmée par Lucas à la GATE 1.
 - Par défaut, le chart désigne le contrôleur par tag et installe des CRD Gateway API v1.6.1 du canal expérimental. Une valeur oubliée dans le blueprint réintroduit l'un ou l'autre sans erreur, d'où le contrôle de la condition 1.
 - Les trois premiers auteurs, tous chez Tetrate, font 51 % des commits humains de l'année. Le fichier de gouvernance donne aux sièges du comité de pilotage une fin au 2025-12-30, et n'a pas changé depuis le 2025-03-04.
 - Le plus jeune des trois, en 1.x depuis le 2024-03-13. Chaque mineure n'est maintenue qu'environ neuf mois : une montée de mineure à la main au moins à ce rythme.
@@ -147,6 +147,18 @@ La porte reste ouverte. La couche commune ne contient que des objets Gateway API
 2. Périmètre de la plate-forme de base dans `docs/benchmarks/TEMPLATE.md`, pour Lucas. Règle provisoire du DSI jusqu'à la GATE 1 : la plate-forme de base (kind, CRD Gateway API, gateway) se compte contre les 500 Mo, et chaque couche suivante contre ses propres seuils, avec le cumul en sensibilité. Sans périmètre fermé, chaque benchmark trouverait la barre plus proche, et l'ordre des benchmarks déciderait des notes ([FINOPS]). Lue sur la gateway seule, la condition de volume ne retirerait de cran à personne : 88, 83 et 78. La même reprise dans le gabarit porte sur l'architecture du volume, notée sur linux_amd64 par décision du DSI. Les seuils des couches suivantes s'écrivent avant les mesures de BENCH-005.
 3. Dépendance à l'ADR-009, pour Lucas. La ligne `gcp` repose sur sa lecture des principes III et V. Lue à la lettre, chaque service managé dérogerait à V, et cet ADR devrait porter la justification du contrôleur de GKE. Si V primait, Envoy Gateway sur GKE passerait devant le service managé, contre le texte de III.
 
+### Réponses de la GATE 1 (2026-11-20)
+
+- Correctifs de sécurité (question 1) : Lucas amende le principe VI. Un
+  correctif de sécurité passe sans le délai de 7 jours si sa PR passe toute la
+  matrice (constitution 1.2.0, PR #24).
+- Périmètre de la plate-forme de base (question 2) : la règle provisoire entre
+  dans le gabarit de benchmark, avec la lecture du volume sur linux_amd64
+  (PR #25).
+- Lecture des principes III et V (question 3) : Lucas retient celle de
+  l'ADR-009. III fixe les candidats d'une cible, V départage. La ligne `gcp`
+  tient.
+
 ## Conformité à la constitution
 
 Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en version 1.0.0. L'amendement 1.1.0 (PR #13) ne touche que la section « Périmètre du MVP ».
@@ -155,7 +167,7 @@ Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en ve
 | --- | --- | --- |
 | I. Rien sans test automatique | respecté | La matrice porte les contrôles des conditions 1, 2, 4 et 5, la CI la vérification de signature de la condition 3, en plus du démarrage local |
 | II. Spec abstraite, catalogue concret | respecté | Envoy Gateway n'apparaît que dans la couche `local` et au catalogue, la classe de GKE dans la couche `gcp` ; la couche commune ne porte que des objets Gateway API du cœur, et la condition 5 le vérifie |
-| III. Managé sur le cloud, open source ailleurs | respecté | Sur `local`, Envoy Gateway est sous Apache-2.0 et gratuit ; sur `gcp`, le contrôleur de GKE est le service managé, dans la lecture de l'ADR-009 qui attend Lucas |
+| III. Managé sur le cloud, open source ailleurs | respecté | Sur `local`, Envoy Gateway est sous Apache-2.0 et gratuit ; sur `gcp`, le contrôleur de GKE est le service managé, dans la lecture de l'ADR-009 validée par Lucas à la GATE 1 |
 | IV. Catalogue traçable | respecté | Les deux lignes de l'entrée portent licence, gouvernance, statut, date et source ; l'entrée s'écrit dans une PR qui suit la GATE 1 |
 | V. Gouvernance ouverte d'abord | respecté | Sur `local`, projet couvert par la CNCF au titre d'Envoy, avec au moins six employeurs parmi les mainteneurs, et l'option à éditeur unique est écartée. Sur `gcp`, service managé imposé par III, sans justification à fournir (gabarit d'ADR, ADR-009) |
 | VI. Récent mais éprouvé | respecté | Aucun critère éliminatoire touché : Apache-2.0, dépôt actif, 1.10.0 du 2026-11-06 publiée depuis plus de 7 jours ; la réserve sur la jeunesse du projet est écrite |
@@ -216,4 +228,4 @@ Ce que BENCH-004 établit se cite par lui ; ses propres sources sont dans sa sec
 | [Constitution](../../.specify/memory/constitution.md), version 1.0.0 | 2026-11-19 | Principes I à X ; délai de 7 jours du principe VI ; amendement et dérogation |
 | [docs/benchmarks/TEMPLATE.md](../benchmarks/TEMPLATE.md), section 5.6 | 2026-11-19 | Règle d'empreinte et seuils de BENCH-003 ; le gabarit ne fixe ni le périmètre ni l'architecture du volume |
 | `.claude/settings.json` | 2026-11-19 | Aucune règle sur `kubectl` |
-| Décisions du DSI du 2026-11-19, reprises dans `docs/risques.md` (R-04, R-25) et BENCH-004 (section 4.1) | 2026-11-19 | R-04 et R-25 en probabilité forte, à confirmer à la GATE 1 ; règle provisoire de la plate-forme de base |
+| Décisions du DSI du 2026-11-19, reprises dans `docs/risques.md` (R-04, R-25) et BENCH-004 (section 4.1) | 2026-11-19 | R-04 et R-25 en probabilité forte, confirmés à la GATE 1 ; règle provisoire de la plate-forme de base |

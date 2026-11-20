@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-19 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, en attente |
+| Décideur | DSI, sur délégation de Lucas à la GATE 1 du 2026-11-20 |
 | BENCH lié | [BENCH-002](../benchmarks/BENCH-002-moteur-templates.md) |
 | Remplace | aucun |
 

@@ -153,8 +153,8 @@ interroge Docker Hub pour 2 images, même préchargées (R-25).
 Le déclencheur se lit sur le premier `task up` complet, et sur le pire cas des
 systèmes visés par Q5, qui comprennent Linux amd64. Lu ainsi, il est franchi
 avec Envoy Gateway avant même les images de la stack, qui ne peuvent
-qu'ajouter. Le DSI a passé la probabilité à forte le 2026-11-19 ; décision à
-confirmer par Lucas à la GATE 1.
+qu'ajouter. Le DSI a passé la probabilité à forte le 2026-11-19 ; décision
+confirmée par Lucas à la GATE 1 le 2026-11-20.
 
 BENCH-005 a mesuré la stack d'essai le 2026-11-19, à chaud seulement : le
 temps à froid n'a pas pu l'être. [FINOPS] a additionné le premier `task up`
@@ -615,7 +615,7 @@ tirage : on attend un tirage compté par image Docker Hub et par création, chif
 à mesurer. La condition 7 de l'ADR-004, relancer `task up` hors réseau,
 échouera en l'état. Le DSI a passé la probabilité à forte le 2026-11-19, parce
 que la dépendance ne tient plus à k3d ou minikube : elle touche chaque `task up`
-avec kind. Décision à confirmer par Lucas à la GATE 1.
+avec kind. Décision confirmée par Lucas à la GATE 1 le 2026-11-20.
 
 Mitigation : retenir un outil qui ne tire rien à la création, et précharger
 sous le condensat du registre, pas seulement sous le tag. [OPS] essaie avant le
