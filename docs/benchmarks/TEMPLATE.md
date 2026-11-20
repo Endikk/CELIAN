@@ -280,6 +280,26 @@ volume compressé à télécharger au premier lancement au-delà de 500 Mo (400 
 à 10 Mbit/s) ; au moins une image retéléchargée à chaque lancement, cache
 plein ; démarrage à chaud au-delà de 90 s (10 % du budget) ; mémoire au repos
 au-delà de 1 Gio (un huitième d'un portable de 8 Gio).
+
+Trois règles validées par Lucas à la GATE 1, le 2026-11-20, après leur usage
+dans BENCH-004, 005, 007 et 009 :
+
+1. Le volume se note sur linux_amd64, pire cas des systèmes visés par Q5.
+   Les autres architectures mesurées vont dans la sensibilité.
+2. La plate-forme de base (cluster kind, CRD Gateway API, gateway) se compte
+   contre les 500 Mo ci-dessus. Chaque couche suivante (stack, secrets,
+   GitOps...) se note contre ses propres seuils, écrits dans sa section 4.1 ;
+   son cumul avec la plate-forme va dans la sensibilité. Sans ce périmètre,
+   l'ordre des benchmarks déciderait des notes.
+3. La mémoire d'une couche se lit au nœud, moins la mémoire du nœud de base
+   (kind seul, même configuration), en médianes : les CRD et les contrôleurs
+   chargent aussi le serveur d'API, que la somme des pods ne voit pas. La
+   somme des pods va dans la sensibilité.
+
+Les seuils écrits avant la première mesure portent leur heure UTC, et le
+rapport dit si des tests de fumée ont tourné avant. Les seuils de couche
+additionnés dépassaient déjà le budget de 900 s à la GATE 1 : un budget par
+étape d'ENF-01 reste à fixer (R-04).
 -->
 
 | Option | Note | Points | Justification | Sources |
