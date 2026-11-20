@@ -144,6 +144,12 @@ deux vraies barrières sont un jeton GitHub sans droits admin
 ([docs/securite/jeton-github.md](docs/securite/jeton-github.md)) et le sandbox,
 qui fera l'objet d'une PR à part une fois testé avec Docker.
 
+Aucune règle ne filtre `kubectl`. Un `kubectl apply` sur un contexte GKE
+créerait des ressources facturées hors de l'état OpenTofu, un équilibreur de
+charge pour une Gateway par exemple (ADR-005). Décision de Lucas à la GATE 1 :
+aucun contexte ni identifiant GKE sur le poste avant la GATE 2. Une règle `ask`
+sur les commandes `kubectl` d'écriture se posera à ce moment-là.
+
 ## Méthode
 
 Six phases, chacune fermée par une gate que Lucas valide. On ne passe pas à la

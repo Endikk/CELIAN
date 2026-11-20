@@ -1,12 +1,12 @@
 # Feuille de route
 
-Mise à jour le 20/11/2026, à la fin de la session 2. Le DSI tient ce fichier à
+Mise à jour le 20/11/2026, après la GATE 1. Le DSI tient ce fichier à
 jour à la fin de chaque session.
 
-## Phase en cours : 1, benchmarks et décisions
+## Phase en cours : 1 terminée, 2 à lancer
 
-Les étapes 1 à 6 sont faites. La phase attend la GATE 1 : rien de la phase 2
-ne commence avant.
+Les étapes 1 à 6 sont faites et la GATE 1 est passée le 20/11/2026. La phase 2
+commence après la validation de son plan par Lucas.
 
 ### Fait
 
@@ -61,11 +61,19 @@ ne commence avant.
   PC ; la clé en 0777 relevée chez minikube n'est pas signalée. Lucas autorise
   le DSI à avancer seul pendant son absence, sans poser de question, les points
   à trancher étant gardés pour son retour.
-- 20/11/2026 : Lucas fusionne les PR #13 à #20. La constitution 1.1.0 est sur
-  `main` ; les ADR-004 à ADR-010 y sont au statut proposé, en attente de la
-  GATE 1.
+- 20/11/2026 : Lucas fusionne les PR #13 à #21. Puis GATE 1 : Lucas retient la
+  lecture des principes III et V de l'ADR-009 (III fixe les candidats d'une
+  cible, V départage) ; un débit visé entre dans le critère d'acceptation,
+  valeur proposée par [FINOPS] après le golden repo, et le profil lite
+  n'embarque pas GitOps ; les trois règles de notation provisoires entrent
+  dans le gabarit de benchmark ; le principe VI est amendé pour laisser passer
+  les correctifs de sécurité qui passent la matrice ; aucun contexte GKE sur
+  le poste avant la GATE 2 ; Lucas lit lui-même les grilles tarifaires de GCP
+  avant la GATE 2. Il confirme les quatre décisions du DSI ci-dessous, et
+  délègue au DSI l'acceptation des ADR : les ADR-001 à ADR-010 passent au
+  statut accepté.
 
-### Décisions du DSI pendant l'absence de Lucas, à confirmer à la GATE 1
+### Décisions du DSI pendant l'absence de Lucas, confirmées à la GATE 1
 
 - Règles de notation provisoires, appliquées à tous les benchmarks de
   l'étape 5 : volume noté sur linux_amd64, pire cas des systèmes de Q5 ;
@@ -83,36 +91,30 @@ ne commence avant.
 
 ### Prochain
 
-GATE 1. Lucas valide les ADR-001 à ADR-010 et la lecture des principes III et
-V (ADR-009). Points les plus lourds, dans l'ordre :
+La GATE 1 est passée. Avant la phase 2 :
 
-1. La lecture des principes III et V. La ligne `gcp` de l'ADR-005, l'ADR-007
-   et l'ADR-010 en dépendent ; sans elle, ESO et Flux passeraient devant sur
-   GCP.
-2. R-04 : le premier `task up` complet télécharge 1 395,9 Mo en amd64, soit
-   124 % du budget de 15 minutes à 10 Mbit/s, et encore 101 % sans GitOps sur
-   le PC. Il faut fixer le débit visé par le critère d'acceptation, ou réduire
-   le volume.
-3. Les règles de notation provisoires ci-dessus, à reprendre dans
-   `docs/benchmarks/TEMPLATE.md`. Les seuils de couche additionnés font déjà
-   118 % du budget.
-4. R-25 : `kind load docker-image` perd le condensat du registre, et chaque
-   `task up` crée un nœud neuf. La condition 7 de l'ADR-004, relancer
-   `task up` hors réseau, échoue en l'état : [OPS] essaie un miroir local, une
-   archive OCI ou le magasin containerd avant le golden repo.
-5. Les correctifs de sécurité de Renovate sans le délai de 7 jours : un
-   amendement du principe VI, que [SECU] et [ARCHI] proposent.
-6. `.claude/settings.json` ne filtre aucune commande `kubectl` : un
-   `kubectl apply` sur un contexte GKE créerait un équilibreur facturé
-   (principe X). Règle `ask` à décider par Lucas.
-7. Si Lucas suit les ADR : Q6 du PRD et `.claude/agents/ops.md` nomment
-   Argo CD, US-012 nomme OpenBao ; une PR dédiée de [PO] pour chacun.
-8. Les grilles tarifaires de GKE, Cloud SQL, Memorystore, du réseau et de
-   Cloud Monitoring restent illisibles pour les agents : qui les lit, pour
-   quelle région, avant la GATE 2 (R-05).
+1. Fusionner les PR de la GATE 1 : amendement du principe VI (#24), règles de
+   notation dans le gabarit (#25), PRD aligné (#26), et celle-ci.
+2. BENCH-010, en cours par [OPS] : faire démarrer `task up` sur kind sans
+   réseau (R-25, condition 7 de l'ADR-004, condition 4 des ADR-005 et 006).
+3. Entrées du catalogue issues des ADR : `gateway`, `secrets`, `gitops`, et le
+   mode Autopilot sur la ligne `gcp` de `kubernetes-cluster`, en cours par
+   [DEV].
+4. Renovate : exempter les correctifs de sécurité du délai de 7 jours, une
+   fois la syntaxe vérifiée par [OPS] sur sa documentation.
+5. Plan court de la phase 2, le golden repo SaaS B2B, à valider par Lucas
+   avant de commencer.
+
+Points restés ouverts, repris dans les ADR (sections « Réponses de la
+GATE 1 ») : quel profil sert de mesure au critère des 15 minutes ; la lecture
+de « arrête et supprime l'environnement » (US-005), qui attend BENCH-010 ; la
+gouvernance de Task ; ce que lit Flux sur le PC ; les identifiants de services
+tiers sur le PC ; la portée de la règle de fraîcheur du catalogue.
 
 Actions de Lucas, hors GATE :
 
+- lire les grilles tarifaires de GKE, Cloud SQL, Memorystore, du réseau et de
+  Cloud Monitoring pour la région choisie, avant la GATE 2 (R-05) ;
 - terminer le changement de jeton `gh` et révoquer l'ancien jeton classique
   (R-07) ; la première tentative a échoué, le presse-papiers ne contenait pas
   le jeton ;
@@ -127,8 +129,8 @@ Actions de Lucas, hors GATE :
 | Phase | Objectif | Rôles | Gate | État |
 | --- | --- | --- | --- | --- |
 | 0 | Installation et cadrage | DSI, PO | Vision, PRD, constitution validés | Terminée le 15/11/2026 |
-| 1 | Benchmarks BENCH-001 à 009, ADR, catalogue daté | BENCH, ARCHI | ADR validés | Étapes 1 à 6 faites, GATE 1 à passer |
-| 2 | Golden repo SaaS B2B construit à la main | DEV, OPS, SECU | Démo du golden repo | À venir |
+| 1 | Benchmarks BENCH-001 à 009, ADR, catalogue daté | BENCH, ARCHI | ADR validés | Terminée le 20/11/2026 (GATE 1) |
+| 2 | Golden repo SaaS B2B construit à la main | DEV, OPS, SECU | Démo du golden repo | Plan à valider |
 | 3 | Template Copier, JSON Schema de la spec v1 | ARCHI, DEV | Génération depuis un exemple de spec | À venir |
 | 4 | Pipeline de validation blueprint et cible | QA, OPS | Matrice verte | À venir |
 | 5 | Plugin Claude Code : entretien, génération, validation | ARCHI, DEV, PO | Projet généré de bout en bout | À venir |

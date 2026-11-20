@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-19 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, en attente de la GATE 1 |
+| Décideur | DSI, sur délégation de Lucas à la GATE 1 du 2026-11-20 |
 | BENCH lié | [BENCH-008](../benchmarks/BENCH-008-modules-opentofu-gcp.md) |
 | Remplace | aucun |
 
@@ -135,6 +135,16 @@ La porte reste ouverte. La couche `gcp` est propre à GCP par construction, et r
 3. Rôles de lecture de la CI, pour [OPS] : le socle donne `roles/viewer` au compte de `tofu plan`, rôle de base que Google déconseille en production. Il se remplace par des rôles de lecture par service, à définir.
 4. À vérifier en phase 2 sur un vrai jeton : la restriction de l'événement et du workflow, puisqu'un workflow `pull_request_target` tourne sur la branche par défaut ; la longueur du nouveau `sub` de GitHub face aux 127 caractères de `google.subject`.
 5. Ajout de [ARCHI], pour [OPS] : le verrou versionné doit couvrir les plateformes des postes de Q5 et des runners de CI. Ni la commande qui y inscrit les sommes de chaque plateforme, ni le comportement de `-lockfile=readonly` quand la plateforme courante y manque, n'ont été vérifiés.
+
+### Réponses de la GATE 1 (2026-11-20)
+
+- Le mode GKE Autopilot, que la grille ne notait pas, est accepté avec l'ADR,
+  sur délégation de Lucas. Aucune ressource n'est créée avant la GATE 2 et un
+  budget validé (principe X, R-05).
+- Lucas lit lui-même les grilles tarifaires de GKE, Cloud SQL, Memorystore et
+  du réseau avant la GATE 2, pour la région choisie : les agents ne peuvent
+  pas les afficher.
+- Aucun contexte ni identifiant GKE sur le poste avant la GATE 2.
 
 ## Conformité à la constitution
 

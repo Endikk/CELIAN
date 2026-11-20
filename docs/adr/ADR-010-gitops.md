@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-20 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, en attente de la GATE 1 |
+| Décideur | DSI, sur délégation de Lucas à la GATE 1 du 2026-11-20 |
 | BENCH lié | [BENCH-009](../benchmarks/BENCH-009-gitops.md) |
 | Remplace | aucun |
 
@@ -70,7 +70,7 @@ Trois montages sortent de la question de parité (BENCH-009, section 7.1) : A, l
 
 Le montage B est écarté. Config Sync finit dernier de la grille, à 62. Google écrit qu'il « can run only on x86-based nodes, not Arm nodes », et ses images ne sont publiées que pour `linux/amd64`. Sur un PC à processeur Apple, il ne tourne que par l'émulation du moteur de conteneurs, non libre (R-26), hors de ce que Google prend en charge, et [SECU] refuse d'y faire tourner un contrôleur lié à `cluster-admin`.
 
-Entre A et C, le montage C tient par le principe III, dans la lecture de l'ADR-009 qui attend Lucas. Config Sync couvre le besoin de Q6 sur GKE : il lit Git, rend Kustomize, et Google documente un `RootSync` par environnement (BENCH-009, sections 7.1 et 7.2). Sa licence est incluse dans l'offre GKE, flotte comprise. Le montage A demanderait sur `gcp` un `managed_gap`, et la seule lacune de Config Sync que BENCH-009 a trouvée est de ne pas tourner sur un PC arm64. Cette lacune touche la cible `local` ; sur `gcp`, elle ne dit rien de ce que le service managé ne couvre pas. Le `managed_gap` reposerait sur la seule parité d'outil, que la lecture de l'ADR-009 ne compte pas comme un manque du service managé. C'est le raisonnement déjà tenu pour les secrets dans l'ADR-007.
+Entre A et C, le montage C tient par le principe III, dans la lecture de l'ADR-009 validée par Lucas à la GATE 1. Config Sync couvre le besoin de Q6 sur GKE : il lit Git, rend Kustomize, et Google documente un `RootSync` par environnement (BENCH-009, sections 7.1 et 7.2). Sa licence est incluse dans l'offre GKE, flotte comprise. Le montage A demanderait sur `gcp` un `managed_gap`, et la seule lacune de Config Sync que BENCH-009 a trouvée est de ne pas tourner sur un PC arm64. Cette lacune touche la cible `local` ; sur `gcp`, elle ne dit rien de ce que le service managé ne couvre pas. Le `managed_gap` reposerait sur la seule parité d'outil, que la lecture de l'ADR-009 ne compte pas comme un manque du service managé. C'est le raisonnement déjà tenu pour les secrets dans l'ADR-007.
 
 Le montage C n'a aucun avantage de coût établi sur le montage A, et cet ADR ne lui en prête pas. Les pods de Config Sync tournent dans le cluster du client. En Autopilot, Google fixe à chaque réconciliateur des demandes d'environ 0,93 vCPU et 0,93 Gio par `RootSync`, aucune page lisible ne les exempte de facturation, et ses métriques partent vers Cloud Monitoring, facturé à l'échantillon (R-31). Sur un cluster à rafale, un `RootSync` et les composants communs demandent environ 1,29 vCPU et 1,76 Gio, contre 0,35 vCPU et environ 371 Mio pour Flux réduit à ses quatre contrôleurs par défaut : 3,7 fois le calcul et 4,9 fois la mémoire, et l'écart grandit à chaque environnement ajouté (relecture de [FINOPS]). Si ces pods sont facturés, Flux sur les deux cibles coûterait moins cher, et le montage C ne tient plus que par le principe III.
 
@@ -170,6 +170,17 @@ La porte reste ouverte. La couche commune ne porte rien de propre à un moteur (
 6. Lecture des principes III et V de l'ADR-009, pour Lucas. La ligne `gcp` en dépend. Si V prime, Flux passe devant Config Sync sur `gcp`, et un nouvel ADR remplace celui-ci par le montage A. Si Lucas retient la lecture littérale, la ligne `gcp` devient une dérogation, justifiée au paragraphe « Écart au principe V ».
 7. Règle de mémoire au nœud et règle d'égalité, pour Lucas. Toutes deux sont provisoires jusqu'à la GATE 1, et le choix de Flux sur le PC repose sur la première (section « Sensibilité »). Avis de [ARCHI] : garder la lecture au nœud, par cohérence avec BENCH-004 et BENCH-007, et l'écrire dans le gabarit de benchmark avec la mesure de `kube-system` qui permet d'attribuer l'écart.
 
+### Réponses de la GATE 1 (2026-11-20)
+
+- Flux dans le profil lite : non, le profil lite n'embarque pas l'outil
+  GitOps (PR #26).
+- Lecture de l'ADR-009 : Lucas la retient. Le montage C tient.
+- Règles de mémoire au nœud et d'égalité : confirmées par Lucas ; la règle de
+  mémoire entre dans le gabarit de benchmark (PR #25).
+- Restent ouvertes : ce que lit Flux sur le PC, la source OCI sur GKE, Flux
+  réduit à ses quatre contrôleurs et la facturation des pods de Config Sync
+  en Autopilot.
+
 ## Conformité à la constitution
 
 Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en version 1.0.0. L'amendement 1.1.0 (PR #13) ne touche que la section « Périmètre du MVP ».
@@ -178,7 +189,7 @@ Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en ve
 | --- | --- | --- |
 | I. Rien sans test automatique | respecté | La matrice porte les contrôles des conditions 1 à 6, et l'essai sur GKE de la condition 7 ; sans lui, la combinaison `gcp` n'est pas proposée |
 | II. Spec abstraite, catalogue concret | respecté | La spec ne déclare pas la brique `gitops` ; Flux et Config Sync n'apparaissent que dans les couches de cible et au catalogue, et les conditions 1 et 2 gardent la couche commune neutre |
-| III. Managé sur le cloud, open source ailleurs | respecté | Sur `local`, Flux, sous Apache-2.0 et gratuit ; sur `gcp`, Config Sync, service managé, dans la lecture de l'ADR-009 qui attend Lucas. La forme libre de Config Sync ne sert qu'au test de la condition 5 |
+| III. Managé sur le cloud, open source ailleurs | respecté | Sur `local`, Flux, sous Apache-2.0 et gratuit ; sur `gcp`, Config Sync, service managé, dans la lecture de l'ADR-009 validée par Lucas à la GATE 1. La forme libre de Config Sync ne sert qu'au test de la condition 5 |
 | IV. Catalogue traçable | respecté | Les deux lignes portent licence ou fournisseur, gouvernance, statut, date et sources ; la ligne `gcp` garde ses `pending` jusqu'à l'essai de la condition 7 |
 | V. Gouvernance ouverte d'abord | respecté dans la lecture de l'ADR-009 | Sur `local`, Flux, gradué à la CNCF, neuf mainteneurs principaux de quatre employeurs et trois indépendants ; l'option à éditeur unique est écartée. Sur `gcp`, service managé imposé par III ; l'écart est écrit ci-dessous, pour le cas où Lucas retiendrait une autre lecture |
 | VI. Récent mais éprouvé | respecté | Aucun critère éliminatoire touché (BENCH-009, section 3) ; Flux 2.10.0 du 2026-10-26 et Config Sync 1.25.2 du 2026-11-03 passent le délai de 7 jours |

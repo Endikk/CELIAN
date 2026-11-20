@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-19 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, en attente de la GATE 1 |
+| Décideur | DSI, sur délégation de Lucas à la GATE 1 du 2026-11-20 |
 | BENCH lié | aucun : le format reprend YAML et JSON Schema 2020-12, déjà retenus par l'[ADR-001](ADR-001-format-spec.md) sur la foi de BENCH-001, et la lecture des principes ne se mesure pas |
 | Remplace | aucun |
 
@@ -147,6 +147,15 @@ La porte reste ouverte. Une cible AWS ou Azure s'ajoute par une version du sché
 3. GitOps sur `gcp` : Config Sync est inclus dans GKE, alors que le brief prévoit Argo CD et que Q6 parle d'une « structure Argo CD ». Avec la lecture proposée, Argo CD sur GKE demande un `managed_gap` qui établit ce que Config Sync ne couvre pas. Le DSI a ouvert BENCH-009 le 2026-11-19 pour trancher avant le golden repo de la phase 2.
 4. Valeur de six mois et blocage de toutes les PR (section 3), pour Lucas. La relecture [SECU] du 2026-11-19 relève qu'une entrée expirée bloquerait aussi les correctifs de sécurité, sans acteur de contournement dans le ruleset de `main`. Son avis : les règles de date ne bloquent que les PR qui touchent `catalog/` et les PR de release, et la tâche hebdomadaire ouvre une issue en cas d'échec. Le changement tient à `always_run` dans `.pre-commit-config.yaml` et aux constantes de `scripts/catalog/catalog_rules.py`.
 5. Lecture stricte des expressions de licence : chaque opérande d'un `OR` doit figurer dans la liste blanche, et aucune exception `WITH` n'est acceptée tant que la liste des exceptions est vide. Gardée par [SECU], pour Lucas.
+
+### Réponses de la GATE 1 (2026-11-20)
+
+- Lecture des principes III et V : Lucas retient celle de cet ADR. III fixe
+  les candidats d'une cible, V départage.
+- Non tranchées, donc gardées telles qu'écrites : la portée de la règle de
+  fraîcheur, qui bloque toutes les PR (l'avis de [SECU] proposait de ne
+  bloquer que les PR qui touchent `catalog/` et les PR de release), et la
+  lecture stricte des expressions de licence.
 
 ## Conformité à la constitution
 

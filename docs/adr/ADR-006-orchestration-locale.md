@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-20 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, en attente de la GATE 1 |
+| Décideur | DSI, sur délégation de Lucas à la GATE 1 du 2026-11-20 |
 | BENCH lié | [BENCH-005](../benchmarks/BENCH-005-orchestration-locale.md) |
 | Remplace | aucun |
 
@@ -156,6 +156,19 @@ La porte reste ouverte. O4 ne demande que kubectl et un cluster qui accepte des 
 5. Gouvernance de Task, pour Lucas. Le brief retient Task, commun aux trois options, et aucun benchmark n'a noté sa gouvernance ; avec O4, il porte toute la boucle. Sa licence est MIT et son dépôt appartient à l'organisation `go-task`, lus le 2026-11-20 ; ses mainteneurs et leurs employeurs n'ont pas été relevés. Si sa gouvernance demandait une justification au titre du principe V, elle tiendrait en deux faits : Task vient du brief et sert toutes les options, et les étapes d'O4 restent trois commandes standard qu'un script reprendrait. Faut-il le faire relever par [BENCH] avant la GATE 1, ou en phase 3 avec le catalogue ?
 6. Seuils de volume, pour Lucas. BENCH-005 compte le nœud kind dans ses seuils de 500 et 1 000 Mo, et la règle provisoire du DSI compte la plate-forme de base, nœud compris, contre 500 Mo : le nœud (384,8 Mo en amd64) est compté deux fois. Sur les notes, l'effet est d'un cran au plus, pour les trois options ensemble, jamais sur l'ordre. Sur le budget, [FINOPS] relève que les seuils de couche posés jusqu'ici somment à 1 327,7 Mo, 118 % des 900 s à 10 Mbit/s : une couche qui tient ses propres seuils peut rendre ENF-01 intenable. Choix attendu : couche seule ou plate-forme comprise, et des parts par étape dont la somme laisse de la place au reste du parcours. C'est la question 2 de l'ADR-005, vue depuis la stack.
 
+### Réponses de la GATE 1 (2026-11-20)
+
+- Les deux décisions du DSI, l'élimination par US-005 et l'ajout de l'option
+  sans outil de boucle, sont confirmées par Lucas.
+- Aspire, pressenti par le brief, n'est pas retenu : l'ADR est accepté.
+- R-04 : un débit visé entre dans le critère d'acceptation, valeur proposée
+  par [FINOPS] après le golden repo, et le profil lite n'embarque pas l'outil
+  GitOps (PR #26).
+- Seuils de volume : la règle de périmètre de la plate-forme de base entre
+  dans le gabarit de benchmark (PR #25).
+- Restent ouvertes : la lecture de « arrête et supprime l'environnement »
+  (US-005), qui attend BENCH-010, et la gouvernance de Task.
+
 ## Conformité à la constitution
 
 Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en version 1.0.0.
@@ -210,7 +223,7 @@ Ce que BENCH-005 établit se cite par lui ; ses propres sources sont dans sa sec
 
 | Source | Lue le | Ce qu'elle établit |
 | --- | --- | --- |
-| [BENCH-005](../benchmarks/BENCH-005-orchestration-locale.md), sections 1 à 3 | 2026-11-20 | Question posée ; options et versions ; ajout d'O4, sa date et ses raisons ; élimination de Compose et de la boucle locale d'Aspire par US-005, sa date, sa raison, à confirmer par Lucas ; critères éliminatoires |
+| [BENCH-005](../benchmarks/BENCH-005-orchestration-locale.md), sections 1 à 3 | 2026-11-20 | Question posée ; options et versions ; ajout d'O4, sa date et ses raisons ; élimination de Compose et de la boucle locale d'Aspire par US-005, sa date, sa raison, confirmée par Lucas à la GATE 1 ; critères éliminatoires |
 | BENCH-005, section 4 | 2026-11-20 | Seuils écrits avant les mesures, révision amd64 et règle provisoire de la plate-forme de base ; mise en œuvre d'O4 ; série retenue du 2026-11-19 ; M1 à M11 ; volumes ; tirages à chaque `task up` et leur cause corrigée ; série bloquée 15 minutes ; adresses d'écoute |
 | BENCH-005, sections 5 à 7 | 2026-11-20 | Notes, grille et totaux 88, 74 et 63 ; sensibilité ; affichage des adresses par la gateway ou `kubectl port-forward` ; seuils du profil lite ; exigences de [SECU] ; condition de réintroduction de Tilt ; suites ; prochaine vérification au 2027-05-19 |
 | BENCH-005, section 8, section 10 et annexe A | 2026-11-20 | Limites, dont le temps à froid et le poste unique ; relectures de [SECU] et de [FINOPS] ; mesures de Docker Compose et de la boucle locale d'Aspire |

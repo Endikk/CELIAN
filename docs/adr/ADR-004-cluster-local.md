@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-19 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, en attente de la GATE 1 ; kind retenu par Lucas le 2026-11-19 |
+| Décideur | Lucas pour kind, le 2026-11-19 ; ADR accepté par le DSI sur délégation de Lucas à la GATE 1 du 2026-11-20 |
 | BENCH lié | [BENCH-003](../benchmarks/BENCH-003-cluster-local.md) |
 | Remplace | aucun |
 
