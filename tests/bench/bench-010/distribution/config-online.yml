@@ -1,0 +1,19 @@
+# BENCH-010, option O2 with CNCF Distribution: a pull-through cache of
+# Docker Hub, first `task up` (network available to the mirror only).
+# The kind node never reaches Docker Hub itself: its hosts.toml sends
+# docker.io to this mirror, with a dead end as fallback.
+# No credentials (anonymous pulls), no push, no delete, no port published
+# on the host: the node reaches the mirror on the "kind" network.
+version: 0.1
+log:
+  level: info
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+http:
+  addr: ":5000"
+proxy:
+  remoteurl: https://registry-1.docker.io
+  # 0 disables cache expiration (configuration reference, proxy section):
+  # the default of 168h would drop cached images after 7 days.
+  ttl: 0s

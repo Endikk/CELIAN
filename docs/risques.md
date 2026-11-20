@@ -1,6 +1,6 @@
 # Registre des risques
 
-Tenu par le DSI. Mis à jour le 19/11/2026. Probabilité et impact sont notés
+Tenu par le DSI. Mis à jour le 20/11/2026. Probabilité et impact sont notés
 faible, moyen ou fort : ce sont des jugements, pas des mesures. Un risque se
 ferme quand sa mitigation est en place et vérifiée.
 
@@ -41,6 +41,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-31 | Moteur GitOps différent entre le PC et GCP | Moyenne | Moyen, fort si un contrôle de sécurité diverge | OPS, SECU, QA, FINOPS | Ouvert |
 | R-32 | Failles des moteurs GitOps invisibles aux scanners | Moyenne | Moyen, fort pour un moteur en `cluster-admin` | SECU, OPS | Ouvert |
 | R-33 | Écrire sur la branche suivie, c'est administrer le cluster | Moyenne | Fort | SECU, OPS | Ouvert |
+| R-34 | Miroir de registres sur le PC, nouvelle brique exposée | Faible | Moyen, fort si une image désignée par tag passe par lui | OPS, SECU | Ouvert |
 
 ## Détail
 
@@ -167,6 +168,11 @@ moins 12,4 Mbit/s pour le seul téléchargement, sans compter l'entretien, la
 génération, la compilation ni la CI. Le critère d'acceptation ne tient donc pas
 à 10 Mbit/s : Lucas tranche à la GATE 1 entre un débit visé écrit dans le
 critère et une réduction du volume.
+
+BENCH-010 (2026-11-20) : le miroir zot ajoute 77,68 Mo en linux_amd64 ; la
+plate-forme de base passe de 505,8 à 583,5 Mo, contre un budget de 500, et le
+premier `task up` du profil standard, hors Keycloak et Mailpit, de 1 395,9 à
+1 473,6 Mo.
 
 Reste à mesurer : le temps à froid, la compilation de la vraie stack (front
 Vite compris) sur le golden repo, et la création du cluster sur un runner
@@ -666,6 +672,14 @@ contient busybox sous GPL-2.0-only. La question vaut pour toutes les images du
 blueprint. Avant tout miroir publié : licences relevées couche par couche
 (SBOM), et source indiqué pour les couches sous MPL ou GPL.
 
+Complément de BENCH-010, relu par [SECU] et [FINOPS] le 2026-11-20 : le
+dernier maillon est observé. Avec des archives de `docker save` chargées par
+`kind load image-archive`, la recréation hors réseau échoue trois fois sur
+trois, parce que containerd range chaque image sous le condensat de l'archive
+et non sous celui du registre. Le kubelet repart alors au registre.
+Mitigation retenue par le DSI le même jour : un miroir local zot 2.1.23, seul
+mécanisme qui recrée le cluster hors réseau, sous les conditions de R-34.
+
 ### R-26. Moteur de conteneurs du poste sous licence payante
 
 Les trois outils de cluster local mesurés par BENCH-003 tournent sur un moteur
@@ -832,3 +846,43 @@ identifiant en lecture seule limité au dépôt, ou source OCI lue par Workload
 Identity ; `known_hosts` obligatoire ; jamais un jeton personnel ni celui de
 `gh` ; Secret jamais créé par une ressource OpenTofu (R-19) ; aucun
 identifiant Git sur le PC par défaut.
+
+### R-34. Miroir de registres sur le PC, nouvelle brique exposée
+
+BENCH-010 retient provisoirement zot 2.1.23 comme miroir local. C'est un
+serveur de plus sur chaque poste, et il devient la source des images Docker
+Hub du cluster hors réseau, puis de celles que l'ADR-011 lui confiera. Il
+tourne en root dans son conteneur, écoute sur 0.0.0.0:5000 et se trouve, dans
+l'essai, sur les réseaux `bridge` et `kind`. Sans authentification, zot
+accepte toute requête, écritures et suppressions comprises. Tout conteneur de
+ces réseaux peut donc réécrire un tag, effacer le cache ou remplir le disque,
+et sur Linux tout processus du poste aussi. Rien de confidentiel n'y est
+gardé. Le projet a publié 21 avis de sécurité en 12 mois, dont un critique et
+19 entre août et octobre 2026. Deux touchent la configuration retenue : deux
+dénis de service corrigés avant la 2.1.23, dont un sur la synchronisation à
+la demande. Les images de release ne sont pas signées. L'intégrité tient pour
+les images désignées par condensat, puisque containerd vérifie le condensat
+de tout ce qu'il reçoit. Elle ne tient pas pour un tag, que le miroir résout
+sur parole tant qu'il garde la capacité `resolve`. Probabilité faible, parce
+que l'exploitation demande du code déjà en marche sur le poste ou dans le
+cluster.
+
+Mitigation :
+
+- miroir déclaré à containerd avec la seule capacité `pull`, à mesurer en T2 ;
+- aucune référence par tag : le contrôle de FR-008 couvre aussi les images
+  construites sur le poste, nommées sous un hôte qui ne résout vers aucun
+  registre public ;
+- miroir relié au seul réseau `kind`, sans port publié ;
+- Docker Engine 28.0.0 au minimum sur Linux ;
+- exécution sous un UID non root, sans capacités ni élévation de privilèges,
+  à essayer ;
+- configuration du projet toujours montée, extension `sync` seule : la
+  configuration par défaut de l'image active la recherche, l'interface et la
+  gestion ;
+- image figée par condensat, suivie par Renovate avec l'exception de sécurité
+  du principe VI, et incluse dans le SBOM et le scan Trivy du projet généré ;
+- stockage jamais versionné ni publié (R-25) ;
+- lecture mensuelle des avis du dépôt par [SECU] ;
+- test de la condition 7 dans la matrice, avec un pod qui relève ce que le
+  cluster joint du miroir.

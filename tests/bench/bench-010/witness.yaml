@@ -1,0 +1,84 @@
+# BENCH-010 witness pulls (M4), applied by the script in the namespace
+# "witness" after an offline `task up`. Digests read on 2026-11-20.
+#
+# The first five images exist on their public registry and are in no cache
+# of the trial: offline, each pull must fail, and the error must name the
+# dead end. One image per public registry the stack may meet.
+#
+# "always" is an image of the stack, already in the node or in the mirror,
+# with imagePullPolicy: Always: the kubelet then asks the registry for the
+# digest even when the image is present (as for 8 containers of Argo CD,
+# BENCH-009). Expected to start with a mirror (O2) only.
+#
+# One YAML document (a v1 List), so that the check-yaml hook reads it.
+apiVersion: v1
+kind: List
+items:
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: w-docker-io
+      labels: {app: witness}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: w
+          image: docker.io/library/hello-world:latest@sha256:1e4c05b897a751332ce85c7e9449da2d93514ea2dea6dbb0e2753c9e949b2bfa
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: w-quay-io
+      labels: {app: witness}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: w
+          image: quay.io/prometheus/busybox:latest@sha256:7379672d53c28113469275f2eb48adffa19954f39f8ef20c1e2992278f658e6c
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: w-registry-k8s-io
+      labels: {app: witness}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: w
+          image: registry.k8s.io/pause:3.9@sha256:7031c1b283388d2c2e09b57badb803c05ebed362dc88d84b480cc47f72a21097
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: w-ghcr-io
+      labels: {app: witness}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: w
+          image: ghcr.io/project-zot/zot-minimal:v2.1.23@sha256:59cb5740832970818903c5ce104425762664c7880835ee566506aad397cd3458
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: w-mcr-microsoft-com
+      labels: {app: witness}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: w
+          image: mcr.microsoft.com/dotnet/runtime-deps:10.0@sha256:fabe6d8f15c430642a1f92ba0b8d58ff81370cd34c39a182164ad13ba136d38f
+  - apiVersion: v1
+    kind: Pod
+    metadata:
+      name: always
+      labels: {app: witness}
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      containers:
+        - name: w
+          image: busybox:1.37.0@sha256:a7dbc319b1438115a207e11930dc4bb3e643dcb3ec0bdd694bb36cd8fad289ec
+          imagePullPolicy: Always
+          command: [sleep, "600"]

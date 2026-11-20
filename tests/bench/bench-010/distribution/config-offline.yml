@@ -1,0 +1,15 @@
+# BENCH-010, option O2 with CNCF Distribution, offline `task up`: same cache,
+# upstream replaced by a dead end (nothing listens on port 9 of the mirror's
+# own loopback). Every answer must come from the content cached during the
+# first `task up`.
+version: 0.1
+log:
+  level: info
+storage:
+  filesystem:
+    rootdirectory: /var/lib/registry
+http:
+  addr: ":5000"
+proxy:
+  remoteurl: https://127.0.0.1:9
+  ttl: 0s
