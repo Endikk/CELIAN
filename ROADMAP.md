@@ -93,16 +93,16 @@ commence après la validation de son plan par Lucas.
 
 La GATE 1 est passée. Avant la phase 2 :
 
-1. Fusionner les PR de la GATE 1 : amendement du principe VI (#24), règles de
-   notation dans le gabarit (#25), PRD aligné (#26), et celle-ci.
+1. Les PR de la GATE 1 sont fusionnées : amendement du principe VI (#24),
+   règles de notation dans le gabarit (#25), PRD aligné (#26). Reste à
+   fusionner #28, les entrées du catalogue issues des ADR : `gateway`,
+   `secrets`, `gitops`, et le mode Autopilot sur la ligne `gcp` de
+   `kubernetes-cluster`.
 2. BENCH-010, en cours par [OPS] : faire démarrer `task up` sur kind sans
    réseau (R-25, condition 7 de l'ADR-004, condition 4 des ADR-005 et 006).
-3. Entrées du catalogue issues des ADR : `gateway`, `secrets`, `gitops`, et le
-   mode Autopilot sur la ligne `gcp` de `kubernetes-cluster`, en cours par
-   [DEV].
-4. Renovate : exempter les correctifs de sécurité du délai de 7 jours, une
+3. Renovate : exempter les correctifs de sécurité du délai de 7 jours, une
    fois la syntaxe vérifiée par [OPS] sur sa documentation.
-5. Plan court de la phase 2, le golden repo SaaS B2B, à valider par Lucas
+4. Plan court de la phase 2, le golden repo SaaS B2B, à valider par Lucas
    avant de commencer.
 
 Points restés ouverts, repris dans les ADR (sections « Réponses de la
