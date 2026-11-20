@@ -1,0 +1,89 @@
+# Catalog entry. Format and procedure: catalog/README.md.
+# Schema: schema/catalog-entry.schema.json. Decision: docs/adr/ADR-010-gitops.md.
+# The id is provisional: ADR-010 confirms it in phase 3, with the spec schema.
+schema_version: 1
+id: gitops
+summary: Synchronisation du dépôt du projet généré vers son cluster, d'une base Kustomize et d'un overlay par environnement.
+declared_by: target
+targets:
+  local:
+    type: oss
+    service: Flux
+    version: "2.10.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: CNCF
+      detail: Projet de l'organisation fluxcd, gradué à la CNCF le 2022-11-30.
+    status: active
+    last_release_on: "2026-11-20"
+    verified_on: "2026-11-20"
+    standards: [kubernetes-api]
+    decisions:
+      adr: [ADR-010]
+      bench: [BENCH-009]
+    sources:
+      - url: https://github.com/fluxcd/flux2
+        read_on: "2026-11-20"
+        establishes: Licence Apache-2.0, dépôt non archivé (API des dépôts de GitHub).
+      - url: https://api.github.com/repos/fluxcd/flux2/releases?per_page=8
+        read_on: "2026-11-20"
+        establishes: v2.10.0 publiée le 2026-10-26 ; v2.10.1 publiée le 2026-11-20, dernière release, marquée Latest.
+      - url: https://www.cncf.io/projects/flux/
+        read_on: "2026-11-20"
+        establishes: Flux accepté à la CNCF le 2019-07-15, gradué le 2022-11-30.
+    pending:
+      - topic: flux-source
+        owner: Lucas
+        note: Ce que lit Flux sur le PC, source servie dans le cluster ou dépôt distant (ADR-010, question 1).
+      - topic: flux-controllers
+        owner: OPS
+        note: Flux réduit à ses quatre contrôleurs par défaut ou complet (ADR-010, question 4).
+    notes: >-
+      La version reste 2.10.0, celle de l'ADR-010 : 2.10.1, publiée le
+      2026-11-20, ne passe le délai de 7 jours du principe VI que le
+      2026-11-27, et sa montée suit la règle de Renovate. Le manifest
+      install.yaml et les images vivent dans la couche local du blueprint,
+      figés par condensat, et non dans le catalogue.
+  gcp:
+    type: managed
+    service: Config Sync, service de GKE, cluster inscrit dans une flotte
+    provider: google
+    governance:
+      model: single-vendor
+      body: Google
+      detail: Service GitOps inclus dans GKE, sans GKE Enterprise depuis la version 1.22.0 du 2025-09-02.
+    status: active
+    verified_on: "2026-11-20"
+    standards: [kubernetes-api]
+    decisions:
+      adr: [ADR-010]
+      bench: [BENCH-009]
+    sources:
+      - url: https://docs.cloud.google.com/kubernetes-engine/config-sync/docs/overview
+        read_on: "2026-11-20"
+        establishes: « Config Sync is a GitOps service included with Google Kubernetes Engine (GKE) » ; prix renvoyé à la grille de GKE.
+      - url: https://docs.cloud.google.com/kubernetes-engine/config-sync/docs/concepts/cluster-requirements
+        read_on: "2026-11-20"
+        establishes: Autopilot et Standard pris en charge ; inscription dans une flotte exigée ; « Config Sync can run only on x86-based nodes, not Arm nodes ».
+      - url: https://docs.cloud.google.com/kubernetes-engine/config-sync/docs/release-notes
+        read_on: "2026-11-20"
+        establishes: 1.25.2 le 2026-11-09 ; 1.22.0 du 2025-09-02, plus besoin de GKE Enterprise ; 1.21.0 du 2025-05-01, mises à jour automatiques retirées.
+    pending:
+      - topic: fleet-opentofu
+        owner: OPS
+        note: Inscription du cluster dans la flotte et activation de Config Sync dans la couche OpenTofu, ressources non vérifiées.
+      - topic: version-pinning
+        owner: OPS
+        note: Mécanisme qui fige la version de Config Sync dans la couche gcp, non lu (R-32).
+      - topic: x86-nodes
+        owner: OPS
+        note: Garantie de nœuds x86 pour Config Sync en Autopilot, non vérifiée.
+      - topic: pod-billing
+        owner: FINOPS
+        note: Facturation des pods de Config Sync en Autopilot (ADR-010, question 5).
+    notes: >-
+      La version de Config Sync se fige dans la couche gcp du blueprint et
+      monte par une PR qui passe la matrice (ADR-010, R-32) ; elle n'est pas
+      tenue ici. Les pending restent ouverts jusqu'à l'essai sur GKE de la
+      condition 7 de l'ADR-010.

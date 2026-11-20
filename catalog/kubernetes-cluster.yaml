@@ -1,5 +1,6 @@
 # Catalog entry. Format and procedure: catalog/README.md.
-# Schema: schema/catalog-entry.schema.json. Decision: docs/adr/ADR-004-cluster-local.md.
+# Schema: schema/catalog-entry.schema.json. Decisions: docs/adr/ADR-004-cluster-local.md,
+# and docs/adr/ADR-008-modules-opentofu-gcp.md for the GKE mode.
 schema_version: 1
 id: kubernetes-cluster
 summary: Cluster Kubernetes qui porte la stack du projet généré, sur le PC comme sur le cloud.
@@ -60,34 +61,35 @@ targets:
       condensat, et non dans le catalogue.
   gcp:
     type: managed
-    service: Google Kubernetes Engine (GKE)
+    service: Google Kubernetes Engine (GKE), mode Autopilot
     provider: google
     governance:
       model: single-vendor
       body: Google
       detail: Service managé de Google Cloud, implémentation managée de Kubernetes.
     status: active
-    verified_on: "2026-11-19"
+    verified_on: "2026-11-20"
     standards: [kubernetes-api]
     decisions:
-      adr: [ADR-004]
+      adr: [ADR-004, ADR-008]
     sources:
       - url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
-        read_on: "2026-11-19"
-        establishes: Implémentation managée de Kubernetes, pilotée par l'API Kubernetes ; modes Autopilot, recommandé par la page, et Standard.
+        read_on: "2026-11-20"
+        establishes: GKE, « a managed implementation of the Kubernetes open source container orchestration platform » ; modes Autopilot, recommandé par la page, et Standard.
+      - url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/autopilot-overview
+        read_on: "2026-11-20"
+        establishes: Autopilot, « the recommended way to use GKE » ; nouveaux clusters régionaux, avec une adresse IP publique ; inscrits par défaut dans le canal Regular.
       - url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/release-channels
-        read_on: "2026-11-19"
-        establishes: Canal Regular par défaut ; mises à jour automatiques des clusters d'un canal, mineure comprise.
+        read_on: "2026-11-20"
+        establishes: Canal Regular par défaut ; un cluster Autopilot ne s'inscrit que dans un canal ; mise à jour automatique des clusters d'un canal vers ses cibles, nouvelle mineure comprise.
       - url: https://docs.cloud.google.com/kubernetes-engine/docs/release-notes-regular
-        read_on: "2026-11-19"
-        establishes: Nouvelles versions dans le canal Regular les 2026-11-10 et 2026-11-13.
+        read_on: "2026-11-20"
+        establishes: Nouvelles versions dans le canal Regular les 2026-11-10 et 2026-11-13 ; 1.36.4-gke.2377000 annoncée le 2026-11-10 comme version par défaut à la création.
     pending:
-      - topic: cluster-mode
-        owner: OPS
-        note: Autopilot ou Standard, fixé par la conception de la cible gcp, avec FINOPS pour le dimensionnement.
       - topic: release-channel
         owner: OPS
-        note: Canal du cluster. Regular sert de référence à la règle de version de l'ADR-004 tant que ce choix n'est pas fait.
+        note: Canal du cluster, que l'ADR-008 laisse à OPS. Regular sert de référence à la règle de version de l'ADR-004 tant que ce choix n'est pas fait.
     notes: >-
-      La mineure de Kubernetes suit la règle de version de l'ADR-004 et n'est
-      pas tenue ici.
+      Le mode Autopilot vient de l'ADR-008, qui le retient sans que la grille
+      de BENCH-008 l'ait noté. La mineure de Kubernetes suit la règle de
+      version de l'ADR-004 et n'est pas tenue ici.
