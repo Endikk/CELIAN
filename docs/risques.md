@@ -38,6 +38,9 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-28 | Secrets locaux en clair dans etcd | Moyenne | Faible, fort si un secret réel y entre | SECU, DEV | Ouvert |
 | R-29 | Synchronisation des secrets de GKE lue, jamais exécutée | Moyenne | Fort | OPS, SECU | Ouvert |
 | R-30 | Boucle locale maison portée par le Taskfile | Moyenne | Moyen | DEV, SECU | Ouvert |
+| R-31 | Moteur GitOps différent entre le PC et GCP | Moyenne | Moyen, fort si un contrôle de sécurité diverge | OPS, SECU, QA, FINOPS | Ouvert |
+| R-32 | Failles des moteurs GitOps invisibles aux scanners | Moyenne | Moyen, fort pour un moteur en `cluster-admin` | SECU, OPS | Ouvert |
+| R-33 | Écrire sur la branche suivie, c'est administrer le cluster | Moyenne | Fort | SECU, OPS | Ouvert |
 
 ## Détail
 
@@ -645,6 +648,16 @@ donc de garder le cluster entre deux `task up`. US-005 demande une commande qui
 « arrête et supprime l'environnement » : supprimer l'application en gardant le
 cluster peut s'y lire, question pour [PO] et [ARCHI].
 
+Complément de BENCH-009, relu par [SECU] le 2026-11-19 : les images de l'outil
+GitOps sont elles aussi retéléchargées à chaque création du cluster kind, quel
+que soit l'outil. Les manifests amont les désignent par tag ; le blueprint les
+fige par condensat (condition 3 de l'ADR-004). `IfNotPresent` ne suffit pas :
+préchargées par `kind load docker-image` depuis un magasin classique, elles
+perdent le condensat du registre et repassent par lui. Argo CD demande en plus
+un correctif, puisque 8 de ses conteneurs sont en `imagePullPolicy: Always`,
+sauf si la mitigation retenue est un miroir local déclaré à containerd.
+Revenir aux tags pour faire marcher `kind load` est refusé.
+
 ### R-26. Moteur de conteneurs du poste sous licence payante
 
 Les trois outils de cluster local mesurés par BENCH-003 tournent sur un moteur
@@ -746,3 +759,68 @@ avant `kubectl apply -k` ; un test ou une politique conftest refuse tout objet
 secret silencieuses (R-20) ; licence et gouvernance de Task relevées au
 catalogue ; procédure documentée pour ajouter un outil de boucle facultatif
 au-dessus de `k8s/`, après relecture [SECU].
+
+### R-31. Moteur GitOps différent entre le PC et GCP
+
+Dans le montage que propose l'ADR-010 (BENCH-009), Flux synchronise le
+cluster local et Config Sync, service managé de GKE, synchronise GCP. Les
+objets de liaison diffèrent, et le service managé n'a jamais tourné chez nous
+(principe X) : ses faits viennent de la documentation de Google. Config Sync
+ne tourne que sur des nœuds x86 : aucun poste à processeur Apple ni runner
+arm64 ne teste nativement la couche `gcp`, et un pool de nœuds Arm sur GKE ne
+le porterait pas. Une annotation propre à un moteur, une variable `${…}` ou
+une autre version de Kustomize peuvent faire diverger la couche commune sans
+bruit, contrôles de sécurité compris. Sur le PC, Flux corrige la dérive à
+chaque réconciliation, et les modifications faites par `kubectl` « will be
+reverted » (<https://fluxcd.io/flux/components/kustomize/kustomizations/>,
+lu le 2026-11-20) : s'il synchronise l'environnement local, il défait ce que
+la boucle de `task up` applique (R-30).
+
+Les pods de Config Sync tournent dans le cluster du client. Google y fixe
+environ 0,93 vCPU et 0,93 Gio par `RootSync` en Autopilot, aucune page lisible
+ne les exempte de facturation, et ses métriques partent vers Cloud Monitoring,
+facturé à l'échantillon ([FINOPS], 2026-11-19). S'ils sont facturés, Flux sur
+les deux cibles coûterait moins cher : le montage ne tient alors que par le
+principe III.
+
+Mitigation : conditions de parité de l'ADR-010 (politique conftest sur la
+couche commune, comparaison des rendus Kustomize des deux moteurs) ; nœuds
+x86 pour Config Sync sur GKE ; Flux hors du profil lite, ou suspendu pendant
+la boucle locale ; un seul `RootSync` dans le profil démo, export
+des métriques coupé ou filtré par défaut ; écarts listés au README ; essai sur
+GKE après accord de Lucas et budget de [FINOPS].
+
+### R-32. Failles des moteurs GitOps invisibles aux scanners
+
+Config Sync corrige des CVE sans les nommer (neuf releases en 2026) et ne
+publie aucun avis : un scan des images voit ses dépendances vulnérables, pas
+une faille de son propre code. Sa mise à jour automatique a été retirée en
+1.21.0 (2025-05-01) : sur GKE, la montée de version se fait à la main, au
+moins tous les neuf mois selon Google. Côté Flux, l'avis élevé
+GHSA-mwcp-qpcg-fr7c (2026-08-11) n'a pas de CVE et manque à la base mondiale
+de GitHub : Flux publie ses avis dans chaque dépôt (BENCH-009, relu par
+[SECU]).
+
+Mitigation : version de Config Sync figée dans la couche `gcp` et montée par
+une PR qui passe la matrice ; relecture mensuelle des notes de version de
+Config Sync et des avis des dépôts `fluxcd` par [SECU] ; scan Trivy des images
+des deux moteurs à chaque montée ; procédure de montée de version dans le
+runbook du projet généré.
+
+### R-33. Écrire sur la branche suivie, c'est administrer le cluster
+
+Les trois moteurs étudiés par BENCH-009 appliquent par défaut avec
+`cluster-admin`, et chaque `RootSync` de Config Sync le reçoit sans
+`roleRefs`. Qui écrit sur la branche suivie, ou intercepte sa lecture,
+administre donc le cluster, et un environnement peut écrire dans un autre sur
+un même cluster GKE. La documentation de Google fait créer un jeton GitHub de
+portée `repo`, qui écrit dans tous les dépôts de l'utilisateur, et désactive la
+vérification de l'hôte SSH quand `known_hosts` manque. Sur le PC, la pente
+serait de reprendre le jeton de `gh` (R-07).
+
+Mitigation : droits restreints des deux côtés, sans `cluster-admin` par défaut
+(ADR-010) ; protection de la branche suivie dans le dépôt généré (Q3) ;
+identifiant en lecture seule limité au dépôt, ou source OCI lue par Workload
+Identity ; `known_hosts` obligatoire ; jamais un jeton personnel ni celui de
+`gh` ; Secret jamais créé par une ressource OpenTofu (R-19) ; aucun
+identifiant Git sur le PC par défaut.
