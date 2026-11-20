@@ -6,6 +6,10 @@
     "customManagers:githubActionsVersions"
   ],
   "minimumReleaseAge": "7 days",
+  "vulnerabilityAlerts": {
+    "minimumReleaseAge": null
+  },
+  "osvVulnerabilityAlerts": true,
   "pre-commit": {
     "enabled": true
   },
