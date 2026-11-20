@@ -35,6 +35,8 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-25 | Démarrage local tributaire des registres publics | Forte | Moyen, fort pour la CI de la matrice | OPS, SECU | Ouvert |
 | R-26 | Moteur de conteneurs du poste sous licence payante | Moyenne | Moyen | OPS, FINOPS | Ouvert |
 | R-27 | Modules OpenTofu tirés sans contrôle d'intégrité | Faible | Fort | SECU, OPS | Ouvert |
+| R-28 | Secrets locaux en clair dans etcd | Moyenne | Faible, fort si un secret réel y entre | SECU, DEV | Ouvert |
+| R-29 | Synchronisation des secrets de GKE lue, jamais exécutée | Moyenne | Fort | OPS, SECU | Ouvert |
 
 ## Détail
 
@@ -452,9 +454,29 @@ port publié par Docker passe avant les règles d'ufw. Un service publié sur
 toutes les interfaces avec un identifiant par défaut s'ouvre à tout le réseau
 local du poste.
 
-Mitigation : `task up` génère des secrets aléatoires au premier lancement, dans
-un `.env` ignoré par Git. Un test de la matrice et une politique conftest
-échouent si un identifiant par défaut atteint la cible GCP. Le blueprint fixe
+Complément vérifié le 2026-11-19 par BENCH-007, relu par [SECU]. La
+mitigation par un `.env` est retirée : un fichier dans le dossier du projet
+est lisible par tout processus du poste, agent compris (R-07), et part dans
+Git le jour où le `.gitignore` manque. `kubectl apply` recopie la valeur d'un
+Secret dans l'annotation `last-applied-configuration`, et sous bash 3.2 un
+heredoc passe par un fichier temporaire. Task affiche chaque commande avant de
+la lancer, et son option `secret: true` ne couvre ni `ps` ni la sortie des
+commandes. Dans le chart d'OpenBao, le mode dev est désactivé par défaut ;
+activé, il prend le jeton racine `root`. L'exemple du fournisseur `vault`
+d'ESO stocke lui aussi le jeton `root`.
+
+Mitigation : `task up` tire chaque valeur de `/dev/urandom` et la passe par un
+tube à `kubectl create -f -`, seulement si le Secret n'existe pas. Jamais
+`kubectl apply` pour un Secret, ni de heredoc. Aucune valeur dans un fichier,
+une variable de Task ou un argument de commande ; les tâches qui manipulent un
+secret sont silencieuses. Un test de la matrice lance deux `task up` sur deux
+clusters neufs et échoue si une valeur se répète, fait moins de 32 caractères
+ou figure dans une liste de valeurs connues (`root`, `admin`, `postgres`,
+`password`, `changeme`, chaîne vide). Le mode dev d'OpenBao et l'exemple
+`root` de la documentation d'ESO ne sont jamais recopiés. Le README dit que
+les secrets locaux sont en clair dans le cluster (R-28). Un test de la matrice
+et une politique conftest échouent si un identifiant par défaut atteint la
+cible GCP. Le blueprint fixe
 127.0.0.1 sur l'API et sur chaque port publié (`listenAddress` pour kind,
 `--ports=127.0.0.1:…` pour minikube, `--api-port 127.0.0.1:…` et
 `-p 127.0.0.1:…` pour k3d ; pour le registre de k3d, `NOM:127.0.0.1:PORT`,
@@ -623,3 +645,47 @@ signalés), ou à défaut figés par SHA complet, sans `depth`.
 `tofu init -lockfile=readonly` dans la CI. Toute montée de version d'un module
 copié passe par une relecture [SECU]. L'ADR-008 retient des modules écrits à la
 main, ce qui écarte le risque pour le MVP tant qu'aucun module tiers n'entre.
+
+### R-28. Secrets locaux en clair dans etcd
+
+Sur le PC, les Secrets de l'application sont en clair dans etcd : kind ne
+configure aucun chiffrement au repos, et les valeurs survivent au redémarrage
+du nœud, donc sur son stockage (BENCH-007, mesures M7 et M8, 2026-11-19). Le
+kubeconfig que kind écrit dans `~/.kube/config` donne l'administration du
+cluster à tout processus de l'utilisateur, agent compris (R-07). Aucune des
+options de BENCH-007 ne protège mieux, puisque toutes finissent dans un Secret
+Kubernetes. Le risque naît quand une valeur réelle y entre : copie d'un secret
+de GCP, clé d'un service tiers. Un développeur qui débogue sera tenté de le
+faire.
+
+Mitigation : valeurs aléatoires et jetables, tirées par `task up` (R-20) ;
+aucune tâche ne lit Secret Manager vers le cluster local ; identifiants de
+services tiers limités à des clés de test, saisis par l'entrée standard,
+jamais dans un fichier du dépôt ; gitleaks en pre-commit et en CI ; le README
+le dit.
+
+### R-29. Synchronisation des secrets de GKE lue, jamais exécutée
+
+Sur GCP, les Secrets de l'application viendront de la synchronisation de GKE
+(`SecretProviderClass` et `SecretSync`), proposée par l'ADR-007. Elle est GA
+depuis le 2026-04-16 et compatible Autopilot, avec GKE 1.33 ou plus et
+Workload Identity Federation for GKE
+(<https://docs.cloud.google.com/secret-manager/docs/release-notes> et
+<https://docs.cloud.google.com/secret-manager/docs/sync-k8-secrets>, lus le
+2026-11-19). BENCH-007 l'a lue sans l'exécuter (principe X). Restent ouverts
+la contrainte « same region as the cluster » face à un secret global, le
+câblage IAM secret par secret, et la conduite en cas de conflit avec un Secret
+existant. Sans ses Secrets, le déploiement sur GCP échoue, et le critère
+d'acceptation du MVP avec lui.
+
+Avec la rotation activée, la synchronisation relit chaque secret toutes les
+2 minutes par défaut, au-delà de la franchise de 10 000 accès par mois dès un
+seul secret ([FINOPS], R-18).
+
+Mitigation : un test de la matrice sur GKE Autopilot, avec l'accord de Lucas
+et un budget de [FINOPS] ; version minimale 1.35.5-gke.1163012, qui recrée un
+Secret supprimé ; `roles/secretmanager.secretAccessor` donné secret par secret
+au compte de service Kubernetes, jamais au niveau du projet ; intervalle de
+relecture d'au moins 15 minutes pour 3 secrets ; repli sur ESO, qui ne change
+que la couche de cible, avec `scopedNamespace` et `scopedRBAC` essayés avant
+usage.
