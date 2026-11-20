@@ -1,0 +1,26 @@
+# BENCH-010: kind cluster for every option. The script replaces
+# @CERTS_DIR@ with the absolute path of the trial's registry host directory
+# before passing this file to kind.
+#
+# - API server on loopback only (condition 1 of ADR-004); no port mapping.
+# - containerd looks up its registry hosts in /etc/containerd/certs.d
+#   (kind local registry recipe and containerd docs/hosts.md).
+# - That directory is the trial's own, mounted read-only. It stays empty for
+#   a normal start; the script writes hosts.toml files into it to send each
+#   public registry to a dead end, or Docker Hub to the local mirror.
+#   containerd reads them at each pull, without a restart.
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  apiServerAddress: "127.0.0.1"
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+nodes:
+  - role: control-plane
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    extraMounts:
+      - hostPath: "@CERTS_DIR@"
+        containerPath: /etc/containerd/certs.d
+        readOnly: true
