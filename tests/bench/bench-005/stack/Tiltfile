@@ -1,0 +1,19 @@
+# -*- mode: Python -*-
+# BENCH-005, Tilt option: builds the API and the front, loads them into the
+# kind cluster, and applies the same application manifests as GKE (k8s/app)
+# plus the local target layer (k8s/local) and the probe (k8s/bench).
+allow_k8s_contexts('kind-celian-bench-005')
+
+k8s_yaml(listdir('k8s/app') + listdir('k8s/local') + listdir('k8s/bench'))
+
+# The API is rebuilt on every change; the front's static files are synced
+# into the running container without a rebuild.
+docker_build('celian-bench-005/api', 'api')
+docker_build(
+    'celian-bench-005/front',
+    'front',
+    live_update=[sync('front/html', '/usr/share/nginx/html')],
+)
+
+k8s_resource('api', port_forwards=[port_forward(18580, 8080, host='127.0.0.1')])
+k8s_resource('front', port_forwards=[port_forward(18581, 8080, host='127.0.0.1')])

@@ -1,0 +1,26 @@
+# BENCH-005: application manifests (k8s/app), meant to be the same on kind
+# and on GKE (principle II). The image is named without registry: Tilt
+# replaces it with the image it builds; a GKE pipeline would set its own.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  labels: {app: api}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: api}
+  template:
+    metadata:
+      labels: {app: api}
+    spec:
+      containers:
+        - name: api
+          image: celian-bench-005/api
+          ports: [{containerPort: 8080}]
+          readinessProbe:
+            httpGet: {path: /healthz, port: 8080}
+            periodSeconds: 5
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
