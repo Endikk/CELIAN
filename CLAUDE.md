@@ -127,20 +127,29 @@ Contre la fuite d'identifiants (R-07), le même fichier :
 - refuse `gh auth token` et les commandes `gcloud` qui impriment un jeton ;
 - refuse la lecture de `~/.config/gh`, `~/.config/gcloud`, `~/.ssh`, `~/.aws`,
   `~/.kube`, `~/.docker/config.json`, `~/.netrc` et `~/.git-credentials` ;
-- bloque les outils de lecture hors des dossiers de travail
-  (`blockReadsOutsideWorkingDirectories`) ;
-- demande une confirmation humaine pour les canaux de sortie et
-  l'exécution de code arbitraire : `curl`, `wget`, `python`, `node`,
-  `docker run`, `exec` et `cp`, `gh auth`, `gh gist`, `security`, l'ajout
-  d'un remote et un `git push` vers une URL.
+- demande une confirmation humaine pour les canaux de sortie les plus
+  sensibles : `gh auth`, `gh gist`, `security`, l'ajout ou la modification
+  d'un remote, et un `git push` vers une URL.
 
-Une règle `ask` du projet passe devant un `allow` de l'utilisateur, et le mode
-auto la respecte (<https://code.claude.com/docs/en/permissions>,
-<https://code.claude.com/docs/en/permission-modes>, relu le 15/11/2026). Un
-test sans interface l'a confirmé le même jour : `curl --version` est autorisé
-sans ce fichier, et bloqué avec lui. Ces règles restent un filtre de motifs, et
-un deny sur Read ne couvre pas un script qui ouvre le fichier lui-même. Les
-deux vraies barrières sont un jeton GitHub sans droits admin
+Une règle `ask` du projet passe devant un `allow` de l'utilisateur, et elle
+demande confirmation même en mode bypass. Une règle `deny` bloque dans tous
+les modes, sans rien demander
+(<https://code.claude.com/docs/en/permissions>,
+<https://code.claude.com/docs/en/permission-modes>, relus le 20/11/2026).
+
+Le 21/11/2026, Lucas a retiré les règles `ask` sur `curl`, `wget`, `python`,
+`python3`, `node`, `docker run`, `docker exec` et `docker cp`, ainsi que
+`blockReadsOutsideWorkingDirectories`. Elles l'interrompaient à chaque session
+en mode bypass, et elles protégeaient peu : une règle porte sur le texte de la
+commande, pas sur ce que lance un script ou `kind` (constat de BENCH-010). Les
+consignes données aux agents restent : pas de `curl`, de `wget` ni
+d'interpréteur, et pas de `docker run` sans l'accord de Lucas. Ce ne sont
+plus que des consignes. Après la fusion, le retrait du blocage des lectures
+demande de redémarrer la session.
+
+Ces règles restent un filtre de motifs, et un deny sur Read ne couvre pas un
+script qui ouvre le fichier lui-même. Les deux vraies barrières sont un jeton
+GitHub sans droits admin
 ([docs/securite/jeton-github.md](docs/securite/jeton-github.md)) et le sandbox,
 qui fera l'objet d'une PR à part une fois testé avec Docker.
 

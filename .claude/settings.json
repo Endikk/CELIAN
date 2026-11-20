@@ -27,7 +27,6 @@
     }
   },
   "permissions": {
-    "blockReadsOutsideWorkingDirectories": true,
     "deny": [
       "Bash(tofu apply *)",
       "Bash(tofu * apply *)",
@@ -63,14 +62,6 @@
       "Bash(gh auth *)",
       "Bash(gh gist *)",
       "Bash(security *)",
-      "Bash(curl *)",
-      "Bash(wget *)",
-      "Bash(python *)",
-      "Bash(python3 *)",
-      "Bash(node *)",
-      "Bash(docker run *)",
-      "Bash(docker exec *)",
-      "Bash(docker cp *)",
       "Bash(git remote add *)",
       "Bash(git remote set-url *)",
       "Bash(git push http*)",
