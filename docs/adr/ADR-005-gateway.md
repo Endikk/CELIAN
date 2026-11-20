@@ -11,11 +11,11 @@
 
 ## Contexte et problème
 
-Le projet généré expose son API et son front par une gateway. Sur la cible `local`, elle tourne dans le cluster kind de l'ADR-004 ; sur `gcp`, dans le cluster GKE de l'ADR-008 (proposé, pas encore fusionné). Il faut choisir le contrôleur de chaque cible, la version des CRD Gateway API et la façon de les livrer au projet, avant le golden repo de la phase 2. Le PRD pressentait Envoy Gateway, repris du brief (section 1 du PRD).
+Le projet généré expose son API et son front par une gateway. Sur la cible `local`, elle tourne dans le cluster kind de l'ADR-004 ; sur `gcp`, dans le cluster GKE de l'[ADR-008](ADR-008-modules-opentofu-gcp.md) (proposé). Il faut choisir le contrôleur de chaque cible, la version des CRD Gateway API et la façon de les livrer au projet, avant le golden repo de la phase 2. Le PRD pressentait Envoy Gateway, repris du brief (section 1 du PRD).
 
 Les exigences viennent du PRD. US-005 veut que `task up` démarre toute la stack sans autre étape (principe VII), affiche des adresses locales qui répondent et choisisse un profil selon la RAM. ENF-01 fixe le parcours à moins de 15 minutes, premier téléchargement des images compris. ENF-02 veut que seule la couche de cible change d'une cible à l'autre (principe II), et que le README liste les écarts restants. ENF-03 veut des dépendances figées et le délai de publication du principe VI. Côté constitution, les principes II, III, V, VI et VIII. Côté risques, R-04 (critère des 15 minutes hors d'atteinte), R-05 (dépense GCP non maîtrisée), R-15 (ressources GCP qui survivent à `tofu destroy`), R-20 (« Identifiants par défaut dans le golden repo »), R-25 (démarrage local tributaire des registres publics) et R-26 (moteur de conteneurs du poste sous licence payante).
 
-Sur `gcp`, le choix suit la lecture des principes III et V que propose l'ADR-009 (branche du catalogue, PR #15, pas encore fusionnée) : le principe III fixe les candidats d'une cible, le principe V les départage. Le contrôleur Gateway de GKE est le service managé qui implémente Gateway API. L'option de BENCH-004 vaut donc pour `local`, et ne vaudrait pour `gcp` qu'avec un `managed_gap`. Lucas n'a pas encore validé cette lecture. BENCH-004 ne note que les options de la cible `local`, et juge le côté GKE sur sa documentation et son rapport de conformité, sans cluster réel (principe X).
+Sur `gcp`, le choix suit la lecture des principes III et V que propose l'[ADR-009](ADR-009-catalogue.md) (proposé) : le principe III fixe les candidats d'une cible, le principe V les départage. Le contrôleur Gateway de GKE est le service managé qui implémente Gateway API. L'option de BENCH-004 vaut donc pour `local`, et ne vaudrait pour `gcp` qu'avec un `managed_gap`. Lucas n'a pas encore validé cette lecture. BENCH-004 ne note que les options de la cible `local`, et juge le côté GKE sur sa documentation et son rapport de conformité, sans cluster réel (principe X).
 
 Deux décisions du DSI du 2026-11-19 pèsent sur ce choix, à confirmer par Lucas à la GATE 1. R-04 passe en probabilité forte : son déclencheur se lit désormais sur le premier `task up` complet et sur le pire cas des systèmes de Q5, et la plate-forme de base le franchit avec Envoy Gateway en amd64. R-25 passe aussi en probabilité forte : une image désignée par condensat et préchargée par `kind load` repasse par le registre à chaque création, ce qui touche chaque `task up` avec kind.
 
@@ -133,7 +133,7 @@ La porte reste ouverte. La couche commune ne contient que des objets Gateway API
 
 ### Suites
 
-- Entrée de catalogue `gateway`, à ajouter après la fusion de la PR du catalogue (#15) : `targets.local` de type `oss`, `targets.gcp` de type `managed` (section « Entrée au catalogue »). Les condensats du tableau « Versions et condensats » vivent dans le blueprint, pas dans l'entrée : l'ADR-009 exclut du catalogue les condensats d'images, et son champ `artifacts` ne vise que des binaires par plateforme. Les suites de BENCH-004 les plaçaient dans l'entrée ; l'ADR-009 l'emporte s'il est validé.
+- Entrée de catalogue `gateway`, à ajouter dans une PR qui suit la GATE 1 : `targets.local` de type `oss`, `targets.gcp` de type `managed` (section « Entrée au catalogue »). Les condensats du tableau « Versions et condensats » vivent dans le blueprint, pas dans l'entrée : l'ADR-009 exclut du catalogue les condensats d'images, et son champ `artifacts` ne vise que des binaires par plateforme. Les suites de BENCH-004 les plaçaient dans l'entrée ; l'ADR-009 l'emporte s'il est validé.
 - Essais de R-25 par [OPS], avant le golden repo (condition 4).
 - Politique conftest ou Kyverno sur le groupe `gateway.envoyproxy.io` (condition 2), et contrôles des conditions 1 et 5, pour [SECU] et [QA].
 - Deux exécutions à chaud de plus pour Envoy Gateway (`OPTIONS=envoy-gateway`, `RUNS`), pour trancher le seuil de mémoire ([BENCH]).
@@ -156,7 +156,7 @@ Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en ve
 | I. Rien sans test automatique | respecté | La matrice porte les contrôles des conditions 1, 2, 4 et 5, la CI la vérification de signature de la condition 3, en plus du démarrage local |
 | II. Spec abstraite, catalogue concret | respecté | Envoy Gateway n'apparaît que dans la couche `local` et au catalogue, la classe de GKE dans la couche `gcp` ; la couche commune ne porte que des objets Gateway API du cœur, et la condition 5 le vérifie |
 | III. Managé sur le cloud, open source ailleurs | respecté | Sur `local`, Envoy Gateway est sous Apache-2.0 et gratuit ; sur `gcp`, le contrôleur de GKE est le service managé, dans la lecture de l'ADR-009 qui attend Lucas |
-| IV. Catalogue traçable | respecté | Les deux lignes de l'entrée portent licence, gouvernance, statut, date et source ; l'entrée s'écrit après la fusion de la PR #15 |
+| IV. Catalogue traçable | respecté | Les deux lignes de l'entrée portent licence, gouvernance, statut, date et source ; l'entrée s'écrit dans une PR qui suit la GATE 1 |
 | V. Gouvernance ouverte d'abord | respecté | Sur `local`, projet couvert par la CNCF au titre d'Envoy, avec au moins six employeurs parmi les mainteneurs, et l'option à éditeur unique est écartée. Sur `gcp`, service managé imposé par III, sans justification à fournir (gabarit d'ADR, ADR-009) |
 | VI. Récent mais éprouvé | respecté | Aucun critère éliminatoire touché : Apache-2.0, dépôt actif, 1.10.0 du 2026-11-06 publiée depuis plus de 7 jours ; la réserve sur la jeunesse du projet est écrite |
 | VII. Une commande pour démarrer | respecté | `task up` installe CRD, charts et objets depuis des fichiers versionnés ; la dépendance au registre à chaque création est traitée par la condition 4 |
@@ -170,7 +170,7 @@ Aucune.
 
 ## Entrée au catalogue
 
-Brique abstraite : `gateway`, nom proposé par le DSI, à confirmer en phase 3 avec le schéma de spec. L'entrée s'écrit au format de l'ADR-009 une fois la PR #15 fusionnée.
+Brique abstraite : `gateway`, nom proposé par le DSI, à confirmer en phase 3 avec le schéma de spec. L'entrée s'écrit au format de l'ADR-009, dans une PR qui suit la GATE 1.
 
 | Cible | Service | Type | Licence | Gouvernance | Statut | Vérifié le | Source |
 | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -208,9 +208,9 @@ Ce que BENCH-004 établit se cite par lui ; ses propres sources sont dans sa sec
 | BENCH-004, sections 8 et 10 | 2026-11-19 | Limites ; avis de [SECU] (Trivy, CVE-2026-97054, lecture des Secrets, NodePort) et de [FINOPS] (volume en amd64, Gateway facturée sur GKE, plancher mémoire, R-04) |
 | `tests/bench/bench-004-gateway.sh`, lignes 71 à 94, 315 à 348 et 620 à 633 | 2026-11-19 | Condensats complets ; EnvoyProxy et GatewayClass locales ; réglages `crds.envoyGateway.enabled`, `crds.gatewayAPI.enabled`, `crds.enabled` et `global.images.envoyGateway.image` |
 | <https://api.github.com/repos/envoyproxy/gateway/releases?per_page=6> | 2026-11-19 | Releases les plus récentes : v1.9.4 le 2026-11-17, v1.10.0 le 2026-11-06 ; aucune release 1.10.x après 1.10.0 |
-| ADR-009 et `catalog/README.md`, branche du catalogue (PR #15, non fusionnée) | 2026-11-19 | Lecture proposée des principes III et V ; option de BENCH-004 valable pour `local`, et pour `gcp` seulement avec un `managed_gap` ; types `oss` et `managed` ; `declared_by` ; condensats d'images hors du catalogue ; `artifacts` réservé aux binaires par plateforme ; `last_release_on` ; standard `gateway-api` |
+| [ADR-009](ADR-009-catalogue.md) et [`catalog/README.md`](../../catalog/README.md) | 2026-11-19 | Lecture proposée des principes III et V ; option de BENCH-004 valable pour `local`, et pour `gcp` seulement avec un `managed_gap` ; types `oss` et `managed` ; `declared_by` ; condensats d'images hors du catalogue ; `artifacts` réservé aux binaires par plateforme ; `last_release_on` ; standard `gateway-api` |
 | [ADR-004](ADR-004-cluster-local.md), conditions 1, 3, 4 et 7, règle de version | 2026-11-19 | Boucle locale ; images par condensat ; manifests tiers versionnés avec leur SHA-256 ; recréation hors ligne ; mineure 1.36 |
-| ADR-008, proposé, branche de BENCH-008, non fusionné | 2026-11-19 | Cluster GKE Autopilot de la couche `gcp` ; gateway hors de sa portée |
+| [ADR-008](ADR-008-modules-opentofu-gcp.md), proposé | 2026-11-19 | Cluster GKE Autopilot de la couche `gcp` ; gateway hors de sa portée |
 | [docs/prd-mvp.md](../prd-mvp.md), section 1, US-001, US-005, US-006, US-012, ENF-01, ENF-02, ENF-03, Q5 | 2026-11-19 | Envoy Gateway pressenti ; prérequis ; démarrage en une commande et profils ; aucune ressource payante lancée par l'agent ; aucun secret ; budget de 15 minutes ; parité ; délai de publication ; systèmes visés |
 | [docs/risques.md](../risques.md), R-04, R-05, R-15, R-20, R-25, R-26 | 2026-11-19 | Déclencheur de R-04 et probabilités forte de R-04 et R-25, à confirmer ; équilibreurs nés de Kubernetes hors de l'état OpenTofu ; pistes et reculs refusés de R-25 |
 | [Constitution](../../.specify/memory/constitution.md), version 1.0.0 | 2026-11-19 | Principes I à X ; délai de 7 jours du principe VI ; amendement et dérogation |
