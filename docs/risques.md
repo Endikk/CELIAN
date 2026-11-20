@@ -1,6 +1,6 @@
 # Registre des risques
 
-Tenu par le DSI. Mis à jour le 15/11/2026. Probabilité et impact sont notés
+Tenu par le DSI. Mis à jour le 19/11/2026. Probabilité et impact sont notés
 faible, moyen ou fort : ce sont des jugements, pas des mesures. Un risque se
 ferme quand sa mitigation est en place et vérifiée.
 
@@ -32,6 +32,8 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-22 | Jour 2 dépendant d'un seul outil communautaire | Faible | Fort | ARCHI | Ouvert |
 | R-23 | Failles du modèle de confiance de Copier | Forte | Fort | SECU | Ouvert |
 | R-24 | Outils du générateur portés par une personne ou un éditeur | Faible | Moyen | ARCHI, DEV | Ouvert |
+| R-25 | Démarrage local tributaire des registres publics | Moyenne | Moyen, fort pour la CI de la matrice | OPS, SECU | Ouvert |
+| R-26 | Moteur de conteneurs du poste sous licence payante | Moyenne | Moyen | OPS, FINOPS | Ouvert |
 
 ## Détail
 
@@ -120,12 +122,27 @@ la phase 5 restent à faire.
 ### R-04. Critère des 15 minutes hors d'atteinte
 
 Le parcours complet compte l'entretien, la génération, le téléchargement des
-images de conteneurs, la création du cluster k3d et la compilation .NET et
-Node. Rien n'est encore mesuré.
+images de conteneurs, la création du cluster local, la compilation .NET et
+Node, et la CI du premier push.
 
-Mitigation : mesurer dès la phase 1 (BENCH-003 et BENCH-005), avec des scripts
-dans `tests/bench/`. Pistes à évaluer : images préconstruites, cache local
-d'images, profil lite par défaut.
+BENCH-003 a mesuré le cluster seul le 2026-11-19, sur un seul poste (Apple M4
+Pro, OrbStack, arm64). La création à froid prend 73,7 s avec kind, 81,0 s avec
+k3d et 145,5 s avec minikube, soit 8 à 16 % du budget. La première création
+télécharge 352 Mo avec kind, 853 Mo avec minikube et au plus 357 Mo avec k3d,
+en volume compressé. À 10 Mbit/s utiles, une hypothèse et non une mesure, ce
+téléchargement seul consomme 31 % du budget avec kind et 76 % avec minikube.
+k3d et minikube retéléchargent aussi des images à chaque création, même avec
+le cache plein : `task up` dépend alors du réseau et de la limite de Docker
+Hub (R-25). La probabilité passe à forte si l'outil retenu télécharge plus de
+500 Mo à la première création.
+
+Reste à mesurer en BENCH-005 : les images et la compilation de la stack, et la
+création du cluster sur un runner GitHub amd64.
+
+Mitigation : fixer après BENCH-005 un budget de temps par étape d'ENF-01, avec
+un plafond de volume pour le cluster ; précharger les images tirées à chaque
+création ; préconstruire les images de la stack ; profil lite par défaut ; un
+essai de phase 6 sur une ligne lente.
 
 ### R-05. Dépense GCP non maîtrisée
 
@@ -369,13 +386,31 @@ Keycloak, OpenBao en mode dev, Postgres et Grafana démarrent avec un mot de
 passe connu ou sans mot de passe. Pour tenir `task up` en une commande, la
 tentation sera de les écrire dans le dépôt, contre le principe IX, et gitleaks
 ne détecte pas un mot de passe sans entropie comme `admin`. Ils partiraient
-dans chaque projet généré, avec un réemploi possible sur GCP. Les ports publiés
-par k3d et Docker écoutent peut-être sur toutes les interfaces (à vérifier).
+dans chaque projet généré, avec un réemploi possible sur GCP.
+
+Mesuré par BENCH-003 le 2026-11-19 (macOS, OrbStack) : un port publié sans
+adresse écoute sur toutes les interfaces (0.0.0.0 et `[::]`) avec k3d, kind et
+minikube, comme tout `docker run -p`, dont c'est le défaut documenté. k3d
+publie en plus par défaut l'API Kubernetes et son registre sur 0.0.0.0, et ce
+registre accepte un `docker push` sans authentification : une machine du même
+réseau peut y déposer une image que le cluster exécutera. kind et minikube
+publient l'API sur 127.0.0.1 ; minikube y ajoute SSH, le démon Docker du nœud
+(2376), son registre et le port 32443, tous en boucle locale. Sous Linux, un
+port publié par Docker passe avant les règles d'ufw. Un service publié sur
+toutes les interfaces avec un identifiant par défaut s'ouvre à tout le réseau
+local du poste.
 
 Mitigation : `task up` génère des secrets aléatoires au premier lancement, dans
-un `.env` ignoré par Git. Les ports se lient à `127.0.0.1`. Un test de la
-matrice et une politique conftest échouent si un identifiant par défaut atteint
-la cible GCP.
+un `.env` ignoré par Git. Un test de la matrice et une politique conftest
+échouent si un identifiant par défaut atteint la cible GCP. Le blueprint fixe
+127.0.0.1 sur l'API et sur chaque port publié (`listenAddress` pour kind,
+`--ports=127.0.0.1:…` pour minikube, `--api-port 127.0.0.1:…` et
+`-p 127.0.0.1:…` pour k3d ; pour le registre de k3d, `NOM:127.0.0.1:PORT`,
+documenté mais non essayé). Un test de la matrice relève les ports en écoute
+après `task up` et échoue sur toute adresse 0.0.0.0, `[::]` ou `*`. Si
+minikube est retenu, `task up` met `$MINIKUBE_HOME` en 700 : minikube 1.39.0
+y recopie à chaque démarrage la clé client du démon Docker du nœud en mode
+0777.
 
 ### R-21. Application Design Center couvre le même besoin sur GCP
 
@@ -449,3 +484,39 @@ et uv fournit aussi l'interpréteur Python.
 Mitigation : un validateur remplaçable, puisque JSON Schema est une norme ;
 une vérification datée du 2027-01-07 ; aucune dépendance de la CLI à uv ; une
 voie d'installation par pipx, avec un Python hors uv, documentée.
+
+### R-25. Démarrage local tributaire des registres publics
+
+Mesuré par BENCH-003 le 2026-11-19 : même avec un cache Docker plein, k3s
+retélécharge 7 images système à chaque création d'un cluster k3d, et minikube
+1.39.0 l'image de son CNI, `kindest/kindnetd`, depuis Docker Hub. kind n'en
+tire aucune. Ces images sont désignées par tag, sans condensat : leur contenu
+est celui que le registre sert ce jour-là, et kindnetd tourne sur le réseau de
+l'hôte avec `NET_ADMIN`. Docker Hub limite les tirages anonymes à 100 par
+adresse IPv4 ou sous-réseau IPv6 /64 sur 6 heures
+(<https://docs.docker.com/docker-hub/usage/pulls/>, lu le 2026-11-19).
+Plusieurs postes derrière une même adresse, ou la CI de la matrice qui crée un
+cluster par combinaison, peuvent atteindre la limite : `task up` échoue ou
+dépasse les 15 minutes (R-04). Les images du blueprint ajoutent leurs propres
+tirages au premier lancement.
+
+Mitigation : retenir un outil qui ne tire rien à la création, ou précharger ce
+qu'il tire ; images du cluster et du blueprint figées par condensat ; un test
+de la matrice qui relance `task up` hors réseau après un premier lancement ; un
+cache d'images dans la CI, et les tirages authentifiés documentés comme option.
+
+### R-26. Moteur de conteneurs du poste sous licence payante
+
+Les trois outils de cluster local mesurés par BENCH-003 tournent sur un moteur
+de conteneurs que le projet généré ne fournit pas. Docker Desktop n'est
+gratuit que pour les entreprises de moins de 250 salariés et de moins de
+10 millions de dollars de chiffre d'affaires, pour l'usage personnel,
+l'éducation et l'open source non commercial
+(<https://docs.docker.com/subscription/desktop-license/>, lu le 2026-11-19).
+OrbStack, qui a servi aux mesures, n'est pas libre. Un prérequis payant sur le
+PC contredirait le principe III. kind et minikube documentent Podman, alors
+que k3d exige Docker (BENCH-003, sources S4, S17 et S27).
+
+Mitigation : [OPS] évalue avec Q5 un moteur libre pour chaque système visé, et
+le README du projet généré le cite en premier. La matrice de validation tourne
+sur au moins un moteur libre.

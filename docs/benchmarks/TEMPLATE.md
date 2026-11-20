@@ -21,7 +21,7 @@ Retirer tous les commentaires avant de passer le statut à « relu ».
 | Mis à jour le | AAAA-MM-JJ |
 | Auteur | [BENCH] |
 | Relecteurs | [SECU] pour les licences et les CVE, [FINOPS] pour les coûts |
-| Périmètre | Générateur, projet généré sur PC (k3d), projet généré sur GCP |
+| Périmètre | Générateur, projet généré sur PC (cluster local), projet généré sur GCP |
 | Choix du PRD | Ligne du tableau des choix ouverts de `docs/prd-mvp.md` |
 | ADR lié | [ADR-XXX](../adr/ADR-XXX-sujet.md), écrit par [ARCHI] |
 | Verdict proposé | Option retenue et total sur 100, rempli en dernier |
@@ -266,6 +266,20 @@ sécurité du projet, base de CVE, avis du projet.
 <!--
 RAM au repos, CPU, temps de démarrage sur le PC (ENF-02). Preuve : la médiane
 des mesures de la section 4.
+
+Règle de notation, validée par Lucas le 2026-11-19 (BENCH-003) : des seuils
+absolus, jamais un écart à la meilleure option. Chaque seuil est une valeur
+ronde tirée du PRD (budget de 900 s d'ENF-01, portable de 8 Gio) ou d'un débit
+bas pris comme hypothèse (10 Mbit/s). Les seuils s'écrivent dans la section
+4.1 avant la première mesure, avec leur origine. Chaque option part de 5 et
+perd un cran par seuil dépassé. Une option à moins de 10 % d'un seuil voit
+ses deux notes possibles écrites dans la sensibilité de la section 7.
+
+Seuils de BENCH-003, à reprendre ou à adapter au sujet, en disant pourquoi :
+volume compressé à télécharger au premier lancement au-delà de 500 Mo (400 s
+à 10 Mbit/s) ; au moins une image retéléchargée à chaque lancement, cache
+plein ; démarrage à chaud au-delà de 90 s (10 % du budget) ; mémoire au repos
+au-delà de 1 Gio (un huitième d'un portable de 8 Gio).
 -->
 
 | Option | Note | Points | Justification | Sources |
