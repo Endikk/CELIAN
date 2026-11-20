@@ -1,0 +1,41 @@
+# Mailpit v1.34.0, image pinned by its index digest (read on 2026-11-20).
+# Credentials come from the Secret mail-ui-auth created by the script, through
+# MP_UI_AUTH, which Mailpit refuses as a command-line flag. The version check
+# against GitHub is turned off (R-25).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mail
+  labels: {app: mail}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: mail}
+  template:
+    metadata:
+      labels: {app: mail}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: mail
+          image: axllent/mailpit:v1.34.0@sha256:23a2ef85bc50853ab3093645d1d64679afd8887e89da5e48a88940c172591a4e
+          env:
+            - name: MP_DISABLE_VERSION_CHECK
+              value: "true"
+            - name: MP_UI_AUTH
+              valueFrom:
+                secretKeyRef: {name: mail-ui-auth, key: mp-ui-auth}
+          ports:
+            - {name: smtp, containerPort: 1025}
+            - {name: http, containerPort: 8025}
+          readinessProbe:
+            httpGet: {path: /readyz, port: http}
+            periodSeconds: 1
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}

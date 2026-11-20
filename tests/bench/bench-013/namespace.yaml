@@ -1,0 +1,12 @@
+# BENCH-013: namespace of every run. The API server enforces the Restricted
+# Pod Security Standard on it, at the policy of the node's minor (ADR-004),
+# so a pod that breaks the profile is refused at admission.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mail-test
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/enforce-version: v1.36
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: v1.36

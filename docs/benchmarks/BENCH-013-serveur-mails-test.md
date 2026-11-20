@@ -83,6 +83,14 @@ est une hypothèse de [BENCH], tirée de l'usage que vise le brief (« Mail de
 dev », section 6) : sans elle, une option portée par une fondation entrerait
 dans la liste (section 2).
 
+[BENCH] Décisions du DSI du 2026-11-20, que Lucas peut renverser. Un :
+l'interface web est requise, parce que le développeur lit dans son navigateur
+les mails de confirmation et de réinitialisation qu'envoie le fournisseur
+d'identité, et que Lucas a nommé Mailpit dans le profil standard. Deux :
+Mailpit se mesure en v1.34.0, sous l'exception de sécurité du principe VI
+(section 2). Trois : la parité sur GCP revient à [ARCHI] dans l'ADR-014. Quatre :
+l'écart au principe V se justifie dans l'ADR-014 (section 7).
+
 ## 2. Options étudiées
 
 <!--
@@ -109,11 +117,20 @@ maildev (6 163) et smtp4dev (4 032) [S1], [S22], [S33]. Le nombre d'étoiles
 est un indicateur faible, gardé parce qu'il est daté et vérifiable ; il sert
 à la sélection et n'entre dans aucune note.
 
+[BENCH] Règle d'interface, décidée par le DSI le 2026-11-20 et que Lucas
+peut renverser (section 1) : une option sans interface web de lecture des
+mails n'est pas retenue. Elle écarte le serveur d'Apache James (liste
+ci-dessous) avant les critères éliminatoires.
+
 [BENCH] Versions. Mailpit v1.34.0 a trois jours à la date de lecture, et le
 principe VI fait attendre 7 jours aux mises à jour : le blueprint pourrait la
 figer à partir du 2026-11-24. Elle corrige toutefois l'avis
-GHSA-v887-64wg-qqc9 [S21], si bien que l'exception de sécurité de la
-constitution 1.2.0 s'applique dès que sa PR passe la matrice. maildev 3.0.0
+GHSA-v887-64wg-qqc9, moyen, CVSS 6.5 : un message SMTP forgé, envoyé sans
+authentification, fait tomber le serveur SMTP de Mailpit. L'avis est publié
+le 2026-11-17 avec la version qui le corrige [S4], [S21]. Le DSI a donc
+décidé le 2026-11-20 de mesurer la v1.34.0 sous l'exception de sécurité du
+principe VI (constitution 1.2.0) ; dans le blueprint, la même exception vaut
+dès que sa PR passe la matrice. maildev 3.0.0
 est une « Complete project re-build » [S23] ; la ligne précédente, 2.2.1 du
 2024-12-12, a plus de douze mois. smtp4dev publie des préversions
 d'intégration continue presque chaque jour : la version examinée est la
@@ -138,8 +155,8 @@ dernière qui n'en est pas une [S34].
   comportement du serveur et liste les mails reçus, sans interface de
   lecture. Son image se construit depuis les sources avec Jib, et l'exemple
   du README lance `linagora/mock-smtp-server`, image d'une entreprise. Écarté
-  faute d'interface : si Lucas juge l'interface inutile au profil standard,
-  il redevient candidat, et le principe V pèse pour lui (question ouverte).
+  par la règle d'interface du DSI : si Lucas la renverse, il redevient
+  candidat, et le principe V pèse pour lui.
 
 ### Parité sur GCP
 
@@ -165,14 +182,15 @@ dernière qui n'en est pas une [S34].
    BENCH-012.
 
 [BENCH] Ce que ces faits impliquent pour l'ADR-014, sans préférence de
-[BENCH]. Aucun service managé de Google ne joue le rôle d'un serveur de test :
+[BENCH] : le DSI a confié la question à [ARCHI] le 2026-11-20, et ce rapport
+ne la tranche pas. Aucun service managé de Google ne joue le rôle d'un serveur de test :
 lu comme le fait l'ADR-009, le principe III ne désigne aucun candidat
 `managed` sur `gcp`. Or le schéma du catalogue exige une entrée `gcp` de type
 `managed`, ou `oss` avec un `managed_gap` (`schema/catalog-entry.schema.json`,
 `catalog/README.md`). Il n'a pas de type pour un fournisseur tiers comme
 SendGrid, ni de moyen d'écrire « pas d'équivalent sur cette cible », et sa
-liste `standards` ne contient pas SMTP. Trois voies restent ouvertes, à
-[ARCHI] de choisir :
+liste `standards` ne contient pas SMTP : c'est un point pour [ARCHI], quelle
+que soit la voie. Trois voies restent ouvertes, à [ARCHI] de choisir :
 
 - rien sur `gcp` : l'application lit l'hôte SMTP dans sa configuration, et
   le README généré liste l'écart (ENF-02). Le schéma doit alors accepter
@@ -296,48 +314,58 @@ par option et par mesure. Dire si les images sont déjà en cache : le temps de
 démarrage en dépend.
 -->
 
-[BENCH] Protocole écrit le 2026-11-20 pendant la phase de lecture. Le script
-n'existe pas encore ; il s'écrira avant la série, qui attend BENCH-010 et
-BENCH-011. Il reproduit les gestes de `task up` : aucun outil de boucle
-(ADR-006), Secrets créés par tube avant l'application des manifests
-(ADR-007), images et manifests figés par condensat (conditions 3 et 4 de
-l'ADR-004).
+[BENCH] Protocole écrit le 2026-11-20 pendant la phase de lecture, puis
+précisé le 2026-11-21 avec le script, avant toute mesure et avant tout test
+de fumée. Le script `tests/bench/bench-013-test-mail.sh` et ses manifests,
+sous `tests/bench/bench-013/`, reproduisent les gestes de `task up` : aucun
+outil de boucle (ADR-006), Secret créé par tube avant l'application des
+manifests (ADR-007), images et manifests figés par condensat (conditions 3 et
+4 de l'ADR-004). Le script s'ouvre sur l'inventaire des commandes qui créent,
+modifient ou suppriment un conteneur ou un réseau (règle [SECU] du
+2026-11-20) : `kind create cluster` et `kind delete cluster`, rien d'autre
+sur le moteur. Il n'emploie ni `docker run`, `start`, `restart`, `exec` ou
+`cp`, ni `kubectl exec`, ni curl, wget, python, node ou perl.
 
-1. Préparation, une fois par série. Le script fige chaque image par son
-   condensat d'index, relevé dans le registre à l'écriture du script :
-   `axllent/mailpit:v1.34.0`, `maildev/maildev:3.0.0`,
-   `rnwood/smtp4dev:3.16.1`, et `busybox:1.37.0` pour le client SMTP, comme
-   dans BENCH-009. Aucun des trois projets ne publie de manifest Kubernetes
-   ni de chart dans les pages lues [S9], [S29], [S40] : les manifests de
-   chaque option (un Deployment, un Service, un fichier `kustomization.yaml`,
-   aucun Secret) sont écrits par [BENCH] et versionnés sous
-   `tests/bench/bench-013/`. Le script vérifie le SHA-256 de chaque fichier
-   contre la valeur qu'il fige, et s'arrête si une image reste sans
-   condensat. Il relève dans le registre les tailles compressées par
-   architecture, sans rien tirer (M4).
-2. Configuration commune, même intention pour les trois options : SMTP et
-   HTTP sur des ports non privilégiés, aucune persistance hors du pod, aucun
-   relais, aucun port publié vers l'hôte. Chaque conteneur suit le profil
-   « Restricted » des Pod Security Standards : `allowPrivilegeEscalation:
-   false`, `runAsNonRoot: true`, `runAsUser` non nul, profil seccomp
-   `RuntimeDefault`, capacités `ALL` retirées [S61]. Les Dockerfile de
-   Mailpit et de smtp4dev ne déclarent pas d'utilisateur [S7], [S37] : le
-   manifest fixe `runAsUser`. smtp4dev écoute par défaut sur les ports 80 et
-   25 [S37], [S38] : le manifest les déplace par variables d'environnement.
-   Mailpit reçoit `MP_DISABLE_VERSION_CHECK=true`, sans quoi il interroge
-   GitHub [S11] (R-25). Une option qui ne démarre pas sous ce profil est
-   consignée, et l'écart se note en sécurité.
+1. Contrôles, une fois par série. Le script vérifie le SHA-256 de chacun des
+   14 fichiers de `tests/bench/bench-013/` contre la valeur qu'il fige, et
+   s'arrête si un fichier n'est pas figé ou si une image n'a pas de
+   condensat. Aucun des trois projets ne publie de manifest Kubernetes ni de
+   chart dans les pages lues [S9], [S29], [S40] : ces manifests sont écrits
+   par [BENCH]. Les images sont désignées par leur condensat d'index, relevé
+   le 2026-11-20 dans l'API de Docker Hub : `axllent/mailpit:v1.34.0`,
+   `maildev/maildev:3.0.0`, `rnwood/smtp4dev:3.16.1`, et `busybox:1.37.0`,
+   celle de BENCH-009, pour la sonde. Sous le verrou, avant la première
+   exécution, `docker manifest inspect` vérifie dans le registre, sans rien
+   tirer, que l'index figé et le tag pointent sur les mêmes manifests amd64
+   et arm64 que ceux relevés, puis relève les tailles compressées par
+   architecture (M4).
+2. Profil « Restricted ». Le namespace `mail-test` porte les étiquettes
+   `pod-security.kubernetes.io/enforce: restricted` et `warn: restricted`, à
+   la version v1.36 du nœud [S61], [S64] : le serveur d'API refuse tout pod
+   qui sort du profil. Chaque conteneur porte `allowPrivilegeEscalation:
+   false`, `runAsNonRoot: true`, `runAsUser: 65534`, le profil seccomp
+   `RuntimeDefault` et les capacités `ALL` retirées. Le même utilisateur
+   numérique sert aux trois options : Mailpit et smtp4dev n'en déclarent pas
+   [S7], [S37], et maildev déclare `node`, un nom que le kubelet ne peut pas
+   confronter à `runAsNonRoot`. Configuration propre à chaque option, sur sa
+   voie documentée : Mailpit reçoit `MP_DISABLE_VERSION_CHECK=true`, sans
+   quoi il interroge GitHub [S11] (R-25) ; smtp4dev passe ses ports SMTP,
+   HTTP, IMAP et POP3 au-dessus de 1024, verrouille ses réglages
+   (`LockSettings`), écrit ses données dans un `emptyDir` et prend `HOME=/tmp`
+   [S37], [S38]. Aucun port n'est publié vers l'hôte, aucun relais n'est
+   configuré, aucune demande de ressources n'est posée.
 3. État de départ de chaque exécution : aucun cluster `celian-bench-013`. Le
    script crée un cluster kind neuf avec l'image de nœud de l'ADR-004,
    kubeconfig dans le dossier d'essai, et attend qu'il soit prêt. Les images
    des options ne sont pas préchargées : le nœud les tire à chaque
    exécution, comme au premier `task up` d'un poste.
-4. Secret (M8) : le script tire un mot de passe de 32 caractères de
-   `/dev/urandom` et crée le Secret par `printf` dans un tube vers
-   `kubectl create -f -`, sans écho de commande, avant d'appliquer les
-   manifests (condition 1 de l'ADR-007). Chaque option le lit par sa voie
-   documentée, en variable d'environnement tirée du Secret, jamais en
-   argument : `MP_UI_AUTH` pour Mailpit [S12],
+4. Secret (M8) : 32 caractères tirés de `/dev/urandom` par `tr` et `head`,
+   mis en forme par `awk` et passés par un tube à `kubectl create -f -`
+   (condition 1 de l'ADR-007). La valeur ne passe ni par une variable, ni par
+   un fichier, ni par un argument, et n'entre jamais dans le dossier d'essai :
+   le script n'en relève que la longueur et l'absence d'annotation
+   `last-applied-configuration`. Chaque option la lit en variable
+   d'environnement tirée du Secret : `MP_UI_AUTH` pour Mailpit [S12],
    `ServerOptions__WebAuthenticationRequired`,
    `ServerOptions__Users__0__Username` et
    `ServerOptions__Users__0__Password` pour smtp4dev [S38], [S39],
@@ -345,45 +373,57 @@ l'ADR-004).
 5. Installation (M1) : `kubectl apply -k` du dossier vérifié de l'option.
    Fin de la mesure : le premier de trois contrôles consécutifs, espacés
    d'une seconde, où le Deployment est prêt et le pod Running et Ready. La
-   sonde de disponibilité vise `/readyz` pour Mailpit, route servie hors de
-   l'authentification [S15], `/api/healthz` pour maildev [S30], et le port
-   HTTP en TCP pour smtp4dev, faute de route de santé dans les pages lues.
-6. Envoi (M5) : un Job busybox envoie un mail au sujet propre à l'exécution
-   par `sendmail -S <service>:<port> -f <expéditeur>` [S60]. Dès que le Job
-   est vu terminé, le script interroge l'API de l'option avec l'identifiant
-   (`/api/v1/messages` pour Mailpit [S14], `/api/email` pour maildev [S30],
-   `/api/messages` pour smtp4dev [S42]) jusqu'à y lire ce sujet. La présence
-   de l'applet `sendmail` dans l'image busybox se vérifie au premier test de
-   fumée.
-7. Contrôles d'accès (M8), depuis un pod du cluster : la même requête sans
-   identifiant doit être refusée, et avec l'identifiant acceptée. Un contrôle
-   statique échoue si un manifest porte la valeur dans `command` ou `args`.
-   Une commande lancée dans le conteneur vérifie que `/proc/1/cmdline` ne
-   contient pas la valeur, lue dans sa propre variable d'environnement : la
-   valeur ne sort jamais du pod et n'est jamais affichée.
-8. Repos (M2, M3) : 120 s après M5, trois échantillons espacés de 10 s de
-   l'API Summary du kubelet (mémoire de travail et CPU du pod de l'option),
+   sonde de disponibilité vise `/readyz` pour Mailpit [S15] et `/api/healthz`
+   pour maildev [S30], deux routes servies hors de l'authentification, et le
+   port HTTP en TCP pour smtp4dev, faute de route de santé dans les pages
+   lues. Une option qui ne devient pas prête en 300 s est consignée avec la
+   raison (événements, journal du pod), et ses exécutions suivantes sont
+   sautées : c'est le relevé du démarrage sous le profil « Restricted » que
+   demande le DSI.
+6. Sonde (M5, M8), un Job busybox lancé dans le namespace, sous le même
+   profil, avec l'identifiant en variables d'environnement tirées du Secret.
+   Elle interroge d'abord l'API de l'option sans identifiant, puis avec, et
+   relève les deux codes HTTP. Elle envoie ensuite un mail au sujet propre à
+   l'exécution par `sendmail -S <service>:<port>` [S60], et relit l'API
+   jusqu'à y trouver ce sujet : `/api/v1/messages` pour Mailpit [S14],
+   `/api/email` pour maildev [S30], `/api/messages` pour smtp4dev [S42]. Les
+   requêtes HTTP partent de `nc`, faute de curl et de wget. M5 se chronomètre
+   dans le pod, sur `/proc/uptime`, de l'envoi à la lecture. La sonde n'écrit
+   que des paires clé et valeur : jamais d'identifiant, jamais de corps de
+   réponse.
+7. Contrôle statique (M8) sur le pod vivant : aucune `command` ni `args`
+   dans la spécification, donc la ligne de commande est le point d'entrée de
+   l'image, sans valeur secrète ; le Secret n'arrive que par `secretKeyRef`.
+   Ce contrôle remplace la lecture de `/proc/1/cmdline` prévue le
+   2026-11-20, qui aurait demandé d'entrer dans le conteneur.
+8. Repos (M2, M3) : 120 s après la sonde, trois échantillons espacés de 10 s
+   de l'API Summary du kubelet (mémoire de travail et CPU du pod de l'option),
    et du conteneur du nœud par `docker stats` au même moment ; médiane des
    trois. La mémoire de la couche est celle du nœud moins celle du nœud de
    base (M7), en médianes (troisième règle de la GATE 1).
-9. Architecture (M6) : le script relève l'architecture du nœud et le
-   condensat de plate-forme que le nœud a tiré, et vérifie qu'il s'agit de
-   l'entrée arm64 de l'index, sans émulation.
+9. Architecture (M6) : le script relève l'architecture du nœud et les
+   entrées de l'index de chaque image (étape 1). Un nœud arm64 qui démarre
+   l'option alors que l'index publie une entrée arm64 la tire en natif ;
+   containerd ne se rabat pas sur une autre architecture.
 10. Fin : suppression du cluster, 15 s de pause. Trois exécutions par option,
     options alternées (Mailpit, maildev, smtp4dev, puis on recommence) pour
     répartir les variations du réseau et de la charge. Les événements
     `Pulled` du nœud donnent les images tirées (M4).
 11. Nœud de base (M7), série de référence à part : l'option `none` suit les
-    mêmes étapes, Secret compris, sans serveur de mails ni Job d'envoi, trois
-    exécutions.
+    mêmes étapes, namespace, Secret et Job de sonde compris, sans serveur de
+    mails ; la sonde s'arrête aussitôt. Trois exécutions.
 
-[BENCH] Le script prendra le verrou de mesure partagé (`BENCH_LOCK`) et
-refusera de démarrer s'il est pris ou si le cluster existe déjà, comme celui
-de BENCH-009. Il passera shellcheck, tournera sous le bash 3.2 de macOS, en
-`umask 077`, avec `KUBECONFIG` dans le dossier d'essai : `~/.kube` n'est ni
-lu ni écrit.
+[BENCH] Le script ne lance aucune commande docker, kind ou kubectl avant
+d'avoir pris le verrou de mesure partagé (`BENCH_LOCK`), qu'il crée par
+`mkdir` et dont il ne retire que son propre fichier `owner`. Il refuse de
+démarrer si le verrou est pris (code 75) ou si le cluster existe déjà. Il
+passe shellcheck, tourne sous le bash 3.2 de macOS, en `umask 077`, avec
+`KUBECONFIG` dans le dossier d'essai : `~/.kube` n'est ni lu ni écrit. L'heure
+à la milliseconde vient de `zsh`, faute de perl et de python. Un test de
+fumée (une exécution par option, repos de 30 s) précède la série ; il ne peut
+rien changer aux seuils, figés et hachés depuis le 2026-11-20.
 
-Pour refaire la mesure, une fois le script écrit :
+Pour refaire la mesure :
 
 ```bash
 BENCH_LOCK=/chemin/vers/un/verrou tests/bench/bench-013-test-mail.sh /chemin/vers/un/dossier/vide
@@ -700,7 +740,7 @@ limites propres aux mesures s'ajouteront avec la série.
 | Une seule machine de mesure, différente du PC de référence de la phase 6 (pas encore défini, ENF-02) | Empreinte propre à ce matériel, sous un moteur non libre (R-26) | Relancer le script sur une deuxième machine, dont un poste linux amd64 |
 | Option pressentie par le PRD et par le brief | Mailpit part avec l'attention du brief | Même règle de sélection écrite avant les notes, mêmes sources, même script pour les trois |
 | Sélection des options par le nombre d'étoiles GitHub | Inbucket ou MailCrab pourraient valoir mieux qu'une des options retenues | Les ajouter à la série de mesure si le DSI le demande |
-| Interface web supposée nécessaire (section 1) | Écarte le seul candidat porté par une fondation | Décision du DSI ou de Lucas |
+| Interface web requise, par décision du DSI du 2026-11-20 (section 1) | Écarte le seul candidat porté par une fondation | Lucas confirme ou renverse la décision |
 | Notes de sécurité et d'expérience dev posées avant l'essai | Un cran par option, dans un sens ou dans l'autre | Essai de la section 4 et relecture [SECU] |
 | Absence d'avis prise comme un fait pour maildev 3.x et smtp4dev | Une faille non publiée ne se voit pas | Scanner les images figées (Trivy, ENF-03) au premier essai |
 | Adoption de Mailpit lue chez des tiers (Laravel, DDEV) et par les tirages de Docker Hub | Maturité surévaluée si ces projets changent d'outil ; les tirages comptent aussi la CI | Revoir à la prochaine vérification |
@@ -785,6 +825,7 @@ pages web sont lues par WebFetch le même jour.
 | S61 | <https://kubernetes.io/docs/concepts/security/pod-security-standards/> | 2026-11-20 | Profil « Restricted » : `allowPrivilegeEscalation` à `false`, `runAsNonRoot` à `true`, `runAsUser` non nul, seccomp `RuntimeDefault` ou `Localhost`, capacités `ALL` retirées | Oui |
 | S62 | <https://github.com/axllent/mailpit/tree/develop/.github/workflows> | 2026-11-20 | Actions figées par SHA ; images construites pour linux/386, amd64 et arm64 ; aucune signature ni attestation trouvée | Oui |
 | S63 | <https://github.com/maildev/maildev/tree/main/.github/workflows> | 2026-11-20 | Deux workflows (`ci.yml`, `draft-release.yml`) ; aucune signature ni attestation trouvée | Oui |
+| S64 | <https://kubernetes.io/docs/concepts/security/pod-security-admission/> | 2026-11-21 | Étiquettes de namespace `pod-security.kubernetes.io/<MODE>: <LEVEL>` et `<MODE>-version: <VERSION>`, modes `enforce`, `audit`, `warn` | Oui |
 
 ## 10. Relectures
 

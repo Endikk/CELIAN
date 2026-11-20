@@ -1,0 +1,12 @@
+# Base node (M7): no mail server. The probe Job still runs, pulls the same
+# busybox image and exits at once, so that the base node goes through the
+# same steps as the options.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mail-test
+configMapGenerator:
+  - name: probe-target
+    literals:
+      - MODE=none
+generatorOptions:
+  disableNameSuffixHash: true

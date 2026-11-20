@@ -1,0 +1,58 @@
+# smtp4dev 3.16.1, image pinned by its index digest (read on 2026-11-20).
+# Its defaults listen on 80, 25, 143 and 110 as root: the ports move above
+# 1024 so that it can run under the Restricted profile. Web and API basic
+# authentication come from the Secret mail-ui-auth created by the script.
+# LockSettings keeps the settings from being changed in the web interface.
+# The data directory /smtp4dev is an emptyDir, writable by any user; HOME
+# points to /tmp for the .NET runtime.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mail
+  labels: {app: mail}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: mail}
+  template:
+    metadata:
+      labels: {app: mail}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: mail
+          image: rnwood/smtp4dev:3.16.1@sha256:211a60c1a4f51ff7ace4a35de055797348994b0e84ab36734991235f90f9ac75
+          env:
+            - {name: HOME, value: /tmp}
+            - {name: ASPNETCORE_HTTP_PORTS, value: "5000"}
+            - {name: ServerOptions__Urls, value: "http://*:5000"}
+            - {name: ServerOptions__Port, value: "2525"}
+            - {name: ServerOptions__ImapPort, value: "1143"}
+            - {name: ServerOptions__Pop3Port, value: "1110"}
+            - {name: ServerOptions__LockSettings, value: "true"}
+            - {name: ServerOptions__WebAuthenticationRequired, value: "true"}
+            - name: ServerOptions__Users__0__Username
+              valueFrom:
+                secretKeyRef: {name: mail-ui-auth, key: username}
+            - name: ServerOptions__Users__0__Password
+              valueFrom:
+                secretKeyRef: {name: mail-ui-auth, key: password}
+          ports:
+            - {name: smtp, containerPort: 2525}
+            - {name: http, containerPort: 5000}
+          readinessProbe:
+            tcpSocket: {port: http}
+            periodSeconds: 1
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}
+          volumeMounts:
+            - {name: data, mountPath: /smtp4dev}
+      volumes:
+        - name: data
+          emptyDir: {}
