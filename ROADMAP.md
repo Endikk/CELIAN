@@ -1,12 +1,33 @@
 # Feuille de route
 
-Mise à jour le 20/11/2026, après la GATE 1. Le DSI tient ce fichier à
-jour à la fin de chaque session.
+Mise à jour le 20/11/2026, au lancement de la phase 2. Le DSI tient ce fichier
+à jour à la fin de chaque session.
 
-## Phase en cours : 1 terminée, 2 à lancer
+## Phase en cours : 2, golden repo SaaS B2B
 
-Les étapes 1 à 6 sont faites et la GATE 1 est passée le 20/11/2026. La phase 2
-commence après la validation de son plan par Lucas.
+La phase 1 est terminée : la GATE 1 est passée le 20/11/2026. Lucas a validé
+le même jour le plan court de la phase 2 : un golden repo SaaS B2B construit à
+la main dans `golden/saas-b2b/`, spécifié par Spec Kit
+(`specs/001-golden-repo-saas-b2b`).
+
+### Plan de la phase 2
+
+1. Spec Kit : `/speckit-specify` (spec 001, PR #29), puis `/speckit-plan` et
+   `/speckit-tasks`, une fois BENCH-010 et BENCH-011 rendus.
+2. Prérequis : BENCH-010 (démarrage hors réseau), BENCH-011 (Postgres local),
+   BENCH-012 (Keycloak) et BENCH-013 (Mailpit), la configuration de Renovate,
+   les versions relues et datées.
+3. Squelette : couches commune, `local` et `gcp`, Taskfile, kind, conventions
+   Git.
+4. Application d'exemple : API .NET et front React.
+5. Cible PC : Envoy Gateway, Secrets créés par `task up`, Postgres, Valkey,
+   profils lite et standard.
+6. Cible GCP : OpenTofu écrit à la main, `tofu validate`, conftest et Trivy,
+   sans `plan` ni `apply`.
+7. Tests et CI.
+
+Gate de la phase : une démo de `task up` sur un poste propre, en profil
+standard, avec le temps et le volume mesurés (R-04).
 
 ### Fait
 
@@ -45,6 +66,10 @@ commence après la validation de son plan par Lucas.
   le format du catalogue et la lecture des principes III et V (PR #15).
 - Risques : R-27 à R-33 ouverts ; R-04 et R-25 passés en probabilité forte ;
   R-15, R-17, R-19, R-20 et R-25 complétés par les mesures.
+- GATE 1 passée le 20/11/2026, PR #23 à #28 fusionnées : release-please
+  démarré à 0.1.0, principe VI amendé (constitution 1.2.0), règles de notation
+  dans le gabarit de benchmark, PRD aligné, ADR-001 à ADR-010 acceptés,
+  entrées `gateway`, `secrets` et `gitops` du catalogue.
 
 ### Décisions de Lucas
 
@@ -72,6 +97,14 @@ commence après la validation de son plan par Lucas.
   avant la GATE 2. Il confirme les quatre décisions du DSI ci-dessous, et
   délègue au DSI l'acceptation des ADR : les ADR-001 à ADR-010 passent au
   statut accepté.
+- 20/11/2026, lancement de la phase 2 : Lucas valide le plan court du golden
+  repo. Postgres local passe d'abord par un benchmark (BENCH-011), avant
+  l'écriture de la couche locale. Aucun déploiement réel sur GCP pendant la
+  phase 2. Le critère des 15 minutes se mesure en profil standard, et non en
+  profil lite. Le profil standard est le profil lite plus Flux, Keycloak et
+  Mailpit ; Keycloak et Mailpit passent chacun par un benchmark avant d'entrer
+  dans le golden repo (BENCH-012, BENCH-013). Ces décisions sont reportées dans
+  le PRD (US-005, ENF-01, ENF-05, section 7).
 
 ### Décisions du DSI pendant l'absence de Lucas, confirmées à la GATE 1
 
@@ -91,25 +124,34 @@ commence après la validation de son plan par Lucas.
 
 ### Prochain
 
-La GATE 1 est passée. Avant la phase 2 :
-
-1. Les PR de la GATE 1 sont fusionnées : amendement du principe VI (#24),
-   règles de notation dans le gabarit (#25), PRD aligné (#26). Reste à
-   fusionner #28, les entrées du catalogue issues des ADR : `gateway`,
-   `secrets`, `gitops`, et le mode Autopilot sur la ligne `gcp` de
-   `kubernetes-cluster`.
+1. La spec 001 du golden repo est fusionnée (#29). Cette mise à jour du PRD
+   et de la feuille de route suit, puis la PR Renovate, fusionnées par Lucas
+   une à la fois.
 2. BENCH-010, en cours par [OPS] : faire démarrer `task up` sur kind sans
    réseau (R-25, condition 7 de l'ADR-004, condition 4 des ADR-005 et 006).
-3. Renovate : exempter les correctifs de sécurité du délai de 7 jours, une
-   fois la syntaxe vérifiée par [OPS] sur sa documentation.
-4. Plan court de la phase 2, le golden repo SaaS B2B, à valider par Lucas
-   avant de commencer.
+   ADR-011 à suivre.
+3. BENCH-011, en cours par [BENCH] : Postgres dans le cluster local, sans
+   opérateur, avec CloudNativePG ou avec un troisième opérateur. ADR-012 à
+   suivre.
+4. Renovate, PR #31 : exempter les correctifs de sécurité du délai de 7 jours
+   (principe VI), syntaxe vérifiée sur sa documentation, sans `automerge`.
+5. BENCH-012 (Keycloak) et BENCH-013 (Mailpit), ouverts le 20/11/2026,
+   mesurés après BENCH-010 et BENCH-011 : les benchmarks se partagent le
+   verrou de mesure.
+6. Chaque benchmark passe par une relecture [SECU] et [FINOPS], un arbitrage
+   du DSI, un ADR écrit par [ARCHI], puis une PR.
+7. `/speckit-plan` puis `/speckit-tasks` sur
+   `specs/001-golden-repo-saas-b2b`, une fois BENCH-010 et BENCH-011 rendus.
+
+La PR release-please « release 0.1.0 » (#22) reste ouverte : pas de release
+tant qu'il n'y a rien à publier.
 
 Points restés ouverts, repris dans les ADR (sections « Réponses de la
-GATE 1 ») : quel profil sert de mesure au critère des 15 minutes ; la lecture
-de « arrête et supprime l'environnement » (US-005), qui attend BENCH-010 ; la
-gouvernance de Task ; ce que lit Flux sur le PC ; les identifiants de services
-tiers sur le PC ; la portée de la règle de fraîcheur du catalogue.
+GATE 1 ») : la lecture de « arrête et supprime l'environnement » (US-005), qui
+attend BENCH-010 ; la gouvernance de Task ; ce que lit Flux sur le PC ; les
+identifiants de services tiers sur le PC ; la portée de la règle de fraîcheur
+du catalogue. Le profil de mesure du critère des 15 minutes, ouvert à la
+GATE 1, est tranché : le profil standard.
 
 Actions de Lucas, hors GATE :
 
@@ -130,7 +172,7 @@ Actions de Lucas, hors GATE :
 | --- | --- | --- | --- | --- |
 | 0 | Installation et cadrage | DSI, PO | Vision, PRD, constitution validés | Terminée le 15/11/2026 |
 | 1 | Benchmarks BENCH-001 à 009, ADR, catalogue daté | BENCH, ARCHI | ADR validés | Terminée le 20/11/2026 (GATE 1) |
-| 2 | Golden repo SaaS B2B construit à la main | DEV, OPS, SECU | Démo du golden repo | Plan à valider |
+| 2 | Golden repo SaaS B2B construit à la main | DEV, OPS, SECU | Démo du golden repo | En cours depuis le 20/11/2026 |
 | 3 | Template Copier, JSON Schema de la spec v1 | ARCHI, DEV | Génération depuis un exemple de spec | À venir |
 | 4 | Pipeline de validation blueprint et cible | QA, OPS | Matrice verte | À venir |
 | 5 | Plugin Claude Code : entretien, génération, validation | ARCHI, DEV, PO | Projet généré de bout en bout | À venir |

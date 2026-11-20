@@ -3,7 +3,9 @@
 Statut : validé par Lucas à la GATE 0 le 15/11/2026, questions Q1 à Q12
 comprises. Rédigé par [PO] le même jour. Aligné par [PO] sur les décisions de
 la GATE 1 du 2026-11-20 : ADR-001 à ADR-010 acceptés, débit visé et profil lite
-(R-04).
+(R-04). Complété par le DSI avec les décisions de Lucas du 2026-11-20 pour la
+phase 2 : profil standard et mesure des 15 minutes, benchmark de Postgres local
+avant la couche locale, aucun déploiement réel sur GCP pendant la phase.
 
 Sources : brief v1.0 (sections 2 à 4, 6, 8, 9 et 12), constitution 1.0.0
 (branche `chore/speckit`) et `CLAUDE.md`, lus le 15/11/2026. La vision tient en
@@ -220,6 +222,15 @@ commande, afin de travailler dans un environnement proche de la cible.
 - Le profil lite n'embarque pas l'outil GitOps : après `task up` dans ce
   profil, aucun de ses contrôleurs ne tourne dans le cluster (décision de la
   GATE 1 du 2026-11-20, R-04).
+- Le profil standard ajoute au profil lite l'outil GitOps (Flux, ADR-010), un
+  fournisseur d'identité (Keycloak) et un serveur de mails de test (Mailpit).
+  C'est lui qui sert de mesure au critère des 15 minutes (section 7). Keycloak
+  et Mailpit entrent dans le golden repo après leurs benchmarks, BENCH-012 et
+  BENCH-013 (décisions de Lucas du 2026-11-20). La composition du profil full
+  n'est pas arrêtée.
+- La façon de faire tourner Postgres dans le cluster local suit BENCH-011, rendu
+  avant l'écriture de la couche locale du golden repo (décision de Lucas du
+  2026-11-20).
 - Une commande documentée arrête et supprime l'environnement.
 
 ### US-006 Déployer sur GCP avec un accord explicite
@@ -355,6 +366,12 @@ D'où les deux décisions de Lucas à la GATE 1 du 2026-11-20 : un débit visé
 écrit dans le critère d'acceptation, et un profil lite sans outil GitOps
 (US-005).
 
+Le délai se mesure en profil standard (décision de Lucas du 2026-11-20,
+section 7). Ce profil ajoute aux 1 395,9 Mo ci-dessus Keycloak et Mailpit,
+dont le volume n'est pas encore mesuré : BENCH-012 et BENCH-013 le relèveront.
+Les 124 % du budget et le débit minimal de 12,4 Mbit/s sont donc des planchers
+pour le profil de mesure.
+
 ### ENF-02 Parité locale et empreinte
 
 Chaque brique de la spec existe sur les deux cibles : open source sur le PC
@@ -381,9 +398,11 @@ exposé se révoque d'abord, puis l'historique se réécrit.
 Aucune ressource payante sans accord explicite, et l'agent ne peut pas lancer
 la commande (US-006). Le dimensionnement GCP par défaut est le plus petit qui
 fait tourner le blueprint ; [FINOPS] le fixe avec [OPS]. Le code généré déclare
-une alerte budget, selon un mécanisme à confirmer par eux. Le coût réel du
-déploiement par défaut est à mesurer en phase 2 sur le golden repo, après
-accord de Lucas.
+une alerte budget, selon un mécanisme à confirmer par eux. La phase 2 ne
+déploie rien sur GCP (décision de Lucas du 2026-11-20) : le golden repo livre
+un code OpenTofu vérifié par `tofu validate`, conftest et Trivy, sans plan ni
+apply. Le coût réel du déploiement par défaut se mesure au premier déploiement
+réel, après accord de Lucas et un budget validé par [FINOPS].
 
 ### ENF-06 Traçabilité
 
@@ -429,6 +448,11 @@ lancement de la commande d'entrée, sur un PC où les prérequis du README et le
 plugin sont installés. Il s'arrête quand l'entretien est terminé, le dépôt
 validé avec un `task up` réussi, le plan OpenTofu GCP valide et la CI du
 premier push verte.
+
+Le `task up` chronométré tourne en profil standard, et non en profil lite
+(décision de Lucas du 2026-11-20) : profil lite, plus Flux, Keycloak et Mailpit
+(US-005). Le profil lite reste celui des petits postes ; il ne sert pas à juger
+le critère.
 
 L'apply réel a lieu dans la même session, après accord, mais sa durée se mesure
 à part : CELIAN ne maîtrise pas le temps que GCP met à créer des ressources
@@ -485,11 +509,12 @@ Aucune n'est validée à ce jour.
 
 Lucas a retenu les propositions du PO pour les douze questions, le 15/11/2026.
 La GATE 1 du 2026-11-20 complète Q1 (débit visé, R-04) et reformule Q6
-(ADR-010).
+(ADR-010). Le même jour, Lucas fixe le profil de mesure de Q1 : le profil
+standard.
 
 | # | Question | Décision |
 | --- | --- | --- |
-| Q1 | Que couvrent les 15 minutes ? | Section 7 : plan GCP et CI dedans, apply mesuré à part, images comprises ; débit visé ajouté à la GATE 1 (R-04) |
+| Q1 | Que couvrent les 15 minutes ? | Section 7 : plan GCP et CI dedans, apply mesuré à part, images comprises ; débit visé ajouté à la GATE 1 (R-04) ; mesure en profil standard (2026-11-20) |
 | Q2 | Qui lance `tofu apply` dans le produit ? | L'utilisateur, jamais l'agent : principe X transposé aux utilisateurs |
 | Q3 | Qui crée le dépôt GitHub distant et pousse ? | CELIAN, avec les droits de l'utilisateur et après confirmation |
 | Q4 | Langue de la documentation générée ? | Question de l'entretien, français par défaut |
