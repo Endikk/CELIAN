@@ -1,0 +1,52 @@
+# Must fail: two digests for the same platform.
+# Based on tests/catalog/valid/minimal.yaml, with the id set to the file name
+# and two fictitious artifacts added to targets.local.
+# Expected error, and only this one:
+#   path: targets/local/artifacts/1/platform   rule: artifact-platform
+#   message: second digest for darwin-arm64: artifacts/0 already has one
+schema_version: 1
+id: duplicate-artifact-platform
+summary: Brique fictive pour les tests du contrôle du catalogue.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-01"
+    verified_on: "2026-11-19"
+    standards: []
+    artifacts:
+      - platform: darwin-arm64
+        sha256: "0000000000000000000000000000000000000000000000000000000000000000"
+        source: https://example.invalid/oss/releases
+        read_on: "2026-11-19"
+      - platform: darwin-arm64
+        sha256: "1111111111111111111111111111111111111111111111111111111111111111"
+        source: https://example.invalid/oss/releases
+        read_on: "2026-11-19"
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+  gcp:
+    type: managed
+    service: Example Managed
+    provider: google
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: active
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-19"

@@ -1,0 +1,43 @@
+# Must fail: a date that matches the pattern but does not exist.
+# Based on tests/catalog/valid/minimal.yaml, with
+# targets.local.last_release_on set to February 30.
+# Expected error, and only this one:
+#   path: targets/local/last_release_on   validator: format
+#   message: '2026-02-30' is not a 'date'
+schema_version: 1
+id: minimal
+summary: Brique fictive pour les tests du contrôle du catalogue.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-02-30"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+  gcp:
+    type: managed
+    service: Example Managed
+    provider: google
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: active
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-19"

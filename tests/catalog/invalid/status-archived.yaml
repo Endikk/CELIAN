@@ -1,0 +1,43 @@
+# Must fail: a status other than active (principle VI).
+# Based on tests/catalog/valid/minimal.yaml, with the id set to the file name
+# and targets.gcp.status changed.
+# Expected error, and only this one:
+#   path: targets/gcp/status   rule: status
+#   message: status is 'archived': only 'active' may stay in the catalog (principle VI)
+schema_version: 1
+id: status-archived
+summary: Brique fictive pour les tests du contrôle du catalogue.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-01"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+  gcp:
+    type: managed
+    service: Example Managed
+    provider: google
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: archived
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-19"

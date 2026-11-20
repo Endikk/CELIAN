@@ -1,0 +1,44 @@
+# Must fail: a date after today. The tests run it with today injected as
+# 2026-11-19.
+# Based on tests/catalog/valid/minimal.yaml, with the id set to the file name
+# and targets.local.last_release_on set to the next day.
+# Expected error, and only this one:
+#   path: targets/local/last_release_on   rule: future-date
+#   message: 2026-11-20 is after today, 2026-11-19 (UTC)
+schema_version: 1
+id: future-date
+summary: Brique fictive pour les tests du contrôle du catalogue.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-20"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+  gcp:
+    type: managed
+    service: Example Managed
+    provider: google
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: active
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-19"

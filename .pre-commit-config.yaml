@@ -66,6 +66,50 @@ repos:
         language: node
         additional_dependencies: ["@commitlint/config-conventional@21.2.4"]
 
+  # Catalog check (ADR-009): scripts/catalog/check_catalog.py and its tests.
+  # Versions are exact, transitive dependencies included, so that pip builds
+  # the same environment everywhere and Renovate applies its 7-day delay to
+  # each package. Keep both lists in step.
+  - repo: local
+    hooks:
+      - id: catalog-check
+        name: check the service catalog (ADR-009)
+        language: python
+        entry: python scripts/catalog/check_catalog.py
+        # Freshness depends on today's date, not on the changed files: every
+        # entry is checked on every run.
+        always_run: true
+        pass_filenames: false
+        # Warnings (open items, last month before expiry) show on success too.
+        verbose: true
+        additional_dependencies:
+          - jsonschema==4.26.0
+          - pyyaml==6.0.3
+          - attrs==26.1.0
+          - jsonschema-specifications==2025.9.1
+          - referencing==0.37.0
+          - rpds-py==2026.9.1
+          - typing-extensions==4.16.0
+      - id: catalog-check-tests
+        name: test the catalog check
+        language: python
+        entry: pytest -p no:cacheprovider -q tests/catalog
+        files: ^(catalog/|docs/(adr|benchmarks)/|schema/catalog-entry\.schema\.json$|scripts/catalog/|tests/catalog/)
+        pass_filenames: false
+        additional_dependencies:
+          - jsonschema==4.26.0
+          - pyyaml==6.0.3
+          - attrs==26.1.0
+          - jsonschema-specifications==2025.9.1
+          - referencing==0.37.0
+          - rpds-py==2026.9.1
+          - typing-extensions==4.16.0
+          - pytest==9.2.0
+          - iniconfig==2.3.1
+          - packaging==26.3
+          - pluggy==1.7.0
+          - pygments==2.21.0
+
   - repo: local
     hooks:
       - id: no-em-dash

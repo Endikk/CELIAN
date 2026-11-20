@@ -44,13 +44,18 @@ ce fichier à jour à la fin de chaque session.
 
 - Étape 5, en cours : BENCH-004 (gateway), BENCH-005 (orchestration locale) et
   BENCH-007 (secrets locaux) mesurés sur kind, BENCH-008 (modules OpenTofu de
-  GCP, sans `plan` ni `apply`). Puis l'étape 6 : `catalog/` avec son check CI.
-  GATE 1 : Lucas valide les ADR et l'amendement de la constitution.
+  GCP, sans `plan` ni `apply`). BENCH-009 (GitOps : Argo CD, Flux, Config
+  Sync) est ajouté par le DSI le 19/11/2026 : Config Sync est inclus dans GKE,
+  et le principe III pourrait l'imposer sur la cible cloud à la place de l'Argo
+  CD prévu par Q6.
+- Étape 6, en cours en parallèle : format du catalogue et lecture des principes
+  III et V (ADR-009, proposé), JSON Schema, première entrée
+  (`kubernetes-cluster`), contrôle en CI avec règle de fraîcheur à 6 mois.
+- GATE 1 : Lucas valide les ADR, l'amendement de la constitution et la lecture
+  des principes III et V proposée par l'ADR-009.
 - Lucas termine le changement de jeton `gh` et révoque l'ancien jeton classique
   (R-07). À reprendre : la première tentative a échoué, le presse-papiers ne
   contenait pas le jeton.
-- Lucas valide la lecture des principes III et V pour les services managés de
-  GCP, avant l'étape 6.
 - Actions de Lucas : installer l'app GitHub Renovate, installer Pixel Agents,
   mettre Claude Code en 2.1.324 ou plus pour figer les marketplaces (R-02).
 

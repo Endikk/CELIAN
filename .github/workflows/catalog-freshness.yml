@@ -1,0 +1,42 @@
+name: catalog-freshness
+
+# Weekly alarm for the catalog check (ADR-009, section 3). Pull requests stay
+# the real gate, through the pre-commit job of ci.yml; this run shows an entry
+# that expires while nobody opens one. GitHub disables scheduled workflows of
+# a public repository after 60 days without activity, and notifies only the
+# last author of the cron line.
+on:
+  schedule:
+    # Mondays at 06:17 UTC. Not on the hour: GitHub names the start of every
+    # hour as a high-load time, when scheduled runs can be delayed.
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  # renovate: datasource=pypi depName=pre-commit
+  PRE_COMMIT_VERSION: 4.7.0
+  # Same interpreter as ci.yml, so both runs share the hook environments.
+  UV_PYTHON: "3.12"
+
+jobs:
+  catalog:
+    name: catalog freshness
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Check every catalog entry against today's date
+        run: uvx "pre-commit@${PRE_COMMIT_VERSION}" run catalog-check --all-files

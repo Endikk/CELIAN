@@ -1,0 +1,44 @@
+# Must fail: verified_on moved without the sources being read again
+# (ADR-009, section 3).
+# Based on tests/catalog/valid/minimal.yaml, with the id set to the file name
+# and targets.gcp.sources[0].read_on set one day earlier than verified_on.
+# Expected error, and only this one:
+#   path: targets/gcp/verified_on   rule: verified-on
+#   message: verified_on is 2026-11-19 but the most recent read_on of the sources is 2026-11-18: they must be equal
+schema_version: 1
+id: verified-on-ahead-of-sources
+summary: Brique fictive pour les tests du contrôle du catalogue.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-01"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+  gcp:
+    type: managed
+    service: Example Managed
+    provider: google
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: active
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-18"

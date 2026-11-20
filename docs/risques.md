@@ -181,8 +181,13 @@ Licences qui changent (Terraform, Vault), projets archivés (MinIO), services
 retirés (Azure Cache for Redis) : le catalogue vieillit sans bruit.
 
 Mitigation : chaque entrée porte sa date de vérification et ses sources
-(principe IV). Revue datée à chaque phase. L'idée « alertes catalogue » reste
-après le MVP.
+(principe IV). Depuis l'ADR-009, un contrôle bloque la CI sur chaque PR et
+chaque push sur `main` : une cible vérifiée il y a 6 mois ou plus, une cible
+open source sans release depuis 12 mois, ou un statut autre que `active`. Le
+même contrôle tourne chaque semaine, pour que l'échéance se voie sans PR.
+GitHub désactive une tâche planifiée après 60 jours sans activité dans un
+dépôt public : le contrôle sur PR reste donc la barrière principale. L'idée
+« alertes catalogue » reste après le MVP.
 
 ### R-07. Agents capables de lire et d'exfiltrer des secrets
 

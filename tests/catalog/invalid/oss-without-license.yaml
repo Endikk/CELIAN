@@ -1,0 +1,41 @@
+# Must fail: an oss target without a license (principle IV).
+# Same as tests/catalog/valid/minimal.yaml, with targets.local.license removed.
+# Expected error, and only this one:
+#   path: targets/local   validator: required
+#   message: 'license' is a required property
+schema_version: 1
+id: minimal
+summary: Brique fictive pour les tests du contrôle du catalogue.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-01"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+  gcp:
+    type: managed
+    service: Example Managed
+    provider: google
+    governance:
+      model: single-vendor
+      body: Example Provider
+    status: active
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/managed
+        read_on: "2026-11-19"

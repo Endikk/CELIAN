@@ -186,8 +186,9 @@ section 8 du brief), puis par un ADR (`docs/adr/ADR-XXX-sujet.md`).
 CLAUDE.md          ce fichier
 ROADMAP.md         fait, en cours, prochain
 docs/              vision, PRD, risques, adr/, benchmarks/
-schema/            JSON Schema de la spec projet et exemples
-catalog/           services par cible : licence, gouvernance, statut, date
+schema/            JSON Schema de la spec projet et du catalogue, exemples
+catalog/           un fichier YAML par brique : services par cible, licence,
+                   gouvernance, statut, date (ADR-009)
 golden/            projets de référence construits à la main
 blueprints/        templates Copier : saas-b2b/{common,local,gcp}
 plugin/            skills et sous-agents Claude Code du produit
