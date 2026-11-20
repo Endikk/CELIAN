@@ -15,7 +15,8 @@
 #   mirror   O2: a local registry, pull-through cache of Docker Hub, on the
 #            "kind" network; the node's containerd sends docker.io to it and
 #            every public registry to a dead end. REGISTRY=distribution or
-#            REGISTRY=zot (tests T1 and T2: `task down` deletes the cluster);
+#            REGISTRY=zot (tests T1 and T2: `task down` deletes the cluster).
+#            The script never starts the registry: see MIRROR_PHASE below;
 #   archive  O3: OCI archives loaded by `kind load image-archive` into a
 #            new cluster (T1 and T2). ARCHIVE_SOURCE picks where they come
 #            from. "zot": cut from the OCI layouts that zot keeps on disk
@@ -68,8 +69,25 @@
 #     RUNS=3             offline runs per option (online runs for base)
 #     IDLE_WAIT=120      seconds between "ready" and the first memory sample
 #     REGISTRY=distribution  registry of option mirror: distribution or zot
-#     REGISTRY_DIR=      directory of the mirror (config/ and storage/);
-#                        default TRIAL_DIR/registry-$REGISTRY
+#     REGISTRY_DIR=      directory of the mirror (config/ and storage/),
+#                        required by option mirror and kept between phases
+#     MIRROR_PHASE=      option mirror runs in four steps, OPTIONS=mirror:
+#                        prepare-online  writes the online configuration in
+#                                        REGISTRY_DIR and prints the command
+#                                        that starts the registry; no lock,
+#                                        no cluster;
+#                        online          run 0 only, with the registry
+#                                        started by that command;
+#                        prepare-offline the same with the offline
+#                                        configuration, once the registry of
+#                                        the online phase is gone;
+#                        offline         runs 1 to RUNS.
+#     REGISTRY_REMOVE_AT_EXIT=1  the registry of the phase (ours: label,
+#                        image and mounts checked) is removed at exit; its
+#                        storage stays in REGISTRY_DIR
+#     BENCH_LOCK_REUSE=0 1: a lock whose owner file starts with "BENCH-010 "
+#                        is reused and left in place at exit, so that the
+#                        operator can hold it across the phases of mirror
 #     ARCHIVE_SOURCE=docker-save  source of the archives: docker-save or zot
 #     ARCHIVE_SRC=       storage directory of a zot mirror, for ARCHIVE_SOURCE=zot
 #     BENCH_LOCK=        a directory used as a lock shared with the other
@@ -81,33 +99,34 @@
 #   node-images, mirror, witness, failures, held, volume, ports, load,
 #   leftovers, summary; command output in TRIAL_DIR/logs/.
 # Needs: bash >= 3.2, docker, kind and kubectl at the versions below, jq,
-#   perl, openssl, shasum, du, tar.
+#   perl, openssl, shasum, du, tar, cmp.
 #
 # Safety:
 #   - the cluster is named celian-bench-010 and the registry
 #     celian-bench-010-mirror (celian-bench-010-registry, the name of an
 #     earlier draft, belongs to a stopped container this script must not
-#     touch). The script refuses to start if the cluster exists, if the
+#     touch), with the registry's name as suffix:
+#     celian-bench-010-mirror-distribution or celian-bench-010-mirror-zot.
+#     The script refuses to start if the cluster exists, if the
 #     lock is held, or if a registry container of that name exists without
 #     the label org.celian.bench=010, with another image or other mounts.
 #     Its EXIT trap is set only after these checks and after the inventory,
 #     so a refusal deletes nothing;
-#   - option mirror reuses a registry container of that name when its label,
-#     image and mounts match, and then leaves it in place at exit. Without
-#     one, it starts it with `docker run`, which asks for the user's
-#     consent in a Claude Code session: no port is published on the host,
-#     the node reaches it on the "kind" network. Switching it from its online
-#     to its offline configuration uses `docker restart`, which starts the
-#     container again: that is covered by the same consent. Only a registry
-#     started by the script is removed at exit; its storage stays in
-#     REGISTRY_DIR;
+#   - the script runs no `docker run`, `docker start` nor `docker restart`.
+#     A command run inside a script is invisible to the permission rules of
+#     a Claude Code session: the registry is started by the command that
+#     MIRROR_PHASE=prepare-* prints, run on its own, so that the user sees
+#     it and consents. It publishes no port on the host; the script connects
+#     it to the "kind" network, where the node reaches it. Going offline
+#     means a new container with the offline configuration, not a restart.
+#     The script uses a registry only if its label, image and mounts match,
+#     and removes it at exit (REGISTRY_REMOVE_AT_EXIT=1);
 #   - umask 077; KUBECONFIG and the registry host directory live in
 #     TRIAL_DIR; ~/.kube is not used. The Postgres password is drawn by
 #     openssl and goes through a pipe to `kubectl create -f -` (R-20): it is
 #     neither written to a file nor passed as an argument;
-#   - no curl, no `docker exec`, no `docker cp`; the only `docker run` is
-#     the registry's, above. Built images are removed at exit; pulled images
-#     stay cached; archives stay in TRIAL_DIR/archives.
+#   - no curl, no `docker exec`, no `docker cp`. Built images are removed at
+#     exit; pulled images stay cached; archives stay in TRIAL_DIR/archives.
 set -euo pipefail
 umask 077
 
@@ -129,13 +148,11 @@ readonly DISTRIBUTION_IMAGE="registry:3.1.2@sha256:82f6ff4a7f982960c8aa51617fea3
 readonly ZOT_IMAGE="ghcr.io/project-zot/zot:v2.1.23@sha256:9d3de83ac2099e6f4843045b4c9b65b7e8baf40f92d28f54906dee9d4d390fd7"
 
 readonly NAME="celian-bench-010"
-readonly REG_NAME="celian-bench-010-mirror"
 readonly REG_LABEL="org.celian.bench=010"
 readonly KUBE_CONTEXT="kind-$NAME"
 readonly NODE="$NAME-control-plane"
 readonly NS=app
 readonly DEAD_END="https://127.0.0.1:9"
-readonly MIRROR_URL="http://$REG_NAME:5000"
 # Registry namespaces sent to the dead end; _default covers the others.
 readonly PUBLIC_REGISTRIES="_default docker.io quay.io registry.k8s.io ghcr.io mcr.microsoft.com gcr.io public.ecr.aws"
 # Images the node pulls for the stack (the API and the front are built and
@@ -158,8 +175,16 @@ REGISTRY="${REGISTRY:-distribution}"
 REGISTRY_DIR="${REGISTRY_DIR:-}"
 ARCHIVE_SOURCE="${ARCHIVE_SOURCE:-docker-save}"
 ARCHIVE_SRC="${ARCHIVE_SRC:-}"
+MIRROR_PHASE="${MIRROR_PHASE:-}"
+REGISTRY_REMOVE_AT_EXIT="${REGISTRY_REMOVE_AT_EXIT:-1}"
 BENCH_LOCK="${BENCH_LOCK:-}"
-readonly OPTIONS RUNS IDLE_WAIT REGISTRY ARCHIVE_SOURCE ARCHIVE_SRC BENCH_LOCK
+BENCH_LOCK_REUSE="${BENCH_LOCK_REUSE:-0}"
+readonly OPTIONS RUNS IDLE_WAIT REGISTRY ARCHIVE_SOURCE ARCHIVE_SRC MIRROR_PHASE REGISTRY_REMOVE_AT_EXIT BENCH_LOCK BENCH_LOCK_REUSE
+
+# One container name per registry, never celian-bench-010-registry (an
+# earlier draft's stopped container, not ours).
+readonly REG_NAME="$NAME-mirror-$REGISTRY"
+readonly MIRROR_URL="http://$REG_NAME:5000"
 
 SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
 readonly STACK="$SCRIPT_DIR/bench-005/stack"
@@ -170,8 +195,9 @@ LOGS=""
 WORK=""
 CERTS=""
 LOCK_HELD=0
+LOCK_REUSED=0
 LOCK_TAKEN=""
-REG_CREATED=0
+REG_OURS=0
 REG_IMAGE=""
 ARCHIVE_VARIANT=""
 API_TAG=""
@@ -224,6 +250,11 @@ acquire_lock() {
   if ! mkdir "$BENCH_LOCK" 2>/dev/null; then
     owner=$(cat "$BENCH_LOCK/owner" 2>/dev/null || echo unknown)
     age=$(lock_age_min)
+    if [ "$BENCH_LOCK_REUSE" = 1 ] && [ "${owner#BENCH-010 }" != "$owner" ]; then
+      LOCK_REUSED=1
+      log "lock $BENCH_LOCK held by this benchmark ('$owner'): reused, left in place at exit"
+      return 0
+    fi
     if [ "$age" -ge "$LOCK_OLD_MIN" ]; then
       log "lock held by '$owner' for ${age} min, older than ${LOCK_OLD_MIN} min: left in place, check it by hand"
     else
@@ -240,9 +271,9 @@ acquire_lock() {
 # The owner file is replaced and the directory touched, so that both show a
 # fresh date: a series of several options can last longer than 90 minutes.
 refresh_lock() {
-  [ "$LOCK_HELD" = 1 ] || return 0
+  [ "$LOCK_HELD" = 1 ] || [ "$LOCK_REUSED" = 1 ] || return 0
   grep -q '^BENCH-010 ' "$BENCH_LOCK/owner" 2>/dev/null || return 0
-  printf 'BENCH-010 %s (series started %s)\n' "$(utc_now)" "$LOCK_TAKEN" >"$BENCH_LOCK/owner.new"
+  printf 'BENCH-010 %s (series started %s)\n' "$(utc_now)" "${LOCK_TAKEN:-before this phase}" >"$BENCH_LOCK/owner.new"
   mv "$BENCH_LOCK/owner.new" "$BENCH_LOCK/owner"
   touch "$BENCH_LOCK"
 }
@@ -305,30 +336,53 @@ registry_config_file() {
   esac
 }
 
-# Mode online or offline: the configuration file is rewritten in place (the
-# directory is mounted read-only in the container), then the registry
-# restarts and reads it.
-set_registry_mode() {
-  local mode=$1 file src deadline
+# The command that starts the mirror, printed by MIRROR_PHASE=prepare-*:
+# bridge network, no published port, image pinned by digest, configuration
+# read-only. The script never runs it (see Safety above).
+registry_run_command() {
+  local file cmd
   file=$(registry_config_file)
-  src="$FILES/$REGISTRY/config-$mode.${file##*.}"
-  cat "$src" >"$REGISTRY_DIR/config/$file"
-  if registry_exists; then
-    docker restart "$REG_NAME" >>"$LOGS/registry.log" 2>&1 || die "could not restart $REG_NAME"
-    deadline=$(($(date +%s) + 60))
-    until [ "$(docker container inspect -f '{{.State.Running}}' "$REG_NAME")" = true ]; do
-      [ "$(date +%s)" -lt "$deadline" ] || die "$REG_NAME is not running"
-      sleep 1
-    done
-    # No client on the host reaches the registry (no published port): give
-    # it time to listen; the first pull of the node is the real check.
-    sleep 3
-  fi
-  tsv network.tsv "$(utc_now)" "registry-$mode" "$REGISTRY"
-  log "registry $REGISTRY: $mode configuration"
+  case $REGISTRY in
+    distribution) cmd="/etc/bench-010/$file" ;;
+    zot) cmd="serve /etc/bench-010/$file" ;;
+  esac
+  printf 'docker run -d --name %s --label %s --network bridge -v %s/config:/etc/bench-010:ro -v %s/storage:/var/lib/registry %s %s\n' \
+    "$REG_NAME" "$REG_LABEL" "$REGISTRY_DIR" "$REGISTRY_DIR" "$REG_IMAGE" "$cmd"
 }
 
-# The registry container of this benchmark, reused if it is ours.
+# MIRROR_PHASE=prepare-online or prepare-offline: writes the configuration
+# of that mode in REGISTRY_DIR/config, then prints the command above. It
+# refuses while a container of that name exists: that one would keep the
+# configuration it read when it started.
+prepare_registry() {
+  local mode=$1 file
+  file=$(registry_config_file)
+  if registry_exists; then
+    die "$REG_NAME exists: the cleanup of the previous phase removes it, prepare the $mode phase after"
+  fi
+  mkdir -p "$REGISTRY_DIR/config" "$REGISTRY_DIR/storage"
+  chmod 755 "$REGISTRY_DIR" "$REGISTRY_DIR/config"
+  cat "$FILES/$REGISTRY/config-$mode.${file##*.}" >"$REGISTRY_DIR/config/$file"
+  chmod 644 "$REGISTRY_DIR/config/$file"
+  log "$REGISTRY: $mode configuration written in $REGISTRY_DIR/config; start the registry with:"
+  registry_run_command
+}
+
+# MIRROR_PHASE=online or offline: the registry runs, is ours (check_registry)
+# and its configuration directory holds the configuration of the phase.
+require_registry() {
+  local mode=$1 file
+  file=$(registry_config_file)
+  [ "$REG_OURS" = 1 ] || die "$REG_NAME not found: run MIRROR_PHASE=prepare-$mode, then the command it prints"
+  [ "$(docker container inspect -f '{{.State.Running}}' "$REG_NAME")" = true ] || die "$REG_NAME is not running"
+  cmp -s "$FILES/$REGISTRY/config-$mode.${file##*.}" "$REGISTRY_DIR/config/$file" ||
+    die "$REGISTRY_DIR/config/$file is not the $mode configuration"
+  tsv network.tsv "$(utc_now)" "registry-$mode" "$REGISTRY"
+  tsv leftovers.tsv start registry "$REG_NAME" "started outside the script, $mode configuration"
+  log "registry $REG_NAME: $mode configuration, started outside the script"
+}
+
+# The registry container of this benchmark, used only if it is ours.
 check_registry() {
   local label image mounts
   registry_exists || return 0
@@ -345,26 +399,7 @@ check_registry() {
     *" $REGISTRY_DIR/storage "*) ;;
     *) die "$REG_NAME does not mount $REGISTRY_DIR/storage (found: $mounts)" ;;
   esac
-}
-
-start_registry() {
-  local file cmd
-  file=$(registry_config_file)
-  if registry_exists; then
-    log "registry $REG_NAME found (label, image and mounts checked): reused, left in place at exit"
-    tsv leftovers.tsv start registry "$REG_NAME" "reused, not created by the script"
-    return 0
-  fi
-  case $REGISTRY in
-    distribution) cmd="/etc/bench-010/$file" ;;
-    zot) cmd="serve /etc/bench-010/$file" ;;
-  esac
-  log "starting $REG_NAME ($REG_IMAGE) with docker run, no published port"
-  # shellcheck disable=SC2086 # cmd is one or two words, split on purpose
-  docker run -d --name "$REG_NAME" --label "$REG_LABEL" --network bridge \
-    -v "$REGISTRY_DIR/config:/etc/bench-010:ro" -v "$REGISTRY_DIR/storage:/var/lib/registry" \
-    "$REG_IMAGE" $cmd >>"$LOGS/registry.log" 2>&1 || die "docker run of $REG_NAME failed"
-  REG_CREATED=1
+  REG_OURS=1
 }
 
 connect_registry() {
@@ -912,17 +947,19 @@ series() {
       ;;
     keep | archive) set_network online ;;
     mirror)
-      # Configuration first: a registry started by the script reads it.
-      set_registry_mode online
-      start_registry
+      # Online phase: run 0 only. Offline phase: runs 1 to RUNS, run 0 was
+      # the online phase, with another container on the same storage.
+      require_registry "$MIRROR_PHASE"
       set_network mirror
       ;;
   esac
-  timed_run "$opt" 0 online
-  record_volume "$opt" after-run-0
+  if [ "$opt" != mirror ] || [ "$MIRROR_PHASE" = online ]; then
+    timed_run "$opt" 0 online
+    record_volume "$opt" after-run-0
+    if [ "$opt" = mirror ]; then return 0; fi
+  fi
   case $opt in
     keep) set_network offline ;;
-    mirror) set_registry_mode offline ;;
     archive)
       case $ARCHIVE_SOURCE in
         zot) probe_sparse_archive ;;
@@ -978,9 +1015,13 @@ check_options() {
     case $opt in
       base | keep) ;;
       mirror)
+        [ "$OPTIONS" = mirror ] || die "option mirror runs alone, in phases (MIRROR_PHASE)"
+        case $MIRROR_PHASE in
+          online | offline) ;;
+          *) die "option mirror needs MIRROR_PHASE=online or offline, after prepare-online or prepare-offline" ;;
+        esac
         REG_IMAGE=$(registry_image)
-        [ -n "$REGISTRY_DIR" ] || REGISTRY_DIR="$TRIAL_DIR/registry-$REGISTRY"
-        mkdir -p "$REGISTRY_DIR/config" "$REGISTRY_DIR/storage"
+        [ -n "$REGISTRY_DIR" ] && [ -d "$REGISTRY_DIR/config" ] || die "option mirror needs REGISTRY_DIR, written by MIRROR_PHASE=prepare-*"
         REGISTRY_DIR=$(cd "$REGISTRY_DIR" && pwd)
         check_registry
         ;;
@@ -1014,8 +1055,8 @@ cleanup() {
     for ref in $(docker images --format '{{.Repository}}:{{.Tag}}' | grep -E "^$NAME/(api|front):"); do
       docker image rm "$ref" >>"$LOGS/cleanup.log" 2>&1 || log "could not remove $ref"
     done
-    if [ "$REG_CREATED" = 1 ] && registry_exists; then
-      log "cleanup: removing $REG_NAME, started by this script (storage kept in $REGISTRY_DIR)"
+    if [ "$REG_OURS" = 1 ] && [ "$REGISTRY_REMOVE_AT_EXIT" = 1 ] && registry_exists; then
+      log "cleanup: removing $REG_NAME, the registry of this phase (storage kept in $REGISTRY_DIR)"
       docker rm -f "$REG_NAME" >>"$LOGS/cleanup.log" 2>&1
     fi
     if registry_exists; then tsv leftovers.tsv end registry "$REG_NAME" "left in place"; fi
@@ -1054,6 +1095,18 @@ summarize() {
 
 main() {
   local opt
+  case $MIRROR_PHASE in
+    prepare-online | prepare-offline)
+      REG_IMAGE=$(registry_image)
+      [ -n "$REGISTRY_DIR" ] || die "MIRROR_PHASE=$MIRROR_PHASE needs REGISTRY_DIR"
+      mkdir -p "$REGISTRY_DIR"
+      REGISTRY_DIR=$(cd "$REGISTRY_DIR" && pwd)
+      prepare_registry "${MIRROR_PHASE#prepare-}"
+      exit 0
+      ;;
+    "" | online | offline) ;;
+    *) die "unknown MIRROR_PHASE: $MIRROR_PHASE" ;;
+  esac
   if [ $# -gt 0 ]; then
     TRIAL_DIR=$1
     if [ -e "$TRIAL_DIR" ] && [ -n "$(ls -A "$TRIAL_DIR")" ]; then
