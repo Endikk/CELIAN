@@ -4,15 +4,15 @@
 | --- | --- |
 | Identifiant | BENCH-011 |
 | Sujet | Forme de Postgres dans le cluster kind de la cible `local` : manifests écrits à la main ou opérateur |
-| Statut | brouillon |
+| Statut | relu |
 | Ouvert le | 2026-11-20 |
-| Mis à jour le | 2026-11-20 |
+| Mis à jour le | 2026-11-21 |
 | Auteur | [BENCH] |
 | Relecteurs | [SECU] pour les licences et les CVE, [FINOPS] pour les coûts |
 | Périmètre | Projet généré sur PC (cluster kind, ADR-004). La cible `gcp` garde Cloud SQL (principe III) |
 | Choix du PRD | US-004 : « CloudNativePG en local, Cloud SQL sur GCP », exemple du brief à confirmer en phase 1 |
 | ADR lié | ADR-012, à écrire par [ARCHI] |
-| Verdict proposé | O1, Postgres sans opérateur (StatefulSet écrit à la main, image officielle) : 88/100, devant CloudNativePG (83) et l'opérateur de Zalando (62). L'écart avec CloudNativePG tient en deux crans de notes de jugement (section 7) |
+| Verdict proposé | O1, Postgres sans opérateur (StatefulSet écrit à la main, image officielle) : 87/100, devant CloudNativePG (83) et l'opérateur de Zalando (61). Un cran de note de jugement rendu à CloudNativePG la laisse derrière (86), deux l'inversent (section 7) |
 
 ## 1. Contexte
 
@@ -279,12 +279,19 @@ si le cluster `celian-bench-011` existe ; son `trap` n'est posé qu'après ce
 contrôle et après le verrou, donc un refus ne supprime rien. Il passe
 shellcheck et tourne sous le bash 3.2 de macOS. Aucun `curl`, aucun
 `docker run`, `docker exec` ni `docker create` : tout contrôle passe par un pod
-du cluster. `docker start` n'apparaît que derrière `NODE_RESTART=1`.
+du cluster. `docker start` n'apparaît que derrière `NODE_RESTART=1`. Le
+script crée en revanche le nœud par `kind create cluster`, qui lance lui-même
+un conteneur privilégié [S60]. Il le supprime par `kind delete cluster`, et
+retire le réseau `kind` par `docker network rm` s'il l'a créé et qu'il est
+vide. Il appelle `perl` pour l'horloge et pour réécrire les références
+d'images. Aucune de ces commandes n'est soumise à confirmation.
 
 [BENCH] Redémarrage du nœud non mesuré. Le relancer demande `docker stop`
-puis `docker start` sur le conteneur du nœud, comme dans BENCH-007, et
-`docker start` attend l'accord de Lucas. Le script le prévoit derrière
-`NODE_RESTART=1`, désactivé par défaut (section 8).
+puis `docker start` sur le conteneur du nœud, comme dans BENCH-007.
+`docker stop` et `docker start` sont réservés à Lucas par consigne du DSI :
+aucune règle de `.claude/settings.json` ne les filtre, et une règle ne verrait
+pas une commande lancée par le script. Le script prévoit ce redémarrage
+derrière `NODE_RESTART=1`, désactivé par défaut (section 8).
 
 ### 4.4 Résultats
 
@@ -293,8 +300,17 @@ puis `docker start` sur le conteneur du nœud, comme dans BENCH-007, et
 (dossier `series-1` du dossier de travail de [BENCH]). Aucun autre conteneur
 ni cluster kind ne tournait au début de chaque exécution (`load.tsv`) ; la
 charge moyenne de l'hôte était de 9,1 sur une minute au début de la première
-exécution de O3, de 2,9 à 3,9 ailleurs. Un test de fumée a précédé, après
-l'écriture des seuils (section 8).
+exécution de O3, 5,9 et 4,2 au début des troisièmes exécutions de O2 et de
+O3, de 2,9 à 3,9 ailleurs. Un test de fumée a précédé, après l'écriture des
+seuils (section 8).
+
+[BENCH] Le SHA-256 de la section 4.1 vaut
+`f9624471eccfc1886cea530f1d9335039458f59d1ba86378a3bf3a47849f95f6`, relevé le
+2026-11-20 à 20:07:15 UTC. Un premier relevé à 20:06:53 UTC
+(`1cb05ee6e2d68bf0ada5200406c141d5603a666ab6a661200583cdf9e9098bab`) portait
+« 20:07 UTC » dans le texte : la mention a été corrigée en « 20:06 » et la
+section hachée de nouveau, avant toute mesure. L'heure des relevés repose sur
+la déclaration de [BENCH], faute de commit.
 
 | Mesure | Option | Exécution 1 | Exécution 2 | Exécution 3 | Médiane | Écart |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -317,6 +333,10 @@ l'écriture des seuils (section 8).
 | M7, retour à « prêt » après suppression du pod | O1. Sans opérateur | 3,3 s | 3,4 s | 3,3 s | 3,3 s | 0,1 s |
 | M7 | O2. CloudNativePG | 12,3 s | 12,4 s | 12,3 s | 12,3 s | 0,1 s |
 | M7 | O3. Opérateur de Zalando | 16,4 s | 15,3 s | 15,2 s | 15,3 s | 1,2 s |
+| CPU du nœud au repos (sensibilité) | O1. Sans opérateur | 17,8 % | 17,6 % | 16,1 % | 17,6 % | 1,7 % |
+| CPU du nœud | O2. CloudNativePG | 19,5 % | 17,0 % | 16,2 % | 17,0 % | 3,3 % |
+| CPU du nœud | O3. Opérateur de Zalando | 15,2 % | 12,6 % | 12,9 % | 12,9 % | 2,6 % |
+| CPU du nœud | kind seul | 11,3 % | 13,9 % | 12,7 % | 12,7 % | 2,6 % |
 
 [BENCH] M2 se lit en médianes : médiane du nœud de l'option moins médiane du
 nœud de base (M9), soit 48,1 Mio pour O1 (648,5 moins 600,4), 160,4 pour O2
@@ -325,9 +345,12 @@ et 192,2 pour O3. Le nœud varie jusqu'à 58 Mio d'une exécution à l'autre
 exécutions peut tomber sur un niveau haut ou bas. La somme des pods de la
 couche, lue par l'API Summary, va en sensibilité : 26,4 Mio pour O1 ; 100,5
 pour O2, dont 34,6 pour l'opérateur en médiane des neuf échantillons ; 104,6
-pour O3, dont 15,1 pour l'opérateur. L'écart entre
-la somme des pods et le nœud vient du serveur d'API et d'etcd, que chargent
-les CRD et les webhooks des opérateurs (troisième règle de la GATE 1).
+pour O3, dont 15,1 pour l'opérateur. La troisième règle de la GATE 1
+attribue l'écart entre la somme des pods et le nœud au serveur d'API et à
+etcd, que chargent les CRD et les webhooks des opérateurs. Ce partage n'est
+pas mesuré ici : O1, sans CRD, montre déjà 21,7 Mio d'écart (48,1 contre
+26,4), contre 59,9 pour O2 et 87,6 pour O3. La CPU du nœud va en
+sensibilité : aucun seuil ne porte sur elle, donc aucun effet sur la note.
 
 [BENCH] Volume (M4) et images retéléchargées (M5), en Mo compressés de
 10⁶ octets, lus au registre :
@@ -342,6 +365,15 @@ les CRD et les webhooks des opérateurs (troisième règle de la GATE 1).
 120,3 Mo en amd64 ; opérande `standard` de CloudNativePG 224,8 Mo et
 `system` 277,8 Mo, soit 264,0 et 316,9 Mo avec l'opérateur. À 10 Mbit/s, le
 seuil de 112,5 Mo vaut 90 s ; O1 en demande 134,8 s, O2 101,6 s, O3 543,6 s.
+
+[BENCH] Cumul avec le premier `task up` (relecture [FINOPS]). Les 505,8 Mo
+de la plate-forme de base (nœud kind 384,8, Envoy Gateway 121,0) ne
+contiennent aucune image Postgres. Les 1 395,9 Mo de R-04 en contiennent une,
+`postgres:18.7-alpine` (120,3 Mo), dans la stack de BENCH-005, et chaque
+option la remplace : +48,3 Mo pour O1, +6,7 pour O2, +559,2 pour O3. Le
+premier `task up` du profil standard avec zot, hors Keycloak et Mailpit,
+passe de 1 473,6 Mo à 1 521,9, 1 480,3 et 2 032,8 Mo, soit 135,3 %, 131,6 %
+et 180,7 % du budget de 900 s à 10 Mbit/s.
 
 [BENCH] Donnée gardée (M6), sur les trois exécutions. La classe de stockage
 relevée à chaque exécution est `standard`, provisionneur `rancher.io/local-path`,
@@ -413,7 +445,7 @@ chaque option ajoute autour, l'empaquetage, l'opérateur et l'image servie.
 | --- | --- | --- | --- | --- |
 | O1. Sans opérateur | 5/5 | 15 | PostgreSQL License, approuvée par l'OSI ; empaquetage de l'image sous MIT ; les manifests sont écrits par CELIAN, sous Apache-2.0 comme le générateur | [S2], [S3], [S4], [S10] |
 | O2. CloudNativePG | 5/5 | 15 | Apache-2.0 pour l'opérateur et pour les scripts des images d'opérande, construites sur les paquets du PGDG ; aucun changement de licence relevé | [S4], [S5], [S8] |
-| O3. Opérateur de Zalando | 4/5 | 12 | MIT pour l'opérateur, Apache-2.0 pour Spilo. Réserve : Spilo embarque une vingtaine d'extensions sous leurs propres licences ; TimescaleDB y est construite en édition Apache par défaut, mais les options de construction de l'image publiée n'ont pas été lues | [S4], [S17], [S20] |
+| O3. Opérateur de Zalando | 4/5 | 12 | MIT pour l'opérateur, Apache-2.0 pour Spilo. L'image publiée est construite sans argument, donc avec TimescaleDB en édition Apache et sans la boîte à outils de Timescale, sous licence non libre. Réserve : une vingtaine d'extensions des paquets du PGDG, licences non lues une à une | [S4], [S17], [S20], [S58] |
 
 ### 5.2 Gouvernance (fondation, multi-vendeurs), poids 15
 
@@ -428,7 +460,7 @@ chaque option ajoute autour, l'empaquetage, l'opérateur et l'image servie.
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
 | O1. Sans opérateur | 5/5 | 15 | PostgreSQL publie une majeure par an et maintient chacune cinq ans ; l'image officielle existe depuis 2014. Supprimer un StatefulSet ne supprime pas ses volumes, et sa politique de rétention est stable depuis Kubernetes 1.32 | [S1], [S3], [S39] |
-| O2. CloudNativePG | 4/5 | 12 | Dépôt créé en 2022, accepté à la CNCF le 2025-01-21, Incubating par vote du TOC. 56 organisations dans `ADOPTERS.md`, dont EDB pour son service de base de données ; l'annonce de la CNCF, écrite par les mainteneurs, cite IBM, Google Cloud, Microsoft Azure et Tesla parmi plus de 50 adoptants en production. Réserve : le niveau Incubating date de dix-huit jours, et la liste d'adoptants est déclarative | [S5], [S13], [S29], [S46] |
+| O2. CloudNativePG | 4/5 | 12 | Code ouvert par EDB en avril 2022, premier commit le 2020-02-18 selon la CNCF ; accepté à la CNCF le 2025-01-21, Incubating par vote du TOC. 56 organisations dans `ADOPTERS.md`, dont EDB pour son service de base de données ; l'annonce de la CNCF, écrite par les mainteneurs, cite IBM, Google Cloud, Microsoft Azure et Tesla parmi plus de 50 adoptants en production. Réserve : niveau Incubating, graduation demandée en 2027 seulement, liste d'adoptants déclarative | [S5], [S13], [S29], [S46] |
 | O3. Opérateur de Zalando | 4/5 | 12 | Dépôt créé en 2017, « used in production for over five years » chez Zalando, déclaré par le projet. Réserve : aucune liste d'adoptants ; la 2.0.0 de juillet 2026 a dû être republiée en 2.0.1 pour une CRD qui cassait les chaînes GitOps | [S17], [S18] |
 
 ### 5.4 Activité et maintenance, poids 10
@@ -443,8 +475,8 @@ chaque option ajoute autour, l'empaquetage, l'opérateur et l'image servie.
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| O1. Sans opérateur | 4/5 | 8 | Rien d'autre que le serveur : ni opérateur, ni webhook, ni droit sur les Secrets du cluster. L'image sert 18.7, qui corrige 52 vulnérabilités, et tourne ici sans root, capacités retirées, mot de passe lu dans un fichier du Secret, authentification `scram-sha-256` par défaut. Réserve : ce durcissement est écrit et tenu par CELIAN ; Docker retire Docker Content Trust pour ses images officielles sans remplaçant documenté, donc aucune signature vérifiable n'a été trouvée (ENF-03), comme pour les images que `task up` construit (ADR-006) | [S2], [S11], [S45], [M1], [M8] |
-| O2. CloudNativePG | 3/5 | 6 | Quatre avis en 12 mois, dont deux critiques (élévation vers le superutilisateur par l'exportateur de métriques, puis par des opérateurs SQL), un élevé et un moyen, tous corrigés le jour de leur publication sur chaque mineure maintenue. Images signées par cosign, conteneurs en `runAsNonRoot` et `readOnlyRootFilesystem`, politique de signalement avec délais. La réserve demande une action : l'opérateur crée, lit, modifie et supprime les Secrets de tout le cluster, et trois des quatre avis manquent à la base mondiale de GitHub : veille au dépôt | [S15], [S16], [S42] |
+| O1. Sans opérateur | 3/5 | 6 | Rien d'autre que le serveur : ni opérateur, ni webhook, ni droit sur l'API. L'image a pris 18.7, qui corrige 52 vulnérabilités, le jour de sa sortie. Elle lit le mot de passe dans un fichier du Secret et refuse de s'initialiser sans mot de passe, sauf en `trust`. Elle authentifie en `scram-sha-256` les connexions réseau, et en `trust` les connexions locales dans le conteneur. La réserve demande une action. Aucune signature n'est vérifiable, et Kyverno ne l'admet que par dérogation (ENF-03). `POSTGRES_USER` fait de l'utilisateur de l'application un superutilisateur, attribut que Cloud SQL ne donne jamais. Le durcissement écrit par CELIAN omet `seccompProfile`, exigé par le profil `restricted` | [S2], [S3], [S11], [S45], [S49], [S50], [S51], [S52], [S53], [S55], [M8] |
+| O2. CloudNativePG | 3/5 | 6 | Quatre avis en 12 mois, dont deux critiques (élévation vers le superutilisateur par l'exportateur de métriques, puis par des opérateurs SQL), un élevé et un moyen, tous corrigés le jour de leur publication sur chaque mineure maintenue. Images signées par cosign, conteneurs en `runAsNonRoot` et `readOnlyRootFilesystem`, politique de signalement avec délais. Le rôle `app` est créé sans privilège, et le superutilisateur n'a pas de mot de passe par défaut. Les deux avis critiques visaient le passage de ce rôle au superutilisateur. La réserve demande une action : l'opérateur crée, lit, modifie et supprime les Secrets de tout le cluster, et trois des quatre avis manquent à la base mondiale de GitHub : veille au dépôt | [S15], [S16], [S27], [S42], [S54] |
 | O3. Opérateur de Zalando | 2/5 | 4 | L'image par défaut sert 18.3 (M8), sans les correctifs de 18.4, 18.6 et 18.7, dont 52 vulnérabilités pour 18.7 seule. Spilo tourne en root par défaut, élévation de privilèges permise ; l'opérateur crée et modifie les CRD et les Secrets du cluster. Aucun avis publié ; signalement par courriel, sans délai annoncé. Contourner demande de construire sa propre image Spilo | [S11], [S21], [S24], [S25], [S36], [M8] |
 
 [BENCH] Les CVE de PostgreSQL lui-même ne départagent pas : la page de
@@ -458,6 +490,10 @@ désigné par condensat dans le script, y compris la variable
 Zalando n'active pas (pgbouncer, sauvegarde logique) [S42], [S25]. Les cinq
 images portent des attestations de construction (provenance, SBOM) au
 registre [S43]. Seule CloudNativePG documente une signature cosign [S15].
+Les attestations de l'image officielle sont des déclarations in-toto non
+signées [S51], et la chaîne des images officielles ne signe que le dépôt
+`notary` [S50]. Le workflow de publication de Spilo n'a aucune étape de
+signature [S58].
 
 ### 5.6 Empreinte sur PC (RAM, CPU, démarrage), poids 10
 
@@ -510,12 +546,16 @@ intervention.
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| O1. Sans opérateur | 4/5 | 4 | Gratuit, rien de facturé : la couche ne tourne que sur le PC. Coût en temps : CELIAN tient les manifests et leur durcissement | [S2], [S12] |
-| O2. CloudNativePG | 4/5 | 4 | Gratuit, rien de facturé. Coût en temps : une mineure environ tous les deux mois, maintenue trois mois après la suivante, donc une montée d'opérateur au moins deux fois par an | [S7] |
-| O3. Opérateur de Zalando | 4/5 | 4 | Gratuit, rien de facturé. Coût en temps : suivre l'opérateur et, faute d'image Spilo à jour, construire la sienne | [S20], [M8] |
+| O1. Sans opérateur | 5/5 | 5 | Aucune licence ni service payant : la couche ne tourne que sur le PC, et la cible `gcp` garde Cloud SQL quelle que soit l'option. Le temps de tenue des manifests est compté en 5.8, comme dans BENCH-008 | [S2], [S10], [S12] |
+| O2. CloudNativePG | 4/5 | 4 | Gratuit, rien de facturé. Coût en temps : une mineure tous les deux à trois mois, maintenue trois mois après la suivante, donc une montée d'opérateur au moins deux fois par an | [S7] |
+| O3. Opérateur de Zalando | 3/5 | 3 | Gratuit, rien de facturé. La réserve demande une action : l'image Spilo par défaut sert 18.3 et aucune plus récente n'est publiée. Rester à jour impose donc de construire et de publier sa propre image à chaque mineure de PostgreSQL, au moins tous les trois mois, en plus de suivre l'opérateur | [S1], [S20], [S43], [M8] |
 
-[BENCH] Le critère ne départage pas : aucune des trois options ne coûte de
-l'argent, et chacune a son coût en temps.
+[BENCH] Aucune option ne coûte de l'argent, ni sur le PC ni sur GCP, où Cloud
+SQL est facturé de la même façon dans les trois cas. Le critère compte le
+temps d'exploitation que chaque option ajoute, hors du temps de tenue du code
+déjà compté en 5.8 (règle de BENCH-008, relecture [FINOPS] du 2026-11-21) :
+rien pour O1, les montées d'opérateur pour CloudNativePG, une image Spilo à
+construire pour Zalando.
 
 ## 6. Grille pondérée
 
@@ -526,29 +566,35 @@ l'argent, et chacune a son coût en temps.
 | Gouvernance (fondation, multi-vendeurs) | 15 | 4/5, 12 pts | 4/5, 12 pts | 2/5, 6 pts |
 | Maturité et adoption | 15 | 5/5, 15 pts | 4/5, 12 pts | 4/5, 12 pts |
 | Activité et maintenance | 10 | 5/5, 10 pts | 5/5, 10 pts | 3/5, 6 pts |
-| Sécurité (CVE, réactivité) | 10 | 4/5, 8 pts | 3/5, 6 pts | 2/5, 4 pts |
+| Sécurité (CVE, réactivité) | 10 | 3/5, 6 pts | 3/5, 6 pts | 2/5, 4 pts |
 | Empreinte sur PC (RAM, CPU, démarrage) | 10 | 3/5, 6 pts | 3/5, 6 pts | 3/5, 6 pts |
 | Portabilité multi-cloud | 10 | 5/5, 10 pts | 5/5, 10 pts | 3/5, 6 pts |
 | Expérience dev et documentation | 10 | 4/5, 8 pts | 4/5, 8 pts | 3/5, 6 pts |
-| Coût (managé ou opérationnel) | 5 | 4/5, 4 pts | 4/5, 4 pts | 4/5, 4 pts |
-| Total | 100 | 88 / 100 | 83 / 100 | 62 / 100 |
+| Coût (managé ou opérationnel) | 5 | 5/5, 5 pts | 4/5, 4 pts | 3/5, 3 pts |
+| Total | 100 | 87 / 100 | 83 / 100 | 61 / 100 |
 
 ## 7. Verdict proposé
 
 [BENCH] Option proposée : O1, Postgres sans opérateur, un StatefulSet et un
-Service écrits à la main autour de l'image officielle, à 88 sur 100. Elle
-devance CloudNativePG, l'option pressentie par le PRD, de 5 points (83), et
-l'opérateur de Zalando de 26 points (62).
+Service écrits à la main autour de l'image officielle, à 87 sur 100. Elle
+devance CloudNativePG, l'option pressentie par le PRD, de 4 points (83), et
+l'opérateur de Zalando de 26 points (61).
 
-[BENCH] Pourquoi. Les 5 points d'écart viennent de deux critères : la
-maturité (3 points, PostgreSQL et un StatefulSet éprouvé contre un niveau
-Incubating de dix-huit jours [S13], [S39]), la sécurité (2 points, aucun
-composant qui détienne des droits sur les Secrets du cluster, face à deux avis
-critiques en douze mois et à un opérateur qui crée et supprime tous les
-Secrets [S16], [S42]). L'empreinte ne départage rien en note, mais elle va
-dans le même sens pour la mémoire et le temps : 112,3 Mio de moins au nœud que
-CloudNativePG (48,1 contre 160,4) et « prêt » en 8,9 s contre 33,8 (M1, M2).
-CloudNativePG télécharge en revanche 41,5 Mo de moins (127,0 contre 168,5).
+[BENCH] Pourquoi. Les 4 points d'écart viennent de la maturité (3 points) et
+du coût (1 point). D'un côté, PostgreSQL, l'image officielle et un
+StatefulSet, objet du cœur de Kubernetes. De l'autre, un projet Incubating qui
+ne demandera la graduation qu'en 2027 [S13], [S39], [S46], et des montées
+d'opérateur au moins deux fois par an [S7]. La sécurité ne départage pas : 3
+de chaque côté, pour des raisons opposées. O1 n'ajoute aucun droit sur l'API,
+mais son image n'a pas de signature vérifiable, et son utilisateur
+d'application est superutilisateur. CloudNativePG signe ses images et sépare
+les rôles, mais son opérateur détient tous les droits sur les Secrets du
+cluster, et ses deux avis critiques visaient la frontière entre le rôle de
+l'application et le superutilisateur [S16], [S42], [S49], [S53]. L'empreinte
+ne départage rien en note, mais elle va dans le même sens pour la mémoire et
+le temps : 112,3 Mio de moins au nœud que CloudNativePG (48,1 contre 160,4),
+et « prêt » en 8,9 s contre 33,8 (M1, M2). CloudNativePG télécharge en
+revanche 41,6 Mo de moins (127,0 contre 168,5).
 Hors grille, deux faits mesurés pèsent aussi pour O1 : supprimer l'objet qui
 porte Postgres garde la donnée avec O1 et la perd avec CloudNativePG (M6 c),
 et O1 ne demande aucune boucle d'attente sur l'API dans `task up`.
@@ -562,28 +608,30 @@ CloudNativePG reste aussi le seul des trois à signer ses images par cosign
 [S15], ce que Kyverno exigera dans les profils qui l'embarquent (ENF-03).
 
 [BENCH] Sensibilité. Le verdict repose sur des notes de jugement, et l'écart
-tient en deux crans. Un seul cran rendu à CloudNativePG laisse O1 devant, de
-2 ou 3 points. Deux crans changent l'issue : gouvernance à 5, au titre de la
-fondation, et maturité à 5, au vu des adoptants cités par la CNCF, mettent
-CloudNativePG devant, 89 contre 88 ; gouvernance à 5 et sécurité à 4 donnent
-l'égalité, 88 partout. Dans l'autre sens, si [SECU] tient l'absence de
-signature de l'image officielle pour une action (réserve de 5.5), O1 passe à
-3 en sécurité, soit 86, encore devant.
+tient en deux crans de poids 15. Un seul cran rendu à CloudNativePG, la
+gouvernance à 5 au titre de la fondation ou la maturité à 5 au vu des
+adoptants cités par la CNCF, la laisse derrière, 86 contre 87. Deux crans la
+mettent devant, 89 contre 87. Un cran de sécurité rendu à CloudNativePG la
+laisse derrière, 85 contre 87.
 Les lectures de l'empreinte qui contredisent les règles de la GATE 1 ne
 changent pas l'ordre :
 
 | Lecture | O1 | O2 | O3 | En tête | Règle |
 | --- | --- | --- | --- | --- | --- |
-| Grille | 88 | 83 | 62 | O1 | Sans objet |
-| Gouvernance de O2 à 5 (fondation) | 88 | 86 | 62 | O1 | Aucune contredite : jugement sur la part d'EDB |
-| Maturité de O2 à 5 (adoptants cités par la CNCF) | 88 | 86 | 62 | O1 | Aucune contredite : jugement sur un niveau Incubating de dix-huit jours |
-| Gouvernance et maturité de O2 à 5 | 88 | 89 | 62 | O2 | Aucune contredite : deux jugements |
-| Gouvernance à 5 et sécurité à 4 pour O2 | 88 | 88 | 62 | Égalité | Aucune contredite : deux jugements de [SECU] et du DSI |
-| Absence de signature de l'image officielle tenue pour une action : O1 à 3 en sécurité | 86 | 83 | 62 | O1 | Aucune contredite : jugement de [SECU] |
-| O1 en variante Alpine, 120,3 Mo en amd64 | 88 | 83 | 62 | O1 | Aucune : toujours au-dessus de 112,5 Mo, à 6,9 % du seuil |
-| O2 avec l'image `standard` (264,0 Mo) ou `system` (316,9 Mo) | 88 | 83 | 62 | O1 | Aucune : même cran perdu |
-| Volume cumulé avec la plate-forme de base (505,8 Mo) contre 500 Mo | 88 | 83 | 62 | O1 | Contredit la deuxième règle de la GATE 1 ; les trois perdent le même cran |
-| Mémoire en somme des pods au lieu du nœud | 88 | 83 | 62 | O1 | Contredit la troisième règle ; les trois restent sous 512 Mio |
+| Grille réconciliée | 87 | 83 | 61 | O1 | Sans objet |
+| Gouvernance de O2 à 5 (fondation) | 87 | 86 | 61 | O1 | Aucune contredite : jugement sur la part d'EDB |
+| Maturité de O2 à 5 (adoptants cités par la CNCF) | 87 | 86 | 61 | O1 | Aucune contredite : jugement sur un niveau Incubating, graduation demandée en 2027 |
+| Gouvernance et maturité de O2 à 5 | 87 | 89 | 61 | O2 | Aucune contredite : deux jugements |
+| Sécurité de O2 à 4 | 87 | 85 | 61 | O1 | Aucune contredite : jugement de [SECU] |
+| Gouvernance à 5 et sécurité à 4 pour O2 | 87 | 88 | 61 | O2 | Aucune contredite : deux jugements de [SECU] et du DSI |
+| Sécurité de O1 à 4 (lecture initiale du rapport) | 89 | 83 | 61 | O1 | Aucune contredite : lecture de [BENCH] avant la relecture [SECU] |
+| Coût à 4/5 pour les trois (lecture initiale de 5.9) | 86 | 83 | 62 | O1 | Aucune contredite : lecture de [BENCH] avant la relecture [FINOPS] |
+| O1 en variante Alpine, 120,3 Mo en amd64 | 87, ou 89 sous le seuil | 83 | 61 | O1 | Aucune : 6,9 % au-dessus de 112,5 Mo, donc à moins de 10 % du seuil ; ses deux notes possibles sont 3/5 et 4/5 |
+| O2 avec l'image `standard` (264,0 Mo) ou `system` (316,9 Mo) | 87 | 83 | 61 | O1 | Aucune : même cran perdu |
+| Volume cumulé avec la plate-forme de base (505,8 Mo) contre 500 Mo | 87 | 83 | 61 | O1 | Contredit la deuxième règle de la GATE 1 ; les trois perdent le même cran |
+| Mémoire en somme des pods au lieu du nœud | 87 | 83 | 61 | O1 | Contredit la troisième règle ; les trois restent sous 512 Mio |
+| zot retenu (BENCH-010), seuil 2 lu comme un retéléchargement depuis Internet, docker.io seul reflété | 89 | 83 | 61 | O1 | Contredit la lettre du seuil 2, mesuré sans miroir ; non mesuré pour l'image d'O1 |
+| Même lecture, ghcr.io reflété aussi | 89 | 85 | 63 | O1 | Idem, non mesuré |
 
 [BENCH] Réserves. L'image officielle est tenue par deux personnes [S38] : si
 son rythme ralentissait, les paquets du PGDG restent disponibles, et
@@ -595,19 +643,32 @@ décembre 2026 [S7], ou au plus tard le 2027-05-20.
 [BENCH] Conditions proposées pour l'ADR-012, chacune vérifiable par la
 matrice (principe I) :
 
-1. Manifests dans la couche `local` seulement : un Service et un StatefulSet,
+1. Manifests dans la couche `local` seulement. Un Service et un StatefulSet,
    sans objet `Secret` (condition 1 de l'ADR-006). Image officielle par
-   condensat (FR-008), variante Debian, sous l'UID 999 sans privilège,
-   capacités retirées, comme dans le script. Contrôle : la matrice échoue sur
-   une image sans condensat, un conteneur root, ou
-   `POSTGRES_HOST_AUTH_METHOD=trust` (R-20).
-2. Mot de passe par fichier : `POSTGRES_USER_FILE` et `POSTGRES_PASSWORD_FILE`
-   pointent sur le Secret monté, jamais une valeur en variable.
+   condensat (FR-008), variante Debian. Le conteneur tourne sous l'UID 999
+   avec `runAsNonRoot`, `allowPrivilegeEscalation: false`, capacités retirées
+   et `seccompProfile` en `RuntimeDefault`, sans jeton de compte de service
+   monté. Le namespace de la base applique le profil `restricted` des Pod
+   Security Standards [S55]. `readOnlyRootFilesystem` s'essaie sur le golden
+   repo. Contrôle : la matrice échoue sur une image sans condensat, sur un pod
+   refusé par le profil `restricted`, ou sur `POSTGRES_HOST_AUTH_METHOD=trust`
+   (R-20).
+2. Mot de passe par fichier, aucune méthode `trust`. `POSTGRES_USER_FILE` et
+   `POSTGRES_PASSWORD_FILE` pointent sur le Secret monté, jamais sur une
+   valeur en variable. `POSTGRES_INITDB_ARGS` porte
+   `--auth-local=scram-sha-256 --auth-host=scram-sha-256`, que l'entrypoint
+   prend en charge [S52]. Ainsi, aucune ligne `trust` n'existe, même dans le
+   conteneur. La sonde `pg_isready` n'a pas besoin du mot de passe [S56] ; son
+   effet sur les journaux se vérifie sur le golden repo. Contrôle : la matrice
+   lit les règles de `pg_hba` et échoue sur toute méthode `trust`. Un pod d'un
+   autre namespace qui se connecte sans mot de passe doit être refusé.
 3. Secret et volume vivent ensemble. Les variables de l'image ne servent qu'à
    l'initialisation d'un volume vide [S2] : `task up` ne recrée jamais le
    Secret tant que le volume existe, et la commande d'arrêt supprime les deux
    ou aucun. Contrôle : deux `task up` sur le même cluster gardent la même
    empreinte du Secret et la donnée lisible (US-2, scénario 3), comme M6 (b).
+   Si le volume existe sans le Secret, `task up` s'arrête avec un message qui
+   propose de supprimer les deux, au lieu de tirer une nouvelle valeur.
 4. Donnée gardée au rechargement et à la suppression du pod (US-1,
    scénario 3 ; FR-007), testée comme M6 (a) et (b). Le redémarrage du nœud
    reste à mesurer, avec l'accord de Lucas (section 8).
@@ -616,14 +677,35 @@ matrice (principe I) :
    tenue en une seule valeur pour les deux couches, comme la mineure de
    Kubernetes dans l'ADR-004. Contrôle : la matrice compare `server_version`
    à cette valeur. Un écart de mineure est admis et listé au README (18.7 en
-   local, 18.6 sur Cloud SQL le 2026-11-20 [S12]).
+   local, 18.6 sur Cloud SQL le 2026-11-20 [S12]). Renovate ne propose aucune
+   autre majeure pour l'image `postgres`. Contrôle : la configuration de
+   Renovate est relue par [SECU].
 6. « Prêt » veut dire une requête authentifiée par le Service, comme M1, et
    non un pod `Ready`.
-7. Signature : aucune signature vérifiable de l'image officielle n'a été
-   trouvée, Docker retirant Docker Content Trust sans remplaçant documenté
-   [S45]. Avant que Kyverno entre dans un profil (ENF-03), l'ADR-012 dit
-   comment ce profil admet l'image, avec la même règle que pour les images
-   que `task up` construit (ADR-006), et [SECU] la relit.
+7. Signature. Aucune signature vérifiable de l'image officielle. Docker a
+   retiré Docker Content Trust pour ses images officielles à partir du
+   2025-08-08, et annonce un remplaçant sans date [S45], [S49]. La chaîne de
+   construction ne signe que le dépôt `notary` [S50], et les attestations
+   sont des déclarations in-toto non signées [S51]. FR-008 reste tenu par le
+   condensat, qui garantit le contenu et non son auteur ; ENF-03 ne l'est pas.
+   Avant que Kyverno entre dans un profil, l'ADR-012 porte une dérogation
+   datée, comme le veut la gouvernance de la constitution. L'image est admise
+   par sa référence exacte, condensat compris, dans une liste fermée [S59].
+   Cette liste est tenue dans la même PR que le manifest, et [SECU] la relit
+   à chaque montée. La dérogation tombe dès que Docker publie une signature
+   que Kyverno sait vérifier. Les images signées qui existent ne conviennent
+   pas en l'état : Docker Hardened Images demande un compte Docker et un
+   Secret de tirage [S57], et l'opérande de CloudNativePG n'a pas le script
+   d'initialisation de l'image officielle.
+8. Rôle de l'application sans superutilisateur. `POSTGRES_USER` crée un
+   superutilisateur [S2], alors que Cloud SQL n'en donne jamais [S53]. Le
+   superutilisateur garde son propre mot de passe, tiré par `task up` selon
+   la condition 1 de l'ADR-007, dans un Secret de la couche `local` que
+   l'application ne monte pas. Un script d'initialisation crée le rôle de
+   `db-auth`, propriétaire de la base `app`, sans `SUPERUSER` ; `CREATEROLE`
+   et `CREATEDB` ne s'ajoutent que sur un besoin écrit. Contrôle : la matrice
+   échoue si l'utilisateur de `db-auth` est superutilisateur, ou si le Secret
+   du superutilisateur figure dans un manifest de l'application.
 
 [BENCH] Réversibilité. Passer à CloudNativePG ne toucherait que la couche
 `local` : l'application garde le Secret `db-auth`, que CloudNativePG accepte
@@ -640,7 +722,8 @@ Secret de `task up` passé par `bootstrap.initdb.secret` ; boucle d'attente
 bornée tant que le webhook refuse le `Cluster` ; une commande d'arrêt qui ne
 supprime pas le `Cluster` si la donnée doit rester ; veille des avis au dépôt,
 la base mondiale n'en ayant qu'un sur quatre ; montée de mineure au moins deux
-fois par an.
+fois par an ; un miroir ghcr.io déclaré dans zot (ADR-011), sans quoi ses
+deux images, 127,0 Mo, repartent d'Internet à chaque création du cluster.
 
 [BENCH] Suites. L'ADR-012, écrit par [ARCHI]. Une entrée `postgres` au
 catalogue (ADR-009) : ligne `local` en `oss`, « image officielle PostgreSQL
@@ -651,24 +734,58 @@ d'images officielles de Docker », statut actif, vérifiée le 2026-11-20, sourc
 Standard exposé : `postgresql-protocol`, déjà dans la liste fermée du
 catalogue. Pour le DSI : le risque R-35 ci-dessous.
 
-[BENCH] R-35 proposé, porteur [DEV] et [SECU], probabilité moyenne, impact
-moyen. « Postgres local écrit à la main dans chaque projet généré. Le
-StatefulSet, son durcissement et ses règles d'initialisation deviennent du
-code de CELIAN, copié dans chaque projet. Quatre dérives possibles : un
-Secret recréé sur un volume existant, qui laisse l'ancien mot de passe en
-base et coupe l'application ; un volume monté ailleurs que sous
-`/var/lib/postgresql`, qui loge la donnée hors du PVC ; une méthode `trust`
-glissée pour déboguer ; une image qui ne suit plus les mineures, alors que
-18.7 corrige 52 vulnérabilités. Mitigation : conditions 1 à 6 de l'ADR-012,
-testées par la matrice ; Renovate sur le condensat de l'image, avec
-l'exception de sécurité du principe VI. »
+[BENCH] R-35 proposé, texte validé par [SECU] le 2026-11-21. Il n'entre pas
+encore au registre des risques : il dépend de la décision de l'ADR-012.
+
+> | ID | Risque | Probabilité | Impact | Porteur | État |
+> | --- | --- | --- | --- | --- | --- |
+> | R-35 | Postgres local écrit à la main dans chaque projet généré | Moyenne | Moyen | DEV, SECU | Ouvert |
+>
+> BENCH-011 propose Postgres sans opérateur sur la cible `local`. Le
+> StatefulSet, son durcissement et ses règles d'initialisation deviennent du
+> code de CELIAN, copié dans chaque projet généré. Six dérives sont
+> possibles :
+>
+> - un Secret recréé sur un volume existant laisse l'ancien mot de passe en
+>   base et coupe l'application ;
+> - un volume monté ailleurs que sous `/var/lib/postgresql` loge la donnée
+>   hors du PVC ;
+> - une méthode `trust` glissée pour déboguer ouvre la base à tout le
+>   cluster ;
+> - l'utilisateur de l'application reste superutilisateur, le défaut de
+>   l'image, alors que Cloud SQL n'en donne jamais : une migration qui en
+>   dépend passe en local et échoue sur GCP ;
+> - Renovate propose la majeure 19, que `latest` désigne depuis le
+>   2026-11-19, et casse la parité avec Cloud SQL ;
+> - l'image ne suit plus les mineures, alors que 18.7 corrige 52
+>   vulnérabilités.
+>
+> S'y ajoute un écart à ENF-03 : l'image officielle n'a aucune signature
+> vérifiable, et Kyverno ne l'admet que par dérogation.
+>
+> Probabilité moyenne : chaque dérive tient à une ligne de manifest. Impact
+> moyen : la donnée locale est jetable, mais une dérive de privilège ou de
+> version ne se voit qu'au déploiement sur GCP.
+>
+> Mitigation :
+>
+> - conditions 1 à 8 de l'ADR-012, testées par la matrice ;
+> - Renovate sur le condensat de l'image, avec l'exception de sécurité du
+>   principe VI, sans montée de majeure hors de la valeur de la condition 5 ;
+> - `mysecretpassword`, valeur d'exemple de la documentation de l'image,
+>   ajoutée à la liste des valeurs connues de la condition 1 de l'ADR-007 ;
+> - dérogation à ENF-03 datée dans l'ADR-012, relue par [SECU] à chaque
+>   montée de condensat, et levée à la publication d'une signature Docker
+>   vérifiable par Kyverno ;
+> - relecture [SECU] de toute modification du StatefulSet de la couche
+>   `local`.
 
 ## 8. Limites et biais
 
 | Limite | Effet possible sur le verdict | Ce qui la lèverait |
 | --- | --- | --- |
 | Une seule machine (macOS, OrbStack, arm64), moteur non libre (R-26) | Temps et mémoire propres à ce poste ; les volumes, eux, sont lus au registre pour l'amd64 | Relancer le script sur Linux amd64 avec Docker Engine |
-| Redémarrage du nœud non mesuré : `docker start` attend l'accord de Lucas | La donnée gardée après un redémarrage du poste n'est pas prouvée pour les trois options | `NODE_RESTART=1`, après accord, qui lance `docker stop celian-bench-011-control-plane` puis `docker start celian-bench-011-control-plane` dans chaque exécution |
+| Redémarrage du nœud non mesuré. `docker stop` et `docker start` sont réservés à Lucas par consigne du DSI : aucune règle de `.claude/settings.json` ne les filtre, et une règle ne verrait pas une commande lancée par le script | La donnée gardée après un redémarrage du poste n'est pas prouvée pour les trois options | `NODE_RESTART=1`, après accord, qui lance `docker stop celian-bench-011-control-plane` puis `docker start celian-bench-011-control-plane` dans chaque exécution |
 | Images tirées sur le réseau à chaque exécution | M1 dépend du débit du moment : 27,2 à 28,1 s pour tirer Spilo, 2,9 à 6,6 s pour les autres images | Remesurer après la solution de R-25 (BENCH-010), cache du nœud plein |
 | Un test de fumée a tourné après l'écriture des seuils (2026-11-20, de 20:13 à 20:22 UTC, une exécution par option) | Aucun : les seuils étaient déjà posés et hachés ; le test a conduit à relever les redémarrages au repos plutôt qu'en fin d'exécution | Sans objet |
 | M6 (c) supprime l'objet qui porte Postgres, pas le namespace | La lecture de la commande d'arrêt reste ouverte (question 4 de l'ADR-006) ; supprimer le namespace emporterait le volume dans les trois options | Refaire M6 avec la commande d'arrêt retenue |
@@ -676,25 +793,27 @@ l'exception de sécurité du principe VI. »
 | Durcissement d'O1 essayé en partie : `readOnlyRootFilesystem` non essayé | La condition 1 pourrait demander un réglage de plus | Essai sur le golden repo |
 | Comptes de commits relevés par l'API de GitHub, employeurs déclarés sur les profils | Gouvernance de O2 et de O3 lue sur des déclarations | Statistiques de LFX pour CloudNativePG |
 | Percona non mesuré, écarté sur sources | Un autre troisième aurait pu finir devant Zalando, pas devant O1 : Percona tire au moins 540 Mo d'images (opérateur et Postgres) en amd64 | Mesurer Percona avec le même script |
-| Aucune signature vérifiable de l'image officielle, sans remplaçant documenté par Docker [S45] | O1 perdrait un cran de sécurité (86), toujours devant | Relecture [SECU] ; guide de migration de Docker |
+| Aucune signature vérifiable de l'image officielle, sans remplaçant documenté par Docker [S45], [S49] | Retenu par [SECU] : O1 perd un cran de sécurité. Dérogation datée à ENF-03 dans l'ADR-012 (condition 7) | Une signature de Docker vérifiable par Kyverno |
 | Option pressentie par le PRD : CloudNativePG | Aucune note ne lui donne d'avantage ; elle finit deuxième | Sans objet |
 
 ## 9. Sources
 
-[BENCH] Toutes lues le 2026-11-20. Les fichiers de dépôt GitHub ont été lus
-par l'API de GitHub (`gh api`), au tag ou au commit indiqué ; les comptes de
-commits sont ceux de la branche par défaut, du 2025-11-20 au 2026-11-20, bots
-exclus (comptes en `[bot]` et `cnpg-bot`).
+[BENCH] Lues le 2026-11-20, sauf S49 à S61, lues le 2026-11-21 par [SECU].
+Les compléments de S2, S3, S16, S27 et S38 viennent de la relecture [SECU] du
+2026-11-21, celui de S7 de la relecture [FINOPS] du même jour. Les fichiers
+de dépôt GitHub ont été lus par l'API de GitHub (`gh api`), au tag ou au
+commit indiqué ; les comptes de commits sont ceux de la branche par défaut, du
+2025-11-20 au 2026-11-20, bots exclus (comptes en `[bot]` et `cnpg-bot`).
 
 | ID | URL | Lue le | Ce que la source établit | Officielle |
 | --- | --- | --- | --- | --- |
 | S1 | <https://www.postgresql.org/support/versioning/> | 2026-11-20 | 18.7 mineure courante de la 18, maintenue jusqu'au 2030-11-14 ; 19.0 sortie le 2026-11-19 ; cinq ans de support par majeure, une mineure au moins tous les trois mois | Oui |
-| S2 | <https://github.com/docker-library/docs/blob/master/postgres/README.md> | 2026-11-20 | Tags `18.7-trixie`, `18.7-bookworm`, `18.7-alpine` ; `PGDATA` en `/var/lib/postgresql/18/docker` et volume en `/var/lib/postgresql` à partir de 18 ; variables `_FILE` ; locales des variantes Alpine (musl) ; image « maintained by the PostgreSQL Docker Community » | Oui |
-| S3 | <https://github.com/docker-library/postgres> | 2026-11-20 | Licence MIT de l'empaquetage, dépôt non archivé, créé le 2014-05-22, dernier commit le 2026-11-19 ; 52 commits en 12 mois, dont 38 du bot | Oui |
+| S2 | <https://github.com/docker-library/docs/blob/master/postgres/README.md> | 2026-11-20 et 2026-11-21 | Tags `18.7-trixie`, `18.7-bookworm`, `18.7-alpine` ; `PGDATA` en `/var/lib/postgresql/18/docker` et volume en `/var/lib/postgresql` à partir de 18 ; variables `_FILE` ; locales des variantes Alpine (musl) ; image « maintained by the PostgreSQL Docker Community » ; `POSTGRES_USER` crée un superutilisateur ; `trust` en local dans le conteneur (Note 1) ; exemple `POSTGRES_PASSWORD=mysecretpassword` | Oui |
+| S3 | <https://github.com/docker-library/postgres> | 2026-11-20 et 2026-11-21 | Licence MIT de l'empaquetage, dépôt non archivé, créé le 2014-05-22, dernier commit le 2026-11-19 ; 52 commits en 12 mois, dont 38 du bot ; 18.7 dans les sources le 2026-11-12 à 18:18 UTC (commit `185fae35`) | Oui |
 | S4 | <https://opensource.org/licenses> | 2026-11-20 | Apache-2.0, MIT et PostgreSQL License approuvées par l'OSI | Oui |
 | S5 | <https://github.com/cloudnative-pg/cloudnative-pg> | 2026-11-20 | Licence Apache-2.0, dépôt créé le 2022-03-10, non archivé, dernier commit le 2026-11-20 | Oui |
 | S6 | <https://github.com/cloudnative-pg/cloudnative-pg/releases/tag/v1.30.2> | 2026-11-20 | 1.30.2 publiée le 2026-11-17 ; opérande par défaut `18.7-system-trixie` ; correctifs Go GO-2026-6617 et suivants ; SHA-256 de `cnpg-1.30.2.yaml` publié par GitHub, `ea4cc355…c68c` ; release non immuable, signature sigstore du manifest jointe | Oui |
-| S7 | <https://github.com/cloudnative-pg/cloudnative-pg/blob/main/docs/src/supported_releases.md> | 2026-11-20 | 1.30.x seule maintenue, sortie le 2026-06-29, fin vers mars 2027, Kubernetes 1.34 à 1.36, PostgreSQL 15 à 18 ; une mineure environ tous les deux mois, maintenue trois mois après la suivante ; 1.31 vers décembre 2026 | Oui |
+| S7 | <https://github.com/cloudnative-pg/cloudnative-pg/blob/main/docs/src/supported_releases.md> | 2026-11-20 et 2026-11-21 | 1.30.x seule maintenue, sortie le 2026-06-29, fin vers mars 2027, Kubernetes 1.34 à 1.36, PostgreSQL 15 à 18 ; une mineure tous les deux à trois mois, maintenue trois mois après la suivante ; 1.31 vers décembre 2026 | Oui |
 | S8 | <https://github.com/cloudnative-pg/postgres-containers> | 2026-11-20 | Images d'opérande sous Apache-2.0, sur Debian et paquets PGDG, reconstruites chaque semaine ; types `minimal`, `standard`, `system` (déprécié) ; amd64 et arm64 ; SBOM et provenance | Oui |
 | S9 | <https://github.com/cloudnative-pg/cloudnative-pg/releases> | 2026-11-20 | 16 releases stables en 12 mois, de 1.26.3 à 1.30.2 ; 1.30.1 le 2026-09-23 | Oui |
 | S10 | <https://www.postgresql.org/about/licence/> | 2026-11-20 | PostgreSQL publié sous la PostgreSQL License, « similar to the BSD or MIT licenses » | Oui |
@@ -703,7 +822,7 @@ exclus (comptes en `[bot]` et `cnpg-bot`).
 | S13 | <https://www.cncf.io/projects/cloudnativepg/> | 2026-11-20 | Acceptée à la CNCF le 2025-01-21, au niveau Incubating depuis le 2026-11-02 | Oui |
 | S14 | <https://github.com/cloudnative-pg/governance> (`MAINTAINERS.md`, `GOVERNANCE.md`) | 2026-11-20 | Comité de pilotage et mainteneurs du cœur : cinq personnes, toutes chez EDB ; comités chaîne d'approvisionnement et communauté ouverts à Verito Digital, GEICO et Upbound ; vote équilibré par organisation encore à venir (ticket #68) | Oui |
 | S15 | <https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.30.2/docs/src/security.md>, <https://github.com/cloudnative-pg/cloudnative-pg/blob/main/SECURITY.md> | 2026-11-20 | Images de l'opérateur et des opérandes signées par cosign ; conteneurs Postgres en `runAsNonRoot`, `readOnlyRootFilesystem`, capacités retirées, seccomp `RuntimeDefault` ; signalement privé, accusé sous 10 jours ouvrés, correctif sous 6 mois | Oui |
-| S16 | <https://github.com/cloudnative-pg/cloudnative-pg/security/advisories> | 2026-11-20 | 4 avis en 12 mois : GHSA-423p-g724-fr39 (critique, 2026-05-08), GHSA-x8c2-3p4r-v9r6 (critique), GHSA-w3gf-xc94-wvmj (élevé, CVSS 8,5), GHSA-7qwx-x8ff-3px9 (moyen, CVSS 5,4), tous trois le 2026-06-29 ; versions corrigées publiées le même jour ; seul le premier figure dans la base mondiale de GitHub | Oui |
+| S16 | <https://github.com/cloudnative-pg/cloudnative-pg/security/advisories> | 2026-11-20 et 2026-11-21 | 4 avis en 12 mois : GHSA-423p-g724-fr39 (critique, 2026-05-08), GHSA-x8c2-3p4r-v9r6 (critique), GHSA-w3gf-xc94-wvmj (élevé, CVSS 8,5), GHSA-7qwx-x8ff-3px9 (moyen, CVSS 5,4), tous trois le 2026-06-29 ; versions corrigées publiées le même jour ; seul le premier figure dans la base mondiale de GitHub ; CVE-2026-44477, CVE-2026-55769, CVE-2026-55765 ; les deux critiques partent d'un utilisateur de la base, GHSA-x8c2 du rôle propriétaire créé par défaut ; GHSA-w3gf sans effet sur une installation par défaut | Oui |
 | S17 | <https://github.com/zalando/postgres-operator/blob/v2.0.3/README.md>, `LICENSE` | 2026-11-20 | Licence MIT ; dépôt créé le 2017-05-12, non archivé, dernier commit le 2026-11-19 ; 2.0.3 pour PostgreSQL 14 à 18 et Kubernetes 1.27 et plus ; « used in production for over five years » chez Zalando | Oui |
 | S18 | <https://github.com/zalando/postgres-operator/releases/tag/v2.0.3> | 2026-11-20 | 2.0.3 publiée le 2026-10-02 ; images de l'opérateur ; la 2.0.0 republiée en 2.0.1 pour une CRD qui cassait les chaînes GitOps | Oui |
 | S19 | <https://github.com/zalando/postgres-operator/blob/v2.0.3/docs/quickstart.md> | 2026-11-20 | minikube, kind et k3d cités ; installation par `kubectl apply -k` du dossier `manifests` | Oui |
@@ -714,7 +833,7 @@ exclus (comptes en `[bot]` et `cnpg-bot`).
 | S24 | <https://github.com/zalando/postgres-operator/blob/v2.0.3/docs/administrator.md>, `docs/reference/operator_parameters.md` | 2026-11-20 | CRD enregistrées par l'opérateur au démarrage ; Spilo tourne en root par défaut (`spilo_runasuser`) ; `spilo_allow_privilege_escalation` à `true` par défaut ; Secrets et PVC supprimés avec l'objet par défaut (`enable_secrets_deletion`, `enable_persistent_volume_claim_deletion`) | Oui |
 | S25 | <https://github.com/zalando/postgres-operator/tree/v2.0.3/manifests> | 2026-11-20 | `docker_image: ghcr.io/zalando/spilo-18:4.1-p2` ; `secret_name_template` ; ClusterRole qui crée, modifie et supprime les Secrets et les CRD du cluster ; SHA-256 des quatre fichiers, figés dans le script | Oui |
 | S26 | <https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.30.2/docs/src/installation_upgrade.md> | 2026-11-20 | Installation par `kubectl apply --server-side -f` du manifest de release ; opérateur dans `cnpg-system` | Oui |
-| S27 | <https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.30.2/docs/src/bootstrap.md> | 2026-11-20 | `bootstrap.initdb.secret` : Secret `kubernetes.io/basic-auth` fourni par l'utilisateur, ou mot de passe aléatoire généré par l'opérateur | Oui |
+| S27 | <https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.30.2/docs/src/bootstrap.md> | 2026-11-20 et 2026-11-21 | `bootstrap.initdb.secret` : Secret `kubernetes.io/basic-auth` fourni par l'utilisateur, ou mot de passe aléatoire généré par l'opérateur ; utilisateur `app` créé sans privilège | Oui |
 | S28 | <https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.30.2/docs/src/container_images.md> | 2026-11-20 | Majeure détectée depuis le tag de `imageName`, ou par un catalogue d'images | Oui |
 | S29 | <https://github.com/cloudnative-pg/cloudnative-pg/blob/main/ADOPTERS.md> | 2026-11-20 | 56 organisations déclarées, liste tenue par le projet | Oui, déclarative |
 | S30 | <https://github.com/percona/percona-postgresql-operator/blob/v3.1.0/LICENSE.md> | 2026-11-20 | Apache-2.0, copyright Crunchy Data puis Percona | Oui |
@@ -725,7 +844,7 @@ exclus (comptes en `[bot]` et `cnpg-bot`).
 | S35 | <https://github.com/reactive-tech/kubegres> | 2026-11-20 | Apache-2.0 ; dernière release v1.19 le 2025-01-04 | Oui |
 | S36 | <https://www.postgresql.org/support/security/> | 2026-11-20 | CVE de PostgreSQL 18 corrigées en 18.2, 18.4, 18.6 et 18.7 ; signalement à `security@postgresql.org` | Oui |
 | S37 | <https://www.postgresql.org/community/contributors/> | 2026-11-20 | Équipe principale de sept membres chez six organisations (EDB deux fois, Microsoft, Redpill Linpro, Databricks, Snowflake, pgEdge) ; 54 contributeurs majeurs, Microsoft et AWS en tête avec dix chacun | Oui |
-| S38 | <https://github.com/docker-library/official-images/blob/master/library/postgres> | 2026-11-20 | Image officielle tenue par deux mainteneurs, Tianon Gravi et Joseph Ferguson ; huit architectures | Oui |
+| S38 | <https://github.com/docker-library/official-images/blob/master/library/postgres> | 2026-11-20 et 2026-11-21 | Image officielle tenue par deux mainteneurs, Tianon Gravi et Joseph Ferguson ; huit architectures ; 18.7 dans `library/postgres` le 2026-11-12 (commit `73d32780`) ; `latest` désigne 19.0 | Oui |
 | S39 | <https://kubernetes.io/docs/concepts/workloads/controllers/statefulset/> | 2026-11-20 | Supprimer un StatefulSet ne supprime pas ses volumes ; `persistentVolumeClaimRetentionPolicy` à `Retain` par défaut, stable depuis Kubernetes 1.32 | Oui |
 | S40 | `specs/001-golden-repo-saas-b2b/spec.md`, branche `docs/spec-golden-repo`, commit `a7cf613d` | 2026-11-20 | US-1 scénario 3, US-2 scénario 3, FR-004, FR-007, FR-008, FR-017, SC-008 | Oui, interne |
 | S41 | [docs/prd-mvp.md](../prd-mvp.md) | 2026-11-20 | US-004 (CloudNativePG en exemple), US-005, ENF-01, ENF-02 | Oui, interne |
@@ -736,17 +855,300 @@ exclus (comptes en `[bot]` et `cnpg-bot`).
 | S46 | <https://www.cncf.io/blog/2026/11/10/cloudnativepg-becomes-a-cncf-incubating-project/> | 2026-11-20 | Billet du 2026-11-10, signé des mainteneurs : vote du TOC pour l'incubation ; plus de 50 adoptants en production, dont IBM, Google Cloud, Microsoft Azure, GEICO Tech et Tesla ; demande de graduation prévue en 2027 | Oui, écrit par le projet |
 | S47 | <https://cloudnative-pg.io/releases/cloudnative-pg-1-30.2-released/> | 2026-11-20 | 1.30.2 du 2026-11-17, avancée « given the security relevance of the PostgreSQL 18.7 release » | Oui |
 | S48 | <https://www.postgresql.org/docs/18/release-18-3.html> | 2026-11-20 | PostgreSQL 18.3 publiée le 2026-02-26 | Oui |
+| S49 | <https://www.docker.com/blog/retiring-docker-content-trust/> | 2026-11-21 | Billet du 2025-07-29. Les certificats DCT des images officielles expirent à partir du 2025-08-08 ; avec `DOCKER_CONTENT_TRUST=1`, leur tirage échoue, et `docker trust inspect` aussi. Une autre solution de signature est annoncée « in the near future », sans date | Oui |
+| S50 | <https://github.com/docker-library/meta-scripts/blob/1b79091a2808/doi.jq>, `meta.jq` | 2026-11-21 | Chaîne des images officielles : SBOM pour une liste de dépôts vérifiés qui contient `postgres`, provenance BuildKit `mode=max`. `build_should_sign` ne vise que le dépôt `notary`, sur amd64 | Oui |
+| S51 | <https://github.com/moby/buildkit/blob/dd75b4955087/docs/attestations/attestation-storage.md> | 2026-11-21 | Attestations rangées dans l'index comme couches `application/vnd.in-toto+json`, seul format pris en charge, donc sans enveloppe signée | Oui |
+| S52 | <https://github.com/docker-library/postgres/blob/31f4af9d429410ba4ad1f6e394daecd9ae7edfa7/18/trixie/docker-entrypoint.sh> | 2026-11-21 | Commit de `18.7-trixie` : initialisation refusée sans mot de passe hors `trust` (lignes 105-120) ; `POSTGRES_INITDB_ARGS` passé à `initdb` (ligne 92) ; `PGPASSWORD` exporté pour une authentification locale par mot de passe (lignes 357-359) | Oui |
+| S53 | <https://docs.cloud.google.com/sql/docs/postgres/users> | 2026-11-21 | « customers cannot create or have access to users with superuser attributes » ; rôle `cloudsqlsuperuser` donné aux utilisateurs intégrés | Oui |
+| S54 | <https://github.com/cloudnative-pg/cloudnative-pg/blob/v1.30.2/docs/src/cloudnative-pg.v1.md>, `postgresql_conf.md` | 2026-11-21 | `enableSuperuserAccess` désactivé par défaut, mot de passe de `postgres` mis à `NULL` ; règle fixe `local all all peer` | Oui |
+| S55 | <https://kubernetes.io/docs/concepts/security/pod-security-standards/> | 2026-11-21 | Profil `restricted` : `seccompProfile` en `RuntimeDefault` ou `Localhost`, `runAsNonRoot`, élévation interdite, capacités `ALL` retirées | Oui |
+| S56 | <https://www.postgresql.org/docs/18/app-pg-isready.html>, <https://www.postgresql.org/docs/18/app-initdb.html> | 2026-11-21 | `pg_isready` n'a pas besoin d'identifiants corrects ; `initdb` met `trust` par défaut ; options `--auth-local` et `--auth-host` | Oui |
+| S57 | <https://docs.docker.com/dhi/how-to/use/>, <https://docs.docker.com/dhi/how-to/verify/> | 2026-11-21 | Tirer depuis `dhi.io` demande une authentification et un Secret de tirage dans Kubernetes ; vérification cosign par clé, avec `--insecure-ignore-tlog` | Oui |
+| S58 | <https://github.com/zalando/spilo/tree/4.1-p2> (`.github/workflows/publish-ghcr-container.yaml`, `postgres-appliance/Dockerfile`, `build_scripts/base.sh`, `scripts/configure_spilo.py`) | 2026-11-21 | Publication sans argument de construction ni signature ; `TIMESCALEDB_APACHE_ONLY=true` ; boîte à outils hors mode Apache seulement ; `local all all trust` et rejet du non-SSL par défaut | Oui |
+| S59 | <https://kyverno.io/docs/guides/exceptions/> | 2026-11-21 | Une `ValidatingPolicy` peut sauter ses contrôles pour des images listées (`exceptions.allowedImages`) | Oui |
+| S60 | <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/providers/docker/provision.go> | 2026-11-21 | Nœud créé par `docker run` avec `--privileged` (ligne 226) | Oui |
+| S61 | <https://github.com/zalando/postgres-operator/blob/v2.0.3/pkg/util/util.go>, `pkg/util/constants/roles.go` | 2026-11-21 | Mots de passe générés par `crypto/rand`, 64 caractères | Oui |
 
 ## 10. Relectures
 
 | Relecteur | Porte sur | Date | Avis |
 | --- | --- | --- | --- |
-| [SECU] | Licences, critères éliminatoires, sécurité | à venir | à venir |
-| [FINOPS] | Coût | à venir | à venir |
+| [SECU] | Licences, critères éliminatoires, sécurité | 2026-11-21 | Réservé, favorable à O1 sous conditions. Licences, gouvernance et maturité confirmées ; la justification de maturité de CloudNativePG est à corriger. La sécurité de O1 passe à 3 : image sans signature vérifiable face à ENF-03, utilisateur de l'application superutilisateur, `seccompProfile` absent. L'ADR-012 doit porter les conditions 1 à 8 révisées, dont une dérogation datée à ENF-03. |
+| [FINOPS] | Coût | 2026-11-21 | Favorable, avec corrections : les chiffres de 4.4 et de 5.6 se retrouvent dans les données brutes et 3/5 tient pour les trois options. En 5.9, O1 passe à 5/5 (temps de tenue déjà compté en 5.8, règle de BENCH-008) et Zalando à 3/5 (image Spilo à construire), d'où 89, 83 et 61. Le cumul avec le premier `task up` doit remplacer l'image Postgres déjà comptée dans R-04. |
 
-[SECU] À venir. Points à relire en priorité : signature de l'image officielle
-(condition 7), droits de l'opérateur de CloudNativePG sur les Secrets, image
-Spilo en 18.3.
+[SECU] Critères éliminatoires et licences confirmés le 2026-11-21 par l'API
+de GitHub. `docker-library/postgres` est sous MIT depuis le 2014-09-05, et
+PostgreSQL sous la PostgreSQL License, approuvée par l'OSI [S3], [S4], [S10].
+CloudNativePG et ses images d'opérande sont sous Apache-2.0. Ce fichier de
+licence date de l'ouverture du code par EDB, le 2022-04-21, et n'a pas changé
+depuis [S5], [S8]. L'opérateur de Zalando est sous MIT, et seule l'année du
+copyright change. Spilo est sous Apache-2.0 depuis son premier commit [S17],
+[S20]. La réserve de O3 sur TimescaleDB se lève : le workflow qui publie
+Spilo 4.1-p2 ne passe aucun argument de construction, le Dockerfile met
+`TIMESCALEDB_APACHE_ONLY` à `true`, et la boîte à outils de Timescale, sous
+licence non libre, ne s'installe que hors de ce mode [S58]. Restent une
+vingtaine d'extensions des paquets du PGDG, dont je n'ai pas lu les licences
+une à une. Les notes 5, 5 et 4 sont maintenues, avec une justification
+corrigée pour O3. CELIAN ne redistribue aucune de ces images : le projet
+généré les désigne, et c'est l'utilisateur qui les tire.
 
-[FINOPS] À venir. Point à relire : volume de la couche dans le budget
-d'ENF-01, au débit visé qui reste à fixer (R-04).
+[SECU] J'ai vérifié le statut de CloudNativePG sur la page de la CNCF :
+accepté le 2025-01-21, Incubating depuis le 2026-11-02 [S13]. Le billet du
+2026-11-10, signé des mainteneurs, annonce le vote du TOC sans en donner la
+date, et prévoit une demande de graduation en 2027 [S46]. Le rapport est
+exact. `MAINTAINERS.md` confirme le reste. Le comité de pilotage, les
+mainteneurs du cœur et l'équipe de réponse de sécurité sont tous chez EDB.
+Trois autres organisations siègent dans deux comités sur quatre, et le vote
+équilibré par organisation reste ouvert (#68) [S14]. La note 4 tient : une
+fondation porte le projet, une entreprise le dirige. O1 à 4 et O3 à 2
+tiennent aussi.
+
+[SECU] En maturité, je confirme les notes 5, 4 et 4, mais une justification
+est à corriger. Dans les rapports précédents, un projet gradué à la CNCF vaut
+5, un projet Incubating ou Sandbox vaut 4 (BENCH-004, BENCH-007, BENCH-009).
+CloudNativePG est donc à sa place à 4. Sa réserve est le niveau Incubating,
+sans graduation avant 2027 [S46]. L'âge du badge, lui, ne compte pas : le
+vote sanctionne une adoption en production antérieure. Le verdict ne doit pas
+s'appuyer sur ces « dix-huit jours ».
+
+[SECU] Je ramène la sécurité de O1 à 3. Trois réserves demandent une action,
+et le rapport n'en écrit qu'une.
+
+- **La signature.** Docker a retiré Docker Content Trust pour ses images
+  officielles. À partir du 2025-08-08, leurs certificats expirent, et un
+  tirage avec `DOCKER_CONTENT_TRUST=1` échoue. Le remplaçant annoncé le
+  2025-07-29 « in the near future » n'a toujours ni date ni guide le
+  2026-11-21 [S45], [S49]. La chaîne de construction des images officielles
+  produit pour `postgres` un SBOM et une provenance BuildKit. Son sélecteur
+  de signature ne vise que le dépôt `notary`, sur amd64 [S50]. Les
+  attestations sont rangées comme déclarations in-toto, sans enveloppe signée
+  [S51]. Kyverno ne peut donc pas s'en servir comme preuve.
+- **Le rôle de l'application.** `POSTGRES_USER` crée un superutilisateur
+  [S2]. L'utilisateur de `db-auth` peut donc lancer `COPY ... TO PROGRAM` et
+  exécuter des commandes dans le pod. Or Cloud SQL ne donne cet attribut à
+  aucun utilisateur [S53] : une migration qui en dépend passerait en local et
+  échouerait sur GCP.
+- **Un oubli du durcissement.** Sans `seccompProfile`, le StatefulSet du
+  script serait refusé par le profil `restricted` des Pod Security Standards
+  [S55].
+
+Le reste tient. L'image a pris 18.7 le jour de sa sortie, le 2026-11-12 [S3],
+[S38]. Elle refuse de s'initialiser sans mot de passe, sauf en `trust` [S52].
+Aucun composant n'obtient de droit sur l'API.
+
+[SECU] Je maintiens la sécurité de CloudNativePG à 3, et celle de Zalando
+à 2. J'ai recompté les quatre avis : GHSA-423p-g724-fr39, critique,
+CVE-2026-44477 ; GHSA-x8c2-3p4r-v9r6, critique, CVE-2026-55769 ;
+GHSA-w3gf-xc94-wvmj, élevé, CVE-2026-55765 ; GHSA-7qwx-x8ff-3px9, moyen. Seul
+le premier figure dans la base mondiale de GitHub [S16]. Les deux avis
+critiques font passer un utilisateur de la base au superutilisateur, puis à
+l'exécution de commandes dans le pod. GHSA-x8c2 part du rôle propriétaire de
+la base, que CloudNativePG crée par défaut. C'est justement la frontière qui
+manque à O1, dont l'utilisateur d'application est déjà superutilisateur. Ces
+avis ne comptent donc pas comme un avantage de O1. De son côté, CloudNativePG
+crée `app` sans privilège, laisse le superutilisateur sans mot de passe et
+n'admet que `peer` en local [S27], [S54]. Ses images sont signées par cosign
+sans clé, avec l'identité du workflow de release [S15]. La note reste
+pourtant à 3, par cohérence avec ESO dans BENCH-007. Son contrôleur crée,
+lit, modifie et supprime tous les Secrets du cluster [S42], et ses avis
+échappent aux scanners, ce qui impose une veille au dépôt. Pour Zalando, les
+faits du rapport sont exacts : Spilo tourne en root avec l'élévation de
+privilèges permise par défaut [S24], il sert PostgreSQL 18.3 sans les 52
+correctifs de 18.7 [S11], et le projet ne publie aucun avis.
+
+[SECU] Secrets (R-20, ADR-007). Aucune option mesurée n'a de mot de passe par
+défaut ni d'accès réseau sans mot de passe. O1 lit `db-auth` par fichier et
+refuse un mot de passe vide [S52]. CloudNativePG reçoit `db-auth` par
+`bootstrap.initdb.secret` et ne le modifie pas (M6). Zalando ne lit pas
+`db-auth` : il adopte un Secret au nom de son gabarit, le supprime avec
+l'objet, puis le régénère, 64 caractères tirés par `crypto/rand` [S61]. La
+valeur reste aléatoire, mais `task up` n'en est plus propriétaire, alors que
+la condition 1 de l'ADR-007 l'exige. À l'intérieur du conteneur, la connexion
+locale est en `trust` pour O1, ce que l'image documente [S2], et pour Spilo
+[S58]. Elle est en `peer` pour CloudNativePG [S54]. Dans les trois cas,
+entrer dans le pod donne le superutilisateur, comme cela donne déjà le
+fichier du Secret. La documentation de l'image donne `mysecretpassword` en
+exemple [S2]. Cette valeur manque à la liste des valeurs connues de la
+condition 1 de l'ADR-007. Côté script, le mot de passe passe par un tube, de
+`/dev/urandom` à `kubectl create -f -`. Les journaux n'en gardent que «
+secret/… created ». `data.tsv` ne garde que 16 caractères hexadécimaux du
+SHA-256 de la valeur encodée, soit 64 bits d'une valeur qui en compte 238,
+sur des clusters déjà supprimés. Les `kubeconfig` de `smoke-1` et `series-1`
+ne contiennent aucune clé.
+
+[SECU] Inventaire du script, au commit `b8bc766`. Commandes qui créent,
+modifient ou suppriment un conteneur ou un réseau : `kind create cluster`
+(ligne 594), qui lance le nœud par `docker run --privileged` [S60] et crée le
+réseau `kind` s'il manque ; `kind delete cluster` (ligne 597, appelée lignes
+741, 834 et 895) ; `docker network rm kind` (ligne 900), seulement si le
+script a créé le réseau et qu'il est vide ; `docker stop` puis `docker start`
+du nœud (lignes 821 et 822), derrière `NODE_RESTART=1`. Le reste ne fait que
+lire Docker : `ps`, `stats`, `manifest inspect`, `network inspect`,
+`version`, `info`. Le script appelle `perl` (lignes 144 et 283), mais ni
+curl, ni wget, ni python, ni node. Aucune règle de `.claude/settings.json` ne
+filtre `kind`, `docker stop`, `docker start` ni `docker network rm`, et une
+règle ne verrait pas une commande lancée par un script. L'en-tête du script
+ne porte pas encore l'inventaire demandé (correction 17).
+
+[SECU] `NODE_RESTART=1` : pas d'objection de sécurité. Le redémarrage vise le
+seul `celian-bench-011-control-plane`, un nœud que le script a créé lui-même,
+puisqu'il refuse de démarrer si ce cluster existe déjà. Il n'ouvre aucun
+droit que `kind create cluster` n'ait déjà donné. Le kubeconfig réécrit reste
+dans le dossier d'essai, sous `umask 077`. Deux conditions : Lucas donne son
+accord explicite ou lance la série lui-même, et la série tourne sous le
+verrou commun.
+
+[SECU] Conséquences pour les exigences. FR-008 est tenu. Le condensat fige le
+contenu, et containerd refuse un contenu qui ne lui correspond pas
+(BENCH-010, S34). Il garantit le contenu lu le 2026-11-20, pas son auteur.
+Chaque montée de condensat par Renovate refait donc confiance à Docker Hub.
+ENF-03 n'est pas tenu, puisque Kyverno doit refuser les images non signées.
+Trois voies existent : une exception Kyverno par référence exacte, condensat
+compris, que la documentation de Kyverno prévoit [S59] ; une contre-signature
+par le projet, qui demande une clé et un registre pour la ranger, lourd pour
+un poste hors réseau ; une image signée. Docker Hardened Images signe la
+sienne, mais `dhi.io` exige un compte Docker et un Secret de tirage [S57], ce
+qui heurte le principe VII et R-28. L'image d'opérande de CloudNativePG est
+signée [S15], mais n'a pas le script d'initialisation de l'image officielle.
+Je recommande la première voie, sous forme de dérogation datée dans l'ADR-012
+(condition 7). Toute autre image officielle Docker de la stack sera dans le
+même cas.
+
+[FINOPS] Recalcul depuis la série du 2026-11-20 (`runs.tsv`, `summary.tsv`,
+`idle-pods.tsv`, `images.tsv`, `node-images.tsv` et `load.tsv` de `series-1`,
+sortie `series-1.out`). Méthode du script : médiane de trois échantillons par
+exécution, puis médiane des trois exécutions. M2 est la médiane du nœud de
+l'option moins celle du nœud de base. M1, le nœud au repos, M9, M2, la somme
+des pods, M3 et M7 se retrouvent au dixième près, écarts compris. Pour M2 :
+648,5 moins 600,4 font 48,1 Mio, 760,8 moins 600,4 font 160,4, et 792,6 moins
+600,4 font 192,2. Les médianes des opérateurs sur neuf échantillons valent
+bien 34,6 et 15,1 Mio. M4 se retrouve aux octets : 168 548 851 pour O1, 126
+959 976 pour CloudNativePG (39 120 216 plus 87 839 760), 679 476 811 pour
+Zalando (50 753 497 plus 628 723 314). Cela donne 134,8, 101,6 et 543,6 s à
+10 Mbit/s. M5 se retrouve aussi : chaque exécution tire toutes les images de
+la couche, en 4,7 à 6,3 s pour O1 et en 27,2 à 28,1 s pour Spilo. Trois
+écarts n'ont aucun effet sur les notes. D'abord, d'après les octets,
+CloudNativePG télécharge 41,6 Mo de moins qu'O1 ; les 41,5 de la section 7
+viennent des valeurs arrondies. Ensuite, la charge de l'hôte valait 5,9 au
+début de la troisième exécution de CloudNativePG et 4,2 à celle de Zalando,
+ce que « de 2,9 à 3,9 ailleurs » ne couvre pas. Enfin, refaite avec les
+valeurs arrondies de `idle-pods.tsv`, la somme des pods de Zalando donne
+104,5 et 102,0 Mio aux exécutions 2 et 3, au lieu de 104,6 et 101,9. Le
+script additionne avant d'arrondir : rien à corriger.
+
+[FINOPS] Le bruit du nœud pèse autant que la couche d'O1. Lue exécution par
+exécution, celle-ci vaut 70,3, moins 24,0 et 48,1 Mio. Le nœud de base varie
+de 36,3 Mio, celui d'O1 de 58,0. La règle lit des médianes, et la note n'en
+dépend pas : Zalando, la plus lourde, reste à 319,8 Mio sous le seuil de 512
+Mio. Par ailleurs, personne n'a mesuré la part du serveur d'API et d'etcd
+dans l'écart entre le nœud et les pods. O1, sans CRD ni webhook, montre déjà
+21,7 Mio d'écart (48,1 contre 26,4), contre 59,9 pour CloudNativePG et 87,6
+pour Zalando.
+
+[FINOPS] Les seuils ont été appliqués tels qu'écrits. J'ai relu une à une les
+lignes 148 à 196 du rapport contre `section-4.1-2026-11-20.md` : elles sont
+identiques. Le condensat de référence,
+`f9624471eccfc1886cea530f1d9335039458f59d1ba86378a3bf3a47849f95f6`, a été
+relevé à 20:07:15 UTC. Un premier relevé à 20:06:53 UTC,
+`1cb05ee6e2d68bf0ada5200406c141d5603a666ab6a661200583cdf9e9098bab`, portait «
+20:07 UTC » dans le texte : c'est sa seule différence avec la version
+retenue. Le test de fumée commence à 20:13:36 UTC (`smoke-1/runs.tsv`), la
+série à 21:54:29. Le seuil 1 est franchi par les trois options ;
+CloudNativePG le dépasse de 12,9 %, hors de la zone des 10 %. Le seuil 2
+aussi : chaque exécution porte un événement `Pulled` pour chaque image de la
+couche. Les seuils 3 et 4 ne sont pas franchis, avec au plus 44,4 s et 192,2
+Mio. Chaque option perd donc deux crans : 3/5.
+
+[FINOPS] Cumul avec le premier `task up`. Les 505,8 Mo de la plate-forme de
+base ne contiennent aucune image Postgres : c'est le nœud kind (384,8) plus
+Envoy Gateway (121,0), d'après BENCH-004 et le détail amd64 de BENCH-005. Les
+583,5 Mo avec zot n'en contiennent pas non plus. Postgres est compté dans la
+stack de BENCH-005 (632,0 Mo) sous la forme de `postgres:18.7-alpine`, 120,3
+Mo, le même volume que la variante Alpine lue ici (120 253 441 octets). Les 1
+395,9 Mo de R-04 et d'ENF-01, comme les 1 473,6 Mo avec zot, contiennent donc
+déjà une image Postgres, que l'option remplace. D'après les octets de M4,
+l'ajout net vaut 48,3 Mo pour O1, 6,7 Mo pour CloudNativePG et 559,2 Mo pour
+Zalando, soit 38,6 s, 5,4 s et 447,4 s à 10 Mbit/s. Le premier `task up` du
+profil standard avec zot, hors Keycloak et Mailpit, passe de 1 473,6 Mo à 1
+521,9 Mo avec O1, 1 480,3 Mo avec CloudNativePG et 2 032,8 Mo avec Zalando.
+Cela représente 135,3 %, 131,6 % et 180,7 % du budget de 900 s au lieu de
+131,0 %, et un débit minimal de 13,5, 13,2 et 18,1 Mbit/s au lieu de 13,1.
+Sans zot, les 1 395,9 Mo de R-04 deviennent 1 444,2, 1 402,6 et 1 955,1 Mo.
+La colonne « Cumul avec la plate-forme de base » de 4.4 est juste, puisque
+les 505,8 Mo n'ont pas de Postgres. Mais elle donne la lecture de la deuxième
+règle de la GATE 1, et non le chiffre qui fait bouger R-04.
+
+[FINOPS] Mémoire, avec la méthode de BENCH-005 reprise pour BENCH-010 :
+plancher multiplié par 1,5, arrondi au demi-gibioctet supérieur, plus 4 Gio
+pour le portable. Les planchers de BENCH-010, 1 138,5 Mio pour le profil lite
+et 1 403,7 Mio pour la partie connue du standard, contiennent déjà le
+Postgres Alpine de la stack de BENCH-005, compris dans ses 134,9 Mio, mais sa
+part n'y est pas isolée. J'en donne donc un majorant, qui ajoute M2 sans rien
+retirer. En profil lite, on obtient 1 186,6 Mio avec O1, 1 298,9 avec
+CloudNativePG et 1 330,7 avec Zalando, tous à 2,0 Gio de VM et 6,0 Gio de
+portable. Il reste 178,7, 66,4 et 34,6 Mio sous ce palier ; les deux
+dernières marges tiennent dans le bruit du nœud, qui varie de 58,0 Mio dans
+cette série. En profil standard, on obtient 1 451,8, 1 564,1 et 1 595,9 Mio,
+tous à 2,5 Gio de VM et 6,5 Gio de portable. Sur un portable de 8 Gio, il
+reste alors à Keycloak et Mailpit 1 278,9, 1 166,6 et 1 134,8 Mio de
+plancher, contre 1 327,0 aujourd'hui. Dans la même série, à périmètre égal,
+CloudNativePG coûte 112,3 Mio de plus qu'O1 au nœud et Zalando 144,1 de plus,
+soit 1,4 % et 1,8 % d'un portable de 8 Gio. L'écart net avec le Postgres
+Alpine de BENCH-005 n'est pas mesuré : pour le connaître, il faut rejouer la
+stack lite avec chaque couche, sur le golden repo. Ces chiffres mêlent cinq
+séries : ce sont des ordres de grandeur.
+
+[FINOPS] zot et les registres. Dans la configuration mesurée par BENCH-010,
+seul docker.io passe par zot (section 8 de BENCH-010). L'image d'O1 vient de
+docker.io : dès la deuxième création du cluster, zot la servirait sans
+Internet, comme il a servi le Postgres Alpine. Ce n'est pas mesuré pour cette
+image. Les images de CloudNativePG et de Zalando viennent de ghcr.io : sans
+miroir déclaré pour ce registre, leurs 127,0 Mo et 679,5 Mo repartent
+d'Internet à chaque création. Flux tire déjà de ghcr.io, donc l'ADR-011 devra
+déclarer ce miroir de toute façon. Le stockage de zot, estimé à 518,2 Mo en
+amd64 pour le profil standard si tout y passe, prendrait 48,3, 6,7 ou 559,2
+Mo de plus.
+
+[FINOPS] Note de coût. Aucune option ne change la facture GCP : la cible
+`gcp` garde Cloud SQL dans les trois cas (ADR-008). Il n'y a donc aucun prix
+à lire, et je n'en écris aucun. Sur le PC, aucune option n'a de licence ni de
+service payant. Reste le temps d'exploitation, que le gabarit range dans ce
+critère. Pour O1, le seul temps écrit est la tenue des manifests par CELIAN,
+déjà comptée comme réserve en 5.8 (« une soixantaine de lignes de manifest à
+écrire et à tenir »). Depuis BENCH-008, ce temps se compte en 5.8 seulement
+(remarque de [FINOPS], correction du DSI le 2026-11-19). O1 revient donc à
+5/5, comme les composants du PC dans BENCH-003, 004 et 005. Pour
+CloudNativePG, les montées d'opérateur, CRD comprises, au moins deux fois par
+an [S7], ne sont comptées nulle part ailleurs, puisque 5.4 en fait une force
+: 4/5 tient. Pour Zalando, la justification nomme elle-même une action :
+construire et publier sa propre image Spilo à chaque mineure de PostgreSQL,
+au moins tous les trois mois [S1], parce que l'image par défaut sert 18.3
+(M8). Ce temps n'est compté ni en 5.8 ni ailleurs : 5.4 et 5.5 comptent le
+retard de l'image et ses CVE, pas le travail pour le combler. L'échelle donne
+3/5 à une réserve qui demande une action. Totaux : 89, 83 et 61.
+
+[FINOPS] Empreinte. La règle donne bien 3/5 aux trois options. Elle compte
+des seuils absolus, jamais l'écart à la meilleure option, et un cran par
+seuil franchi, quelle que soit la hauteur du dépassement. Les 112,3 Mio entre
+O1 et CloudNativePG font 21,9 % du seuil de 512 Mio et 1,4 % d'un portable de
+8 Gio. Même dans le majorant ci-dessus, ils ne font changer de palier ni le
+profil lite ni le standard. Les 679,5 Mo de Zalando franchissent le même
+seuil unique que les 127,0 Mo de CloudNativePG : un cran chacun. L'écart se
+voit dans le budget : 559,2 Mo nets, 447 s de plus à 10 Mbit/s, 180,7 % du
+budget au total. Le verdict n'en dépend pas, puisque Zalando finit dernier.
+Pour les couches à venir, et non pour ce rapport, un deuxième palier de
+volume écrit en 4.1, comme les 500 et 1 000 Mo de BENCH-005, verrait un tel
+excès.
+
+[BENCH] Suite donnée. Les corrections de [SECU] et de [FINOPS] sont intégrées
+dans les sections 1 à 9 ; là où elles touchent les mêmes phrases (en-tête,
+sections 6 et 7), la grille réconciliée par le DSI le 2026-11-21 tranche. Les
+deux relectures ont été rendues séparément : les totaux cités par [FINOPS]
+(89, 83 et 61) ne comptent pas la sécurité de O1 ramenée à 3 par [SECU].
+Appliquées ensemble, elles donnent 87, 83 et 61 (section 6). La correction 17
+de [SECU] ajoute l'inventaire en tête du script par un commit à part. Le
+script de la série a pour SHA-256
+`4e86f8e17aeec9f4ca04bc282534f83265e99f3dfd8a6b3fc4467e873b89a92c` ; celui du
+dépôt n'en diffère que par ces onze lignes de commentaire, et les numéros de
+ligne cités par [SECU] renvoient au script de la série. R-35 attend la
+décision de l'ADR-012 pour entrer au registre des risques.
