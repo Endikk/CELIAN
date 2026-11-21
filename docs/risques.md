@@ -1,6 +1,6 @@
 # Registre des risques
 
-Tenu par le DSI. Mis à jour le 20/11/2026. Probabilité et impact sont notés
+Tenu par le DSI. Mis à jour le 21/11/2026. Probabilité et impact sont notés
 faible, moyen ou fort : ce sont des jugements, pas des mesures. Un risque se
 ferme quand sa mitigation est en place et vérifiée.
 
@@ -42,6 +42,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-32 | Failles des moteurs GitOps invisibles aux scanners | Moyenne | Moyen, fort pour un moteur en `cluster-admin` | SECU, OPS | Ouvert |
 | R-33 | Écrire sur la branche suivie, c'est administrer le cluster | Moyenne | Fort | SECU, OPS | Ouvert |
 | R-34 | Miroir de registres sur le PC, nouvelle brique exposée | Faible | Moyen, fort si une image désignée par tag passe par lui | OPS, SECU | Ouvert |
+| R-35 | Postgres local écrit à la main dans chaque projet généré | Moyenne | Moyen | DEV, SECU | Ouvert |
 
 ## Détail
 
@@ -173,6 +174,14 @@ BENCH-010 (2026-11-20) : le miroir zot ajoute 77,68 Mo en linux_amd64 ; la
 plate-forme de base passe de 505,8 à 583,5 Mo, contre un budget de 500, et le
 premier `task up` du profil standard, hors Keycloak et Mailpit, de 1 395,9 à
 1 473,6 Mo.
+
+BENCH-011 (2026-11-21, relecture [FINOPS]) : les 1 395,9 Mo comptaient déjà
+une image `postgres:18.7-alpine` (120,3 Mo), dans la stack de BENCH-005. Le
+Postgres retenu par Lucas, `postgres:18.7-trixie` sans opérateur, la remplace
+et ajoute 48,3 Mo nets. Le premier `task up` du profil standard, hors
+Keycloak et Mailpit, passe à 1 444,2 Mo sans miroir et à 1 521,9 Mo avec
+zot, soit 135,3 % du budget de 900 s à 10 Mbit/s. ENF-01 est à mettre à jour
+dans le PRD.
 
 Reste à mesurer : le temps à froid, la compilation de la vraie stack (front
 Vite compris) sur le golden repo, et la création du cluster sur un runner
@@ -886,3 +895,43 @@ Mitigation :
 - lecture mensuelle des avis du dépôt par [SECU] ;
 - test de la condition 7 dans la matrice, avec un pod qui relève ce que le
   cluster joint du miroir.
+
+### R-35. Postgres local écrit à la main dans chaque projet généré
+
+Ouvert le 21/11/2026 avec BENCH-011, texte validé par [SECU]. Lucas a retenu
+Postgres sans opérateur sur la cible `local`. Le StatefulSet, son
+durcissement et ses règles d'initialisation deviennent du code de CELIAN,
+copié dans chaque projet généré. Six dérives sont possibles :
+
+- un Secret recréé sur un volume existant laisse l'ancien mot de passe en
+  base et coupe l'application ;
+- un volume monté ailleurs que sous `/var/lib/postgresql` loge la donnée
+  hors du PVC ;
+- une méthode `trust` glissée pour déboguer ouvre la base à tout le cluster ;
+- l'utilisateur de l'application reste superutilisateur, le défaut de
+  l'image, alors que Cloud SQL n'en donne jamais : une migration qui en
+  dépend passe en local et échoue sur GCP ;
+- Renovate propose la majeure 19, que `latest` désigne depuis le
+  2026-11-19, et casse la parité avec Cloud SQL ;
+- l'image ne suit plus les mineures, alors que 18.7 corrige 52
+  vulnérabilités.
+
+S'y ajoute un écart à ENF-03 : l'image officielle n'a aucune signature
+vérifiable, et Kyverno ne l'admet que par dérogation.
+
+Probabilité moyenne : chaque dérive tient à une ligne de manifest. Impact
+moyen : la donnée locale est jetable, mais une dérive de privilège ou de
+version ne se voit qu'au déploiement sur GCP.
+
+Mitigation :
+
+- conditions 1 à 8 de l'ADR-012, testées par la matrice ;
+- Renovate sur le condensat de l'image, avec l'exception de sécurité du
+  principe VI, sans montée de majeure hors de la valeur de la condition 5 ;
+- `mysecretpassword`, valeur d'exemple de la documentation de l'image,
+  ajoutée à la liste des valeurs connues de la condition 1 de l'ADR-007 ;
+- dérogation à ENF-03 datée dans l'ADR-012, relue par [SECU] à chaque
+  montée de condensat, et levée à la publication d'une signature Docker
+  vérifiable par Kyverno ;
+- relecture [SECU] de toute modification du StatefulSet de la couche
+  `local`.
