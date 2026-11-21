@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-21 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, en attente ; arbitrage du DSI du 2026-11-20 sur BENCH-010 |
+| Décideur | Lucas, le 2026-11-21 ; arbitrage du DSI du 2026-11-20 sur BENCH-010 |
 | BENCH lié | [BENCH-010](../benchmarks/BENCH-010-demarrage-hors-reseau.md) |
 | Remplace | aucun |
 
@@ -185,6 +185,25 @@ La porte reste ouverte. Le miroir ne vit que dans la couche `local` ; une cible 
 4. Mécanisme de purge, pour Lucas, [OPS] et [SECU]. Avis de [ARCHI] : la commande explicite par défaut, parce qu'elle n'active rien de nouveau dans zot ; la rétention seulement si elle passe en `dryRun` et la relecture [SECU] (condition 5).
 5. Adoption au sens du principe VI, pour Lucas. Le principe veut une techno « déjà adoptée en production », et zot n'a qu'un adoptant déclaré, Cisco, qui est aussi son sponsor (BENCH-010, section 5.3). Avis de [ARCHI] : l'accepter, puisque c'est le seul mécanisme qui passe T2, et relire l'adoption à la prochaine vérification, au plus tard le 2027-02-20.
 6. Un stockage par projet ou partagé entre les projets du poste, pour Lucas et [FINOPS]. Le partage éviterait de tirer deux fois la même image, au prix d'une purge qui toucherait tous les projets. Avis de [ARCHI] : un volume par projet pour le MVP.
+
+### Réponses de Lucas (2026-11-21)
+
+Lucas accepte cet ADR le 2026-11-21, avec les avis du DSI et de [ARCHI] sur
+les six questions :
+
+- `task down` supprime le cluster, `task app:down` le garde (question 1).
+  La lecture de US-005 reste à confirmer par [PO] au moment des noms, en
+  phase 5.
+- Le conteneur du miroir est retiré à chaque `task down`, son volume reste
+  (question 2).
+- Le miroir entre au catalogue par un attribut `companions` sur la cible
+  `local` de `kubernetes-cluster` (question 3), dans la PR de schéma de la
+  phase 3.
+- La purge passe par une commande explicite ; la rétention de zot seulement
+  après un essai en `dryRun` et une relecture [SECU] (question 4).
+- L'adoption de zot est acceptée au sens du principe VI, et relue au plus
+  tard le 2027-02-20 (question 5).
+- Un volume par projet pour le MVP (question 6).
 
 ## Conformité à la constitution
 

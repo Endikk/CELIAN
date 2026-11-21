@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-21 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, décisions du 2026-11-21 sur BENCH-011 ; validation de l'ADR en attente |
+| Décideur | Lucas, décisions et acceptation du 2026-11-21 sur BENCH-011 |
 | BENCH lié | [BENCH-011](../benchmarks/BENCH-011-postgres-local.md) |
 | Remplace | aucun |
 
@@ -15,7 +15,7 @@ Le projet généré a besoin de Postgres sur ses deux cibles. Sur `gcp`, c'est C
 
 Les exigences viennent du PRD et de la spec. US-005 veut que `task up` démarre Postgres dans le cluster local sans autre étape (principe VII), et qu'une commande documentée arrête et supprime l'environnement. La spec ajoute que le rechargement ne redémarre pas la base et ne perd pas ses données (récit 1, scénario 3 ; FR-007), qu'une relance garde les secrets « et les données restent lisibles » (récit 2, scénario 3), que les secrets locaux sont aléatoires, d'au moins 32 caractères, jamais dans un fichier, une variable affichée ou un argument (FR-004), et que toute image tirée est figée par condensat (FR-008). ENF-01 fixe le budget de 15 minutes. ENF-02 veut la parité : seule la couche de cible change, et le README liste les écarts. ENF-03 veut que Kyverno refuse les images non signées. Le DSI a ajouté pour BENCH-011 une exigence : la même version majeure que Cloud SQL.
 
-Les décisions acceptées posent leurs contraintes. ADR-006 : aucun outil de boucle, `task up` enchaîne `docker build`, `kind load` et `kubectl apply -k`, Helm reste hors des prérequis, et aucun objet `Secret` ne figure sous `k8s/` (condition 1). [ADR-007](ADR-007-secrets.md) : `task up` crée chaque Secret par un tube avec une valeur aléatoire, seulement s'il n'existe pas, et le nom et les clés de chaque Secret sont les mêmes sur les deux cibles (conditions 1 et 5). ADR-004 : images figées par condensat (condition 3). L'[ADR-011](ADR-011-miroir-registres.md), proposé, fait passer les tirages du nœud par un miroir zot, et propose deux commandes d'arrêt : `task down`, qui supprime le cluster, et `task app:down`, qui le garde. Il renvoie à BENCH-011 le sort des données de Postgres. Côté constitution, les principes I à IX ; le X est sans objet sur `local`. Côté risques, R-04, R-20, R-25, R-28, et R-35, ouvert avec BENCH-011.
+Les décisions acceptées posent leurs contraintes. ADR-006 : aucun outil de boucle, `task up` enchaîne `docker build`, `kind load` et `kubectl apply -k`, Helm reste hors des prérequis, et aucun objet `Secret` ne figure sous `k8s/` (condition 1). [ADR-007](ADR-007-secrets.md) : `task up` crée chaque Secret par un tube avec une valeur aléatoire, seulement s'il n'existe pas, et le nom et les clés de chaque Secret sont les mêmes sur les deux cibles (conditions 1 et 5). ADR-004 : images figées par condensat (condition 3). L'[ADR-011](ADR-011-miroir-registres.md), accepté le 2026-11-21, fait passer les tirages du nœud par un miroir zot, et propose deux commandes d'arrêt : `task down`, qui supprime le cluster, et `task app:down`, qui le garde. Il renvoie à BENCH-011 le sort des données de Postgres. Côté constitution, les principes I à IX ; le X est sans objet sur `local`. Côté risques, R-04, R-20, R-25, R-28, et R-35, ouvert avec BENCH-011.
 
 BENCH-011 a mesuré trois options avec le même script, trois exécutions chacune, le 2026-11-20. [SECU] et [FINOPS] l'ont relu le 2026-11-21, et Lucas a tranché le même jour (BENCH-011, section 7). Cet ADR écrit ses décisions et les conditions de [SECU]. Il tranche aussi ce que le rapport laissait à [ARCHI] : la répartition par couche, ce qui change pour l'ADR-007, la parité avec Cloud SQL, le passage par le miroir et l'entrée au catalogue.
 
@@ -168,6 +168,16 @@ La porte reste ouverte. La couche `local` ne sert que le PC. Une cible AWS ou Az
 
 1. Namespace de la base, et données à travers `task app:down`, pour Lucas. La condition 9 met la base dans le namespace de l'application : `task app:down` (ADR-011) la supprime avec ses deux Secrets, et la donnée locale ne survit qu'aux `task up` et aux rechargements successifs. L'autre voie est un namespace à part, que `task app:down` garde. La donnée survivrait alors à cette commande, au prix de deux exemplaires de `db-auth`, un par namespace, que `task up` doit tenir ensemble, et d'une commande qui ne supprime plus toute l'application. Avis de [ARCHI] : un seul namespace. La donnée locale est jetable (R-35), et c'est l'état le plus simple à garder cohérent avec la condition 3.
 2. Date de relecture de la dérogation, pour Lucas. Proposée au plus tard le 2027-05-20, date de la prochaine vérification de BENCH-011, en plus de la relecture de [SECU] à chaque montée de condensat. Avis de [ARCHI] : cette date suffit, sauf si Docker publie une date pour son remplaçant de Docker Content Trust ; la relecture se cale alors sur elle.
+
+### Réponses de Lucas (2026-11-21)
+
+Lucas accepte cet ADR le 2026-11-21, avec les avis du DSI et de [ARCHI] sur
+les deux questions :
+
+- La base vit dans le namespace de l'application : `task app:down` efface
+  la donnée locale avec ses deux Secrets (question 1).
+- La dérogation à ENF-03 est relue au plus tard le 2027-05-20, et par
+  [SECU] à chaque montée de condensat (question 2).
 
 ## Conformité à la constitution
 
