@@ -12,7 +12,7 @@
 | Périmètre | Projet généré sur PC (cluster kind, ADR-004). La cible `gcp` garde Cloud SQL (principe III) |
 | Choix du PRD | US-004 : « CloudNativePG en local, Cloud SQL sur GCP », exemple du brief à confirmer en phase 1 |
 | ADR lié | ADR-012, à écrire par [ARCHI] |
-| Verdict proposé | O1, Postgres sans opérateur (StatefulSet écrit à la main, image officielle) : 87/100, devant CloudNativePG (83) et l'opérateur de Zalando (61). Un cran de note de jugement rendu à CloudNativePG la laisse derrière (86), deux l'inversent (section 7) |
+| Verdict proposé | O1, Postgres sans opérateur (StatefulSet écrit à la main, image officielle) : 87/100, devant CloudNativePG (83) et l'opérateur de Zalando (61). Un cran de note de jugement rendu à CloudNativePG la laisse derrière (86), deux l'inversent (section 7). Retenu par Lucas le 2026-11-21, avec une dérogation datée à ENF-03 (section 7) |
 
 ## 1. Contexte
 
@@ -612,7 +612,8 @@ tient en deux crans de poids 15. Un seul cran rendu à CloudNativePG, la
 gouvernance à 5 au titre de la fondation ou la maturité à 5 au vu des
 adoptants cités par la CNCF, la laisse derrière, 86 contre 87. Deux crans la
 mettent devant, 89 contre 87. Un cran de sécurité rendu à CloudNativePG la
-laisse derrière, 85 contre 87.
+laisse derrière, 85 contre 87. Un cran de gouvernance ou de maturité et un
+cran de sécurité la mettent devant aussi, 88 contre 87.
 Les lectures de l'empreinte qui contredisent les règles de la GATE 1 ne
 changent pas l'ordre :
 
@@ -734,8 +735,8 @@ d'images officielles de Docker », statut actif, vérifiée le 2026-11-20, sourc
 Standard exposé : `postgresql-protocol`, déjà dans la liste fermée du
 catalogue. Pour le DSI : le risque R-35 ci-dessous.
 
-[BENCH] R-35 proposé, texte validé par [SECU] le 2026-11-21. Il n'entre pas
-encore au registre des risques : il dépend de la décision de l'ADR-012.
+[BENCH] R-35 proposé, texte validé par [SECU] le 2026-11-21. Il entre au
+registre des risques avec l'arbitrage ci-dessous.
 
 > | ID | Risque | Probabilité | Impact | Porteur | État |
 > | --- | --- | --- | --- | --- | --- |
@@ -779,6 +780,31 @@ encore au registre des risques : il dépend de la décision de l'ADR-012.
 >   vérifiable par Kyverno ;
 > - relecture [SECU] de toute modification du StatefulSet de la couche
 >   `local`.
+
+[DSI] Arbitrage du 2026-11-21, après les relectures de [SECU] et de
+[FINOPS]. Lucas retient O1, Postgres sans opérateur, sur la cible `local` :
+87 sur 100 dans la grille réconciliée, alors que le PRD pressentait
+CloudNativePG. L'écart tient à la maturité et au coût, et la sensibilité le
+dit fragile : deux crans de jugement l'inversent. Trois faits font pencher.
+Aucun opérateur à monter, donc aucun contrôleur qui détient les droits sur
+tous les Secrets du cluster. Une image sur docker.io, que le miroir de
+l'ADR-011 sert déjà. Des données qui survivent à la suppression puis à la
+recréation de l'objet qui porte Postgres, quand CloudNativePG les perd. Le
+prix est du code que CELIAN tient lui-même : le StatefulSet durci, un rôle
+applicatif sans superutilisateur et un second Secret (conditions 1 à 8
+ci-dessus), et le risque R-35. Revenir plus tard à CloudNativePG ne
+toucherait que la couche `local`, qui garde le même Secret `db-auth`.
+
+[DSI] Lucas retient le même jour une dérogation datée à ENF-03 pour les
+images officielles Docker sans signature vérifiable. Kyverno les admet par
+leur référence exacte, condensat compris, dans une liste fermée que [SECU]
+relit à chaque montée. La dérogation tombe dès que Docker publie une
+signature que Kyverno sait vérifier. L'ADR-012, à écrire par [ARCHI],
+reprend cette dérogation et les conditions 1 à 8. Lucas autorise enfin la
+mesure du redémarrage du nœud (`NODE_RESTART=1`, `docker stop` puis
+`docker start` du seul nœud de mesure, sous le verrou commun). Elle tournera
+après les séries de BENCH-012 et BENCH-013, et son résultat complétera ce
+rapport dans une PR à part.
 
 ## 8. Limites et biais
 
@@ -976,7 +1002,10 @@ SHA-256 de la valeur encodée, soit 64 bits d'une valeur qui en compte 238,
 sur des clusters déjà supprimés. Les `kubeconfig` de `smoke-1` et `series-1`
 ne contiennent aucune clé.
 
-[SECU] Inventaire du script, au commit `b8bc766`. Commandes qui créent,
+[SECU] Inventaire du script, dans sa version de la série (SHA-256
+`4e86f8e17aeec9f4ca04bc282534f83265e99f3dfd8a6b3fc4467e873b89a92c`), dont
+les numéros de ligne suivent ; l'inventaire ajouté en tête du script les
+décale de 11 lignes. Commandes qui créent,
 modifient ou suppriment un conteneur ou un réseau : `kind create cluster`
 (ligne 594), qui lance le nœud par `docker run --privileged` [S60] et crée le
 réseau `kind` s'il manque ; `kind delete cluster` (ligne 597, appelée lignes
