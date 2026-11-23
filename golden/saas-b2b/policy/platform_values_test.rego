@@ -5,6 +5,11 @@ valid_values := {"kubernetes_minor": "1.36", "postgres_major": "18"}
 
 combined(path, contents) := [{"path": path, "contents": contents}]
 
+accepted(files) if {
+	msgs := deny with input as files
+	count(msgs) == 0
+}
+
 denied_with(files, fragment) if {
 	msgs := deny with input as files
 	some msg in msgs
@@ -12,11 +17,11 @@ denied_with(files, fragment) if {
 }
 
 test_s21_accepts_both_values_as_strings if {
-	count(deny) == 0 with input as combined("platform.yaml", valid_values)
+	accepted(combined("platform.yaml", valid_values))
 }
 
 test_s21_accepts_platform_yaml_under_a_folder if {
-	count(deny) == 0 with input as combined("golden/saas-b2b/platform.yaml", valid_values)
+	accepted(combined("golden/saas-b2b/platform.yaml", valid_values))
 }
 
 test_s21_rejects_an_input_without_platform_yaml if {
@@ -76,7 +81,8 @@ test_s21_rejects_a_major_with_a_minor if {
 }
 
 test_s21_names_its_requirements_in_each_message if {
-	msgs := deny with input as combined("platform.yaml", {"kubernetes_minor": 1.36})
+	files := combined("platform.yaml", {"kubernetes_minor": 1.36})
+	msgs := deny with input as files
 	count(msgs) == 2
 	every msg in msgs {
 		startswith(msg, "S21 (FR-010, FR-017;")
