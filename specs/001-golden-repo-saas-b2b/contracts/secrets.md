@@ -1,0 +1,32 @@
+# Contrat : Secrets de l'application
+
+L'application lit le même Secret, de même nom et de mêmes clés, sur les deux cibles, et ne sait pas ce qui l'a produit (ADR-007, condition 5). Elle les lit par fichiers montés, de la même façon sur les deux cibles. Noms provisoires jusqu'au schéma de spec de la phase 3.
+
+## Secrets
+
+| Secret | Type | Clés | Producteur `local` | Producteur `gcp` | Lu par |
+| --- | --- | --- | --- | --- | --- |
+| `db-auth` | `kubernetes.io/basic-auth` | `username` (`app`), `password` | `task up` | synchronisation de GKE depuis Secret Manager (ADR-007) | API ; script d'initialisation de la base sur `local` |
+| `cache-auth` | `Opaque` | `password`, clés définitives fixées par l'ADR-015 | `task up`, à partir de l'étape 19 | selon l'authentification de Memorystore retenue par l'ADR-015, étape 20 (research RS-11) | API ; le cache sur `local` |
+| `db-superuser` | `kubernetes.io/basic-auth` | `username`, `password` | `task up` | aucun : Cloud SQL ne donne pas de superutilisateur (ADR-012) | conteneur Postgres seulement ; jamais l'application |
+| `gateway-tls` | `kubernetes.io/tls` | `tls.crt`, `tls.key` | `task up`, méthode à trancher (research RS-10) | à trancher par [OPS] et [SECU] avec la classe de GKE | Gateway |
+
+`db-superuser` est un Secret de couche : son écart entre cibles se liste au README (ENF-02, ADR-012). Keycloak et Mailpit ajouteront leurs Secrets après leurs ADR. Flux n'a aucun identifiant Git par défaut (ADR-010, condition 4).
+
+## Création sur `local`
+
+- Chaque mot de passe : 40 caractères alphanumériques tirés de `/dev/urandom`.
+- Chaque Secret passe par un tube vers `kubectl create -f -`, seulement s'il manque. Jamais `kubectl apply`, jamais de heredoc, jamais de valeur dans un fichier, une variable de Task ou un argument.
+- Les tâches qui créent un Secret sont silencieuses.
+- `db-auth` et `db-superuser` vivent avec le volume de la base : volume présent et Secret absent, `task up` s'arrête (ADR-012, condition 3). Un Secret présent sans volume reste valide.
+- Aucun Secret n'est versionné, ni sous `k8s/`, ni ailleurs (S03).
+
+## Ce que vérifient les tests
+
+| Contrôle | Règle |
+| --- | --- |
+| E04 | Deux environnements neufs : aucune valeur de mot de passe commune, 32 caractères au moins, aucune valeur de la liste `root`, `admin`, `postgres`, `password`, `changeme`, `mysecretpassword`, chaîne vide. `username` est fixe par construction et n'entre pas dans la comparaison |
+| E05 | Second `task up` : empreinte SHA-256 de chaque valeur inchangée ; aucune annotation `kubectl.kubernetes.io/last-applied-configuration` ; chaque Secret porte exactement les clés de ce contrat |
+| E06 | Aucune valeur retrouvée dans l'arborescence ni dans l'historique Git |
+| S07 | Les références aux Secrets dans les rendus `local` et `gcp` de l'application sont identiques : nom, clés, lecture par fichier |
+| S03, S04 | Aucun Secret versionné ; tâches silencieuses, sans heredoc ni `apply` |
