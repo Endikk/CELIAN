@@ -1,38 +1,18 @@
-<!--
-Gabarit des rapports de benchmark (brief, section 8).
-Dupliquer ce fichier en docs/benchmarks/BENCH-XXX-sujet.md, sujet court en
-minuscules et mots séparés par des tirets (ex. BENCH-003-cluster-local.md).
-Remplir dans l'ordre des sections, le verdict en dernier.
-Chaque paragraphe s'ouvre par le tag de son auteur : [BENCH] pour le corps,
-[SECU] ou [FINOPS] dans les relectures.
-Aucun fait de mémoire (principe VIII) : chaque version, licence, date ou
-chiffre renvoie à une source [Sn] ou à une mesure [Mn].
-Retirer tous les commentaires avant de passer le statut à « relu ».
--->
-
 # BENCH-012. Fournisseur d'identité du profil standard
 
 | Champ | Valeur |
 | --- | --- |
 | Identifiant | BENCH-012 |
 | Sujet | Fournisseur d'identité (OIDC) du profil standard sur le PC, et son pendant sur GCP |
-| Statut | brouillon |
+| Statut | relu |
 | Ouvert le | 2026-11-20 |
-| Mis à jour le | 2026-11-23 |
+| Mis à jour le | 2026-11-24 |
 | Auteur | [BENCH] |
 | Relecteurs | [SECU] pour les licences et les CVE, [FINOPS] pour les coûts |
 | Périmètre | Projet généré sur PC (cluster local) et projet généré sur GCP |
 | Choix du PRD | Aucune ligne du tableau des choix ouverts : composition du profil standard, décision de Lucas du 2026-11-20 (US-005) |
 | ADR lié | ADR-013, à écrire par [ARCHI] |
-| Verdict proposé | Keycloak, 84 sur 100, 22 points devant Zitadel (62) ; Authentik éliminé (section 3) |
-
-<!--
-Statut : « brouillon » pendant la rédaction. « relu » quand [SECU] et [FINOPS]
-ont rendu leur avis et que leurs remarques sont traitées. « clos » quand l'ADR
-lié a tranché : le rapport ne bouge plus, un fait nouveau ouvre un nouveau
-benchmark.
-Périmètre : garder seulement ce que le choix touche.
--->
+| Verdict proposé | Keycloak, 81 sur 100, 19 points devant Zitadel (62) ; Authentik éliminé (section 3). Retenu le 2026-11-24 ; Identity Platform sur `gcp` ; dérogation datée à ENF-03 (section 7) |
 
 ## 1. Contexte
 
@@ -91,12 +71,6 @@ premier visiteur de son flux d'installation, sauf variable d'amorçage [S38],
 
 ## 2. Options étudiées
 
-<!--
-Deux ou trois options : celles de la section 8 du brief, sauf raison écrite
-sous le tableau. Version examinée : la dernière release stable à la date de
-lecture de sa source.
--->
-
 | Option | En une phrase | Version examinée | Publiée le | Sources |
 | --- | --- | --- | --- | --- |
 | Keycloak | Serveur d'identité et d'accès (OpenID Connect, OAuth 2.0, SAML), en Java sur Quarkus d'après son dépôt, en incubation à la CNCF ; image officielle sur quay.io, manifest de démarrage rapide pour Kubernetes et opérateur | 26.8.2 | 2026-11-05 | [S1], [S2], [S5], [S8], [S12] |
@@ -104,7 +78,10 @@ lecture de sa source.
 | Authentik | Fournisseur d'identité (OpenID Connect, OAuth 2.0, SAML, LDAP, proxy), en Python et en Go d'après son dépôt, édité par Authentik Security Inc. ; un serveur et un worker dans la même image, installés par un chart Helm | 2026.8.6 | 2026-11-20 | [S30], [S31], [S38], [S42] |
 
 [BENCH] Âge des versions examinées au regard du principe VI (7 jours avant
-toute mise à jour automatique). Keycloak 26.8.2 a 15 jours. Zitadel v4.20.5 en
+toute mise à jour automatique). Keycloak 26.8.2 a 15 jours. L'image mesurée
+est une republication du tag du 2026-11-19 : `26.8.2` a porté au moins trois
+condensats entre le 2026-11-09 et le 2026-11-19, le projet reconstruisant
+l'image dès qu'une base neuve résout des CVE [S65], [S66]. Zitadel v4.20.5 en
 a 2 : la dernière version utilisable le 2026-11-20 est la v4.20.3 du
 2026-11-13 [S20]. Authentik 2026.8.6 est sortie le jour de la lecture : la
 2026.8.5 du 2026-10-21 est la dernière utilisable, et la 2026.8.6 le
@@ -158,24 +135,6 @@ pour ce rapport.
 
 ## 3. Critères éliminatoires
 
-<!--
-Les trois critères du brief, vérifiés avant toute notation.
-Licence : open source pour tout ce qui tourne sur le PC ou en on-prem, soit
-une licence approuvée par l'OSI, vérifiée sur la liste de l'OSI à la date du
-rapport [Sn]. Sans objet pour un service managé de la cible cloud
-(principe III).
-Statut : ni archivé, ni annoncé en maintenance par le dépôt, le site ou la
-fondation.
-Release : la dernière date de moins de 12 mois au jour de la vérification.
-Pour une norme stable (JSON Schema, OpenAPI, OCI), le critère porte sur
-l'outil maintenu qui la met en œuvre, pas sur le texte de la norme. Il ne
-s'applique pas aux dépendances transitives, qui se signalent dans les limites.
-Une exigence fonctionnelle du PRD peut éliminer une option ; elle s'écrit dans
-le contexte avec sa référence (US-xxx), et le DSI l'accepte par écrit.
-Une option éliminée n'est pas notée. S'il reste moins de deux options, le
-signaler au DSI avant de continuer.
--->
-
 [BENCH] Seuil de release : 2025-11-20, douze mois avant la vérification.
 
 | Option | Licence open source | Ni archivé ni en maintenance | Release de moins de 12 mois | Vérifié le | Résultat |
@@ -221,12 +180,6 @@ passe. Le changement de licence de 2025 (Apache-2.0 vers AGPL) se note en
 2026-11-21. Il reste deux options, Keycloak et Zitadel.
 
 ## 4. Mesures
-
-<!--
-Une mesure réelle pour chaque critère où elle a un sens, en général
-l'empreinte sur PC (ENF-02). Si aucune n'en a, le dire en une phrase et
-retirer les sous-sections.
--->
 
 ### 4.1 Ce qui est mesuré
 
@@ -291,7 +244,9 @@ premier de trois succès de suite, comme dans BENCH-009 et BENCH-011.
 ### 4.2 Machine de mesure
 
 [BENCH] Matériel et système relevés le 2026-11-20 ; moteur, ressources et
-versions relevés au lancement de la série du 2026-11-21 (`versions.tsv`).
+versions relevés au lancement de la série du 2026-11-21, et de nouveau à
+celui de la série de référence du 2026-11-23 (`versions.tsv` de `series-4`,
+sur batterie).
 
 | Élément | Valeur |
 | --- | --- |
@@ -365,7 +320,7 @@ fin de cette section.
    le script reconstruit avec openssl la clé publique RSA que désigne le `kid`
    dans le `jwks_uri`, vérifie la signature RS256, l'émetteur et l'expiration,
    relève `aud`, `azp` et `client_id` sans les juger, puis efface le jeton.
-5. M8 : sept valeurs connues, celles de la condition 1 de l'ADR-007 plus
+5. M8 : sept valeurs connues : les six de la condition 1 de l'ADR-007 et
    `Password1!`, défaut de l'administrateur humain dans `steps.yaml` de
    Zitadel [S59], puis la valeur du Secret. Keycloak : `grant_type=password`
    sur le royaume master avec le client `admin-cli`, pour l'utilisateur
@@ -373,7 +328,10 @@ fin de cette section.
    vérification de l'utilisateur et du mot de passe de l'administrateur
    humain [S62]. Le verrouillage après échecs est désactivé par défaut chez
    Zitadel [S60] ; chez Keycloak, la détection de force brute n'est pas
-   activée par le protocole.
+   activée par le protocole. La condition 10 de l'ADR-012 a ajouté
+   `mysecretpassword`, que le script de la série ne testait pas ; sans effet
+   sur M8, la valeur du Secret étant aléatoire. Le script versionné l'ajoute
+   depuis la relecture de [SECU].
 6. M2, M3 : pod client ramené à zéro, 120 s d'attente, trois échantillons à
    10 s de l'API Summary du kubelet pour les pods du namespace du
    fournisseur, et du nœud par `docker stats` ; médianes.
@@ -387,8 +345,12 @@ fin de cette section.
 
 [BENCH] Garde-fous du script : inventaire en tête des commandes qui créent,
 modifient ou suppriment un conteneur ou un réseau (règle de [SECU] du
-2026-11-20) ; aucun `docker run`, `start`, `restart`, `exec`, `cp`, `build`
-ni `pull` ; ni curl, ni wget, ni python, ni node, ni perl. Verrou partagé
+2026-11-20) ; `kind create cluster` lance lui-même le nœud par
+`docker run --privileged` (BENCH-011, S60) ; aucun `docker run`, `start`,
+`restart`, `exec`, `cp`, `build` ni `pull` ; ni curl, ni wget, ni python, ni
+node, ni perl. Deux lectures sortent du poste : `gh api` vers GitHub, avec le
+jeton de l'utilisateur, et `docker manifest inspect` vers les registres. Le
+verrou n'est pris que si `BENCH_LOCK` est défini. Verrou partagé
 (`BENCH_LOCK`, refus en code 75 s'il est pris), refus si le cluster existe
 déjà, `trap` posé après ces contrôles, `umask 077`, `KUBECONFIG` dans le
 dossier d'essai. Aucune valeur secrète, aucun jeton ni aucune clé dans les
@@ -416,12 +378,6 @@ caffeinate -i -s env BENCH_LOCK=/chemin/vers/un/verrou tests/bench/bench-012-ide
 
 ### 4.4 Résultats
 
-<!--
-Une ligne par mesure et par option. La médiane sert à la notation, l'écart
-(maximum moins minimum) montre la dispersion. Ajouter une colonne par
-exécution au-delà de trois.
--->
-
 [BENCH] Mesures de référence : la série lancée le 2026-11-23 à 20:39 UTC et
 finie à 21:16 UTC, sur la machine de la section 4.2, trois exécutions par
 option et trois du nœud de base, alternées, toutes complètes (série
@@ -440,8 +396,16 @@ capot fermé (« Clamshell Sleep » dans `pmset -g log`), ce que `caffeinate` ne
 peut empêcher. La série lancée le 2026-11-21 à 00:08 UTC a été arrêtée par
 ces veilles et nettoyée à 20:01 UTC le même jour ; un défaut du script lui
 avait aussi fait continuer une exécution dont l'échantillonnage avait échoué.
-Les séries de 20:04 et de 21:44 UTC, script corrigé, ont chacune refusé leur
-dernière exécution au moment de la veille. Les exécutions complètes de ces
+Les séries lancées le 2026-11-21 à 20:04 et à 21:44 UTC, script corrigé, ont
+chacune refusé leur dernière exécution au moment de la veille. La première a
+même démarré pendant une veille : l'ordinateur s'est mis en veille capot fermé
+à 20:04:26 UTC, 19 s après le lancement, et ne s'est réveillé qu'à
+21:18:04 UTC (`pmset -g log`, relu le 2026-11-24, réponse à la question de
+[FINOPS]). Entre les deux, la préparation n'a avancé que pendant les réveils
+de maintenance, et la lecture des tailles aux registres n'a rendu aucune
+taille pour les deux images de base ; la première exécution commence au
+réveil, à 21:18:04 UTC (`runs.tsv`, `load.tsv`). La seconde série commence la
+sienne à 21:45:16 UTC. Les exécutions complètes de ces
 deux séries (nœud de base 2 et 2, Keycloak 2 et 2, Zitadel 1 et 1), faites
 hors veille, donnent des valeurs du même ordre que la série de référence ;
 elles ne servent pas à la notation. Aucune exécution incomplète n'est
@@ -466,7 +430,12 @@ médianes) : Keycloak 1 503,2 moins 660,0 = 843,2 Mio ; Zitadel 922,9 moins 660,
 262,9 Mio. Pour Keycloak, la deuxième exécution reste basse, au nœud
 (1 184,8 Mio) comme au pod (538,2 Mio), sans cause établie ; un tas de JVM
 encore petit, sous la limite de 2000Mi du manifest, l'expliquerait, sans
-vérification. Les pods de Zitadel sont l'API (85 à 91 Mio) et la connexion V2 (98 à 100 Mio).
+vérification. Les quatre exécutions complètes de Keycloak des séries du
+2026-11-21, non retenues, donnent de 838,8 à 841,2 Mio au pod : la valeur
+basse reste isolée. Les pods de Zitadel sont l'API et la connexion V2 : dans
+l'échantillon médian de chaque exécution, l'API tient de 85,2 à 93,0 Mio et la
+connexion de 98,2 à 99,8 ; sur les neuf échantillons, de 85,0 à 122,7 et de
+80,0 à 99,8.
 
 | Mesure | Keycloak | Zitadel |
 | --- | --- | --- |
@@ -524,24 +493,12 @@ d'expérience dev (5.8) s'appuie désormais sur l'essai, et la note de sécurit�
 
 ### 5.1 Licence et liberté d'usage, poids 15
 
-<!--
-Licence exacte, ce qu'elle impose au générateur (Apache-2.0) et aux projets
-générés, changement de licence passé. Preuves : fichier de licence du dépôt,
-annonce officielle.
--->
-
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Keycloak | 5/5 | 15 | Apache-2.0, la licence du générateur ; fichier de licence inchangé depuis son ajout le 2019-11-08. Le manifest de démarrage rapide vient d'un dépôt sous Apache-2.0. L'image repose sur Red Hat UBI 9 micro, dont les conditions n'ont pas été lues (section 8) | [S1], [S12], [S18], [S45] |
-| Zitadel | 3/5 | 9 | AGPL-3.0-only depuis la v3 : le passage d'Apache-2.0 à l'AGPL est fusionné le 2025-04-02 (PR #9597). Les contributions ne sont acceptées que sous Apache-2.0 et l'éditeur vend une licence commerciale : un prochain changement ne dépend que de lui. L'AGPL ne pèse pas sur un projet généré qui tire l'image sans la modifier, et se signale si l'utilisateur la modifie et l'expose (pièges du brief, section 5). Chart sous Apache-2.0. Action : relire la licence à chaque vérification du catalogue | [S19], [S21], [S22], [S28], [S45] |
+| Keycloak | 5/5 | 15 | Apache-2.0, la licence du générateur ; fichier de licence inchangé depuis son ajout le 2019-11-08. Le manifest de démarrage rapide vient d'un dépôt sous Apache-2.0. L'image repose sur Red Hat UBI 9 micro, dont le contrat laisse chaque composant sous sa licence libre, sans abonnement ni limite d'usage ; une image dérivée redistribuée joint ce contrat et ne se dit pas soutenue par Red Hat | [S1], [S12], [S18], [S45], [S67] |
+| Zitadel | 3/5 | 9 | AGPL-3.0-only depuis la v3 : le passage d'Apache-2.0 à l'AGPL est fusionné dans `v3.x` le 2025-03-27 (PR #9597), puis dans `main` le 2025-04-02 avec la v3 (PR #9645). Les contributions ne sont acceptées que sous Apache-2.0 et l'éditeur vend une licence commerciale : un prochain changement ne dépend que de lui. L'AGPL ne pèse pas sur un projet généré qui tire l'image sans la modifier, et se signale si l'utilisateur la modifie et l'expose (pièges du brief, section 5). Chart sous Apache-2.0. Action : relire la licence à chaque vérification du catalogue | [S19], [S21], [S22], [S28], [S45], [S75] |
 
 ### 5.2 Gouvernance (fondation, multi-vendeurs), poids 15
-
-<!--
-Fondation porteuse, éditeur unique ou communauté, nombre d'entreprises parmi
-les mainteneurs (principe V). Preuves : page du projet chez la fondation,
-fichier des mainteneurs, statistiques de contribution datées.
--->
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
@@ -550,23 +507,12 @@ fichier des mainteneurs, statistiques de contribution datées.
 
 ### 5.3 Maturité et adoption, poids 15
 
-<!--
-Ancienneté, niveau de maturité dans la fondation, adoption en production
-déclarée (principe VI : pas de projet qui vient de sortir). Preuves : page de
-la fondation, liste d'adoptants en précisant qui la tient.
--->
-
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Keycloak | 5/5 | 15 | Premier commit le 2013-07-02, en incubation à la CNCF, version majeure 26 depuis le 2024-10-04. 59 organisations en référence publique dans `ADOPTERS.md`, liste tirée de l'enquête communautaire du projet. Certifié OpenID par Red Hat pour les profils de déconnexion (18.0.0) et FAPI (15.0.2). Red Hat en vend une version à support long | [S2], [S5], [S6], [S7], [S44] |
+| Keycloak | 4/5 | 12 | Premier commit le 2013-07-02, version majeure 26 depuis le 2024-10-04. 59 organisations en référence publique dans `ADOPTERS.md`, liste tirée de l'enquête communautaire. Red Hat en vend une version à support long. Réserve : Incubating à la CNCF depuis le 2023-04-10, sans demande de graduation trouvée ; certifications OpenID sur 18.0.0 et 15.0.2 seulement | [S2], [S5], [S6], [S7], [S44], [S81] |
 | Zitadel | 3/5 | 9 | Dépôt créé le 2020-03-16, v1.0.0 le 2021-04-20. Trois versions majeures depuis, dont la v3 (2025-05-02) et la v4 (2025-07-31) à trois mois d'écart, avec des ruptures : retrait de CockroachDB, API migrées. 16 lignes, éditeur compris, dans une liste d'adoptants tenue par les adoptants eux-mêmes. Absent des implémentations certifiées OpenID lues. Action : prévoir les montées de version majeure dans `copier update` | [S20], [S22], [S25], [S44] |
 
 ### 5.4 Activité et maintenance, poids 10
-
-<!--
-Rythme des releases sur 12 mois, contributeurs actifs, délai de réponse aux
-tickets. Preuves : page des releases, statistiques du dépôt, datées.
--->
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
@@ -575,57 +521,12 @@ tickets. Preuves : page des releases, statistiques du dépôt, datées.
 
 ### 5.5 Sécurité (CVE, réactivité), poids 10
 
-<!--
-Politique de signalement, avis de sécurité publiés, délai entre signalement
-et correctif, CVE encore ouvertes. Relu par [SECU]. Preuves : politique de
-sécurité du projet, base de CVE, avis du projet.
--->
-
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Keycloak | 3/5 | 6 | Politique tirée du modèle de la CISA, signalement par une liste privée, accusé de réception sous 7 jours ouvrés, correctifs sur la dernière mineure seulement. 21 avis publiés en 12 mois, dont un critique, CVE-2026-18963 (prise de compte sans authentification par le flux de réinitialisation, corrigée en 26.7.2 le 2026-08-19, avis publié le 2026-11-19), et 12 élevés. Le projet suit aussi ses CVE en tickets : 228 tickets hors dépendances ouverts en 12 mois, 10 encore ouverts au 2026-11-20, tous moyens ou faibles. Signature des images non relevée. Avec des identifiants tirés au hasard, M8 refuse les sept valeurs connues et accepte celle du Secret, à chaque exécution. La réserve demande une action : suivre chaque mineure, environ tous les trois mois, et ne jamais reprendre les identifiants du manifest de démarrage | [M8], [S7], [S8], [S9], [S10], [S11], [S12] |
-| Zitadel | 2/5 | 4 | Signalement par un portail de l'éditeur. 55 avis publiés en 12 mois, dont 6 critiques : cinq prises de compte, dont trois sans authentification, et une SSRF sans authentification ; 31 élevés, dont quatre publiés entre le 2026-11-13 et le 2026-11-18. Aucune signature d'image dans le flux de publication lu. Le démarrage rapide documente un mot de passe d'administration connu, `Password1!`, défaut de `steps.yaml` ; avec un mot de passe tiré au hasard, M8 refuse les sept valeurs connues et accepte celle du Secret, à chaque exécution | [M8], [S23], [S24], [S26], [S29], [S59] |
+| Keycloak | 3/5 | 6 | Politique tirée du modèle de la CISA, accusé de réception sous 7 jours ouvrés, correctifs sur la dernière mineure seulement. 21 avis au dépôt en 12 mois ; dans la base mondiale, 74 CVE dédoublonnées sur quatre paquets Maven (1 critique, 24 élevées), dont CVE-2026-18963, prise de compte sans authentification corrigée en 26.7.2. Une partie des CVE des tickets n'a pas de paquet dans cette base, hors de portée des scanners. Image sans signature ; tag `26.8.2` republié trois fois du 2026-11-09 au 2026-11-19. Force brute désactivée par défaut. M8 refuse les sept valeurs connues et accepte celle du Secret à chaque exécution. La réserve demande une action : suivre chaque mineure, dérogation datée à ENF-03, royaumes durcis | [M8], [S7], [S9], [S10], [S12], [S18], [S65], [S66], [S68], [S69] |
+| Zitadel | 2/5 | 4 | Signalement par un portail de l'éditeur. 55 avis publiés en 12 mois, dont 6 critiques : cinq prises de compte, dont trois sans authentification, et une SSRF sans authentification ; 31 élevés, dont six publiés entre le 2026-11-13 et le 2026-11-18. Aucune signature d'image dans le flux de publication lu. 31 des 55 avis, dont 4 des 6 critiques, ne sont associés à aucun module Go dans la base mondiale, que Trivy lit pour les modules Go. La tâche de setup tire `docker.io/alpine/k8s`, image tierce non signée, sous un compte de service qui écrit les Secrets du namespace ; le PAT d'`iam-admin` vaut jusqu'au 2029-01-01. Le démarrage rapide documente un mot de passe d'administration connu, `Password1!`, défaut de `steps.yaml` ; avec un mot de passe tiré au hasard, M8 refuse les sept valeurs connues et accepte celle du Secret, à chaque exécution | [M8], [S23], [S24], [S26], [S29], [S59], [S68], [S73], [S79] |
 
 ### 5.6 Empreinte sur PC (RAM, CPU, démarrage), poids 10
-
-<!--
-RAM au repos, CPU, temps de démarrage sur le PC (ENF-02). Preuve : la médiane
-des mesures de la section 4.
-
-Règle de notation, validée par Lucas le 2026-11-19 (BENCH-003) : des seuils
-absolus, jamais un écart à la meilleure option. Chaque seuil est une valeur
-ronde tirée du PRD (budget de 900 s d'ENF-01, portable de 8 Gio) ou d'un débit
-bas pris comme hypothèse (10 Mbit/s). Les seuils s'écrivent dans la section
-4.1 avant la première mesure, avec leur origine. Chaque option part de 5 et
-perd un cran par seuil dépassé. Une option à moins de 10 % d'un seuil voit
-ses deux notes possibles écrites dans la sensibilité de la section 7.
-
-Seuils de BENCH-003, à reprendre ou à adapter au sujet, en disant pourquoi :
-volume compressé à télécharger au premier lancement au-delà de 500 Mo (400 s
-à 10 Mbit/s) ; au moins une image retéléchargée à chaque lancement, cache
-plein ; démarrage à chaud au-delà de 90 s (10 % du budget) ; mémoire au repos
-au-delà de 1 Gio (un huitième d'un portable de 8 Gio).
-
-Trois règles validées par Lucas à la GATE 1, le 2026-11-20, après leur usage
-dans BENCH-004, 005, 007 et 009 :
-
-1. Le volume se note sur linux_amd64, pire cas des systèmes visés par Q5.
-   Les autres architectures mesurées vont dans la sensibilité.
-2. La plate-forme de base (cluster kind, CRD Gateway API, gateway) se compte
-   contre les 500 Mo ci-dessus. Chaque couche suivante (stack, secrets,
-   GitOps...) se note contre ses propres seuils, écrits dans sa section 4.1 ;
-   son cumul avec la plate-forme va dans la sensibilité. Sans ce périmètre,
-   l'ordre des benchmarks déciderait des notes.
-3. La mémoire d'une couche se lit au nœud, moins la mémoire du nœud de base
-   (kind seul, même configuration), en médianes : les CRD et les contrôleurs
-   chargent aussi le serveur d'API, que la somme des pods ne voit pas. La
-   somme des pods va dans la sensibilité.
-
-Les seuils écrits avant la première mesure portent leur heure UTC, et le
-rapport dit si des tests de fumée ont tourné avant. Les seuils de couche
-additionnés dépassaient déjà le budget de 900 s à la GATE 1 : un budget par
-étape d'ENF-01 reste à fixer (R-04).
--->
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
@@ -641,23 +542,22 @@ toujours au-delà du seuil ; il faudrait retirer aussi la connexion V2 et
 `wait4x` pour descendre à 54,1 Mo, ce qui changerait l'installation de
 référence. Le deuxième seuil, dépassé par les deux options, ne le serait plus
 avec le miroir zot de l'ADR-011, accepté après l'écriture de ces seuils, qui,
-d'après cet ADR, garde les images au-delà de la recréation du cluster : les
-deux options regagneraient le même cran, Keycloak à 3/5 et Zitadel à 4/5, et l'écart
-resterait de 22 points. La mesure suit le protocole écrit, sans miroir.
+d'après cet ADR, garde les images au-delà de la recréation du cluster, à
+condition que leurs registres passent par lui : quay.io pour Keycloak, que
+l'ADR-011 ne liste pas encore, et docker.io et ghcr.io pour Zitadel, que le
+profil standard demande déjà (condition 10 de l'ADR-011, mécanisme à plusieurs
+amonts non établi) : les deux options regagneraient le même cran, Keycloak à
+3/5 et Zitadel à 4/5, et l'écart resterait de 19 points. La mesure suit le
+protocole écrit, sans miroir.
 
 [BENCH] Cumul avec le reste du profil standard, en sensibilité (deuxième
-règle de la GATE 1). Le premier `task up` télécharge 1 395,9 Mo en amd64
-avant ce benchmark (ENF-01). Avec Keycloak : 1 661,0 Mo, soit 1 328,8 s à
-10 Mbit/s, 148 % du budget de 900 s, Mailpit non compté. Avec Zitadel :
-1 859,7 Mo, 1 487,8 s, 165 %.
+règle de la GATE 1, relecture [FINOPS]). Le premier `task up` télécharge
+1 521,9 Mo en amd64 avant ce benchmark, miroir zot de l'ADR-011 et Postgres
+de l'ADR-012 compris, Mailpit non compté (R-04). Avec Keycloak : 1 787,0 Mo,
+soit 1 429,6 s à 10 Mbit/s, 158,8 % du budget de 900 s, et 15,9 Mbit/s au
+minimum. Avec Zitadel : 1 985,7 Mo, 1 588,5 s, 176,5 %, 17,7 Mbit/s.
 
 ### 5.7 Portabilité multi-cloud, poids 10
-
-<!--
-Fonctionne sur les deux cibles du MVP sans code propre à l'une (principe II),
-et resterait utilisable sur un autre cloud ou en on-prem. Preuves :
-documentation officielle d'installation par plateforme.
--->
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
@@ -673,12 +573,6 @@ trois. Ce choix revient à l'ADR-013.
 
 ### 5.8 Expérience dev et documentation, poids 10
 
-<!--
-Qualité et fraîcheur de la documentation officielle, clarté des erreurs,
-temps pour faire tourner un exemple minimal. Note de jugement : décrire
-l'essai qui la fonde. Preuves : documentation officielle, essai consigné.
--->
-
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
 | Keycloak | 4/5 | 8 | Installé, prêt et servant un jeton vérifié à chaque exécution, avec le manifest de démarrage rapide et ses seuls écarts listés ; le client de test se déclare dans le royaume importé au démarrage, secret lu dans l'environnement. Documentation par guide, avec sélecteur de version (26.8.2) ; compte d'administration d'amorçage par variables, temporaire par conception. Réserve : le manifest de démarrage écrit ses identifiants en clair, la documentation juge l'import au démarrage surtout utile en mode dev, et la construction optimisée qu'elle recommande demande une image construite par le projet | [M1], [M6], [M7], [S12], [S13], [S14], [S15], [S16] |
@@ -691,50 +585,37 @@ option, sans intervention, après quatre tests de fumée qui ont surtout servi
 
 ### 5.9 Coût (managé ou opérationnel), poids 5
 
-<!--
-Coût du service managé sur GCP, ou coût d'exploitation sur le PC et en
-on-prem (temps, licence, support). Relu par [FINOPS]. Preuves : page de tarifs
-officielle datée, estimation de [FINOPS].
--->
-
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Keycloak | 4/5 | 4 | Gratuit sur le PC. Sur GCP, pendant managé identique pour toutes les options (Identity Platform) : d'après l'extrait que le moteur de recherche donne de la page officielle, les méthodes du premier palier sont gratuites jusqu'à 50 000 utilisateurs actifs par mois, et le palier dépend du fournisseur qui authentifie. Réserve : page des prix illisible par l'outil le 2026-11-20 (R-05). Sur GKE, avec un `managed_gap`, la référence demande 500m de CPU et 1700Mi par réplique, deux répliques par défaut | [S12], [S49], [S50] |
-| Zitadel | 4/5 | 4 | Gratuit sur le PC. Même pendant managé, même réserve sur la page des prix. Demandes de ressources sur GKE non relevées | [S49], [S50] |
+| Keycloak | 4/5 | 4 | Gratuit sur le PC : Apache-2.0, aucun service payant ; suivi des mineures compté en 5.5 et construction optimisée en 5.8 (règle de BENCH-008). Sur GCP, le coût dépend de la voie de l'ADR-013. Identity Platform est sans frais jusqu'à 50 000 utilisateurs actifs par mois, et jusqu'à 50 sur la ligne SAML/OIDC ; prix au-delà non lus. Sur GKE Autopilot, la référence demande 500m et 1700Mi par réplique : environ 22,2 USD par réplique et par mois aux prix d'exemple de us-central1, 44,4 USD pour les deux répliques par défaut, hors stockage éphémère et base. Réserve : coût sur GCP à trancher | [S12], [S50], [S82], [S83], [S84] |
+| Zitadel | 4/5 | 4 | Gratuit sur le PC, même règle : montées de majeure comptées en 5.3, gestes d'installation en 5.8. Même pendant managé. Sur GKE, le chart 10.5.0 ne fixe aucune demande de ressources : Autopilot appliquerait 0,5 vCPU et 2 Gio à chacun des deux pods, environ 46,9 USD par mois aux mêmes prix, ou 19,8 USD au minimum sans rafale ; rien n'est mesuré sur GKE. Même réserve | [S50], [S64], [S82], [S83], [S84] |
 
-[BENCH] Le coût ne départage pas les options à ce stade : licence gratuite sur
-le PC pour les trois, et même service managé sur GCP. Il ne bougerait que si
-l'ADR-013 retenait l'option libre sur GKE, où les demandes de ressources de
-chaque référence entreraient dans le budget de [FINOPS].
+[BENCH] Le coût ne départage pas les options : licence gratuite sur le PC,
+temps d'exploitation compté en 5.3, 5.5 et 5.8, et même pendant managé sur
+GCP. Une démo reste dans la franchise d'Identity Platform. Sur la voie de
+l'option sur GKE, les pods se paient à l'heure, de 20 à 47 USD par mois
+environ selon les demandes, aux prix d'exemple de us-central1 et non à la
+grille, illisible le 2026-11-23 ; la région n'est pas choisie (R-05).
 
 ## 6. Grille pondérée
-
-<!--
-Reporter notes et points de la section 5. Total : somme des points, sur 100.
-Une option éliminée garde sa colonne, avec « éliminée » dans chaque case.
--->
 
 | Critère | Poids | Keycloak | Zitadel | Authentik |
 | --- | --- | --- | --- | --- |
 | Critères éliminatoires (section 3) | éliminatoire | passe | passe | éliminée (licence) |
 | Licence et liberté d'usage | 15 | 5/5, 15 pts | 3/5, 9 pts | éliminée |
 | Gouvernance (fondation, multi-vendeurs) | 15 | 4/5, 12 pts | 2/5, 6 pts | éliminée |
-| Maturité et adoption | 15 | 5/5, 15 pts | 3/5, 9 pts | éliminée |
+| Maturité et adoption | 15 | 4/5, 12 pts | 3/5, 9 pts | éliminée |
 | Activité et maintenance | 10 | 5/5, 10 pts | 5/5, 10 pts | éliminée |
 | Sécurité (CVE, réactivité) | 10 | 3/5, 6 pts | 2/5, 4 pts | éliminée |
 | Empreinte sur PC (RAM, CPU, démarrage) | 10 | 2/5, 4 pts | 3/5, 6 pts | éliminée |
 | Portabilité multi-cloud | 10 | 5/5, 10 pts | 4/5, 8 pts | éliminée |
 | Expérience dev et documentation | 10 | 4/5, 8 pts | 3/5, 6 pts | éliminée |
 | Coût (managé ou opérationnel) | 5 | 4/5, 4 pts | 4/5, 4 pts | éliminée |
-| Total | 100 | 84 / 100 | 62 / 100 | éliminée |
+| Total | 100 | 81 / 100 | 62 / 100 | éliminée |
 
 ## 7. Verdict proposé
 
-<!--
-Une proposition. L'ADR lié, écrit par [ARCHI], tranche, et Lucas valide.
--->
-
-[BENCH] Option proposée pour le cluster local : Keycloak, 84 sur 100, 22
+[BENCH] Option proposée pour le cluster local : Keycloak, 81 sur 100, 19
 points devant Zitadel (62). L'ADR-013, écrit par [ARCHI], tranche ; Lucas
 valide.
 
@@ -752,8 +633,8 @@ les clés de l'émetteur [M6], aucune valeur connue acceptée pour
 l'administrateur [M8].
 
 [BENCH] Sensibilité. Un cran vaut au plus 3 points : il faudrait au moins
-huit crans dans le sens de Zitadel pour combler l'écart. Les mesures ne le
-peuvent pas : l'empreinte pèse 10 points, et Keycloak garderait 14 points
+sept crans dans le sens de Zitadel pour combler l'écart. Les mesures ne le
+peuvent pas : l'empreinte pèse 10 points, et Keycloak garderait 11 points
 d'avance avec 0/5 contre 5/5 à Zitadel. Le verdict ne repose sur aucun
 critère isolé. Si Lucas renversait l'élimination d'Authentik, ses notes de
 lecture du 2026-11-20 (62 points sur 90 hors empreinte, avant suppression de
@@ -765,24 +646,35 @@ réserve porte sur le poids d'IBM, 8 mainteneurs sur 11 [S3].
 
 [BENCH] Réserves. D'abord l'empreinte : 843,2 Mio au nœud, à compter dans la
 mémoire minimale du profil standard (US-005, condition 6 de l'ADR-004), et
-265,1 Mo de plus au premier `task up`, qui portent le parcours à 148 % du
-budget à 10 Mbit/s avant Mailpit (R-04). Ensuite la cadence des correctifs :
+265,1 Mo de plus au premier `task up`, qui le portent à 1 787,0 Mo avec zot
+et le Postgres de l'ADR-012, soit 158,8 % du budget à 10 Mbit/s avant Mailpit
+(R-04). Le profil standard passe à 3,5 Gio de VM et 7,5 Gio de portable,
+435,7 Mio sous la limite d'un portable de 8 Gio avant Mailpit (relecture
+[FINOPS]) : la limite mémoire du pod reste à fixer et à mesurer sur le golden
+repo. Ensuite la cadence des correctifs :
 la dernière mineure seule est corrigée [S7], [S8], et 228 tickets de CVE hors
 dépendances ont été ouverts en douze mois [S11] ; le blueprint doit suivre
 chaque mineure. Enfin les identifiants : le manifest de démarrage écrit
 `admin`/`admin` [S12] ; le golden repo garde les écarts de la couche de
 mesure (Secrets créés par un tube, aucun identifiant en clair), et un contrôle
-du type de M8 est à proposer pour la matrice de validation. Prochaine
+du type de M8 est à proposer pour la matrice de validation. Aucune image
+n'est signée : l'ADR-013 porte une dérogation à ENF-03 pour
+`quay.io/keycloak/keycloak`, celle de l'ADR-012 ne couvrant que
+`docker.io/library`. Les réglages `start` du PC ne passent pas sur GKE, et la
+force brute s'active sur chaque royaume (relecture [SECU]). Prochaine
 vérification : 2027-05-23, six mois après les mesures (ADR-009).
 
 [BENCH] Question ouverte pour Lucas, posée par le DSI pour l'ADR-013 et non
 tranchée ici : sur GCP, Identity Platform (principe III), avec un parcours de
 connexion du front propre à la couche `gcp` [S47], ou Keycloak sur GKE avec
 un `managed_gap`, au prix de pods facturés (la référence demande 500m de CPU
-et 1700Mi par réplique [S12]) et de la base dans Cloud SQL, que Keycloak
-prend en charge en PostgreSQL 18 [S17]. La première voie garde le principe III
-et coûte un écart d'interface entre les cibles ; la seconde garde la parité et
-coûte un composant à exploiter sur la cible cloud.
+et 1700Mi par réplique [S12], soit environ 22,2 USD par réplique et par mois
+aux prix d'exemple de us-central1 [S83], hors stockage éphémère et base ;
+Identity Platform reste sans frais jusqu'à 50 000 utilisateurs actifs par
+mois, et jusqu'à 50 sur la ligne SAML/OIDC [S82]) et de la base dans Cloud
+SQL, que Keycloak prend en charge en PostgreSQL 18 [S17]. La première voie
+garde le principe III et coûte un écart d'interface entre les cibles ; la
+seconde garde la parité et coûte un composant à exploiter sur la cible cloud.
 
 [BENCH] Suites proposées. L'ADR-013 ([ARCHI]). Une entrée `identity` au
 catalogue : cible `local` de type `oss`, Keycloak 26.8.2, `Apache-2.0`,
@@ -790,18 +682,34 @@ gouvernance `foundation` (CNCF), statut `active`, dernière release le
 2026-11-05, sources [S1], [S2], [S5] ; cible `gcp` en `pending` jusqu'à la
 réponse de Lucas. Pour `docs/risques.md`, à décider par le DSI : R-20
 confirmé pour Keycloak et pour Zitadel, avec les défauts relevés ([S12],
-[S59]) ; R-04 relevé de 265,1 Mo ; un risque nouveau si Identity Platform est
-retenu, « parcours de connexion différent entre le PC et GCP ».
+[S59]) ; R-04 relevé de 265,1 Mo, à 1 787,0 Mo avec zot (158,8 % du budget,
+15,9 Mbit/s au minimum) ; quay.io à ajouter à la liste unique des registres
+du miroir (condition 10 de l'ADR-011) ; un risque nouveau si Identity
+Platform est retenu, « parcours de connexion différent entre le PC et GCP ».
+
+[DSI] Arbitrage du 2026-11-24, après les relectures de [SECU] et de
+[FINOPS]. Keycloak 26.8.2 est retenu comme fournisseur d'identité sur la
+cible `local`, à 81 sur 100 dans la grille réconciliée, devant Zitadel (62).
+La maturité de Keycloak passe à 4, comme pour tout projet Incubating de la
+CNCF dans BENCH-004 et BENCH-011. Lucas a tranché le même jour trois points.
+Sur la cible `gcp`, le projet généré utilise Identity Platform, service managé
+de Google, conformément au principe III : une démo reste dans sa franchise,
+et le parcours de connexion du front devient propre à la cible, ce que le
+golden repo devra tester. Keycloak reçoit sa propre dérogation datée à
+ENF-03, sur le modèle de l'ADR-012 : `quay.io/keycloak/keycloak` est admise
+par sa référence exacte, condensat compris, dans une liste fermée que [SECU]
+relit à chaque montée, republications comprises ; elle tombe quand Keycloak
+signe ses images de façon vérifiable par Kyverno. Authentik reste éliminé sur
+le critère de licence, preuve revérifiée par [SECU]. L'ADR-013, à écrire par
+[ARCHI], reprend les conditions 1 à 10 de [SECU] et les trois conditions de
+[FINOPS] : une limite mémoire de Keycloak fixée et mesurée sur le golden repo,
+pour que le profil standard tienne sur un portable de 8 Gio avec Mailpit ;
+`quay.io` dans la liste unique des registres du miroir (condition 10 de
+l'ADR-011) ; R-04 et ENF-01 mis à jour à 1 787,0 Mo. Les failles sans paquet
+associé, invisibles aux scanners, touchent les deux options : elles ouvrent
+le risque R-36.
 
 ## 8. Limites et biais
-
-<!--
-Ce qui peut fausser le verdict, dit une fois et précisément, avec ce qui
-lèverait la limite. Pistes : une seule machine de mesure, machine différente
-du PC de référence de la phase 6 (pas encore défini, ENF-02), images en
-cache, source tenue par l'éditeur lui-même, note de jugement, option
-pressentie par le PRD.
--->
 
 [BENCH] Empreinte des seuils. SHA-256 de la section 4.1, du titre « 4.1 »
 jusqu'à la ligne qui précède le titre « 4.2 » :
@@ -816,11 +724,11 @@ empreinte et doit se justifier ici, avant la première mesure.
 | Série de référence sur batterie, capot ouvert ; trois séries précédentes interrompues par la veille capot fermé | Aucun, la série de référence ne montre aucune veille et le script refuse toute exécution qui en contient une ; la machine reste un portable sur batterie | Mesurer sur secteur, ou sur un poste fixe |
 | Une seule machine de mesure, sous macOS avec OrbStack, moteur non libre (R-26), nœud arm64 | Empreinte et temps propres à ce matériel ; le volume, lui, se lit au registre pour amd64 | Relancer le script sous Linux avec Docker Engine, sur un runner amd64 |
 | Note d'expérience dev de jugement, fondée sur un essai de trois exécutions par option avec le protocole de 4.3 | Un cran au plus, sans effet sur le classement (section 7) | Un essai par une autre personne, sur le golden repo |
-| Comptes de CVE asymétriques : Keycloak suit ses CVE en tickets en plus de ses avis, Zitadel et Authentik dans leurs avis GitHub seulement | Les volumes de la section 5.5 ne se comparent pas un pour un | Relecture de [SECU], recoupement avec la base mondiale de GitHub comme dans BENCH-009 |
+| Comptes de CVE asymétriques : Keycloak suit ses CVE en tickets en plus de ses avis, Zitadel et Authentik dans leurs avis GitHub seulement | Les volumes de la section 5.5 ne se comparent pas un pour un | Fait par [SECU] le 2026-11-23, voir 5.5 [S68] |
 | Statistiques de contribution tirées de l'API de GitHub, limitée aux principaux contributeurs de la branche par défaut (500 comptes rendus pour Keycloak, 100 pour Zitadel, 498 pour Authentik) ; robots, comptes sans profil et agent `claude` écartés | Commits et parts sous-estimés pour Zitadel au plus | Relevé par l'API des commits, sur les mêmes 12 mois |
 | Employeurs lus dans les profils GitHub, déclaratifs ; seul Keycloak tient un fichier des mainteneurs avec employeurs | Gouvernance de Zitadel et d'Authentik lue sur un échantillon | Fichiers de gouvernance des deux éditeurs, s'ils existent |
-| Page des prix d'Identity Platform illisible par l'outil (81 caractères) ; le palier gratuit vient d'un extrait du moteur de recherche | Coût sur GCP non établi | Lecture par [FINOPS] de la page dans un navigateur (R-05) |
-| Conditions de Red Hat UBI 9 micro, base de l'image de Keycloak, non lues ; dépendance transitive, hors critère éliminatoire | Réserve possible sur la licence de Keycloak | Lecture par [SECU] des conditions d'UBI |
+| Page des prix d'Identity Platform encore illisible par l'outil le 2026-11-23 [S49] ; franchise lue sur la page tarifaire de Firebase [S82], prix au-delà non lus | Coût au-delà de la franchise inconnu, surtout pour les utilisateurs fédérés par SAML ou OIDC, sans frais jusqu'à 50 par mois | Lecture de la page dans un navigateur par Lucas (R-05) |
+| Conditions de Red Hat UBI 9 micro, base de l'image de Keycloak, non lues ; dépendance transitive, hors critère éliminatoire | Réserve possible sur la licence de Keycloak | Levée par [SECU] le 2026-11-23 [S67] |
 | Option pressentie par le PRD et proposée par BENCH-005 : Keycloak | Biais de lecture en sa faveur | Mêmes sources et mêmes critères pour les trois options ; relecture de [SECU] |
 | Élimination d'Authentik décidée par le DSI le 2026-11-21, réversible par Lucas | Une troisième colonne à ajouter, notes et mesures comprises | Décision de Lucas |
 | Client de test de Zitadel créé par l'API après « prêt », alors que Keycloak le déclare dans le royaume importé au démarrage | M1 de Zitadel ne contient pas la création du client | M6 dit comment le client est créé ; écart écrit dans la sensibilité |
@@ -829,15 +737,11 @@ empreinte et doit se justifier ici, avant la première mesure.
 | Postgres partagé sans TLS (`sslmode=disable` pour Zitadel) dans le cluster local | Sans effet sur l'empreinte ; écart à la cible GCP, où la base serait managée | Rien à faire pour ce benchmark ; à traiter dans l'ADR-013 |
 | Certifications OpenID et listes d'adoptants tenues par les éditeurs eux-mêmes | Maturité lue sur des sources non indépendantes | Aucune source indépendante trouvée |
 | Pages de Zitadel lues en partie : le guide de configuration dépasse ce que l'outil lit d'un coup (167 431 caractères) | Une capacité déclarative peut avoir échappé à la lecture (5.8) | Relecture complète avant l'écriture du script |
+| Client HTTP du pod de test : PAT et en-tête `Basic` en argument, corps des requêtes dans un fichier du pod | Aucun sur les mesures | Ne pas reprendre ce client dans la matrice (FR-004) |
+| Pic de mémoire au démarrage non mesuré ; mémoire lue 120 s après « prêt » | Le plancher de BENCH-005, qui retient le pic s'il dépasse le repos, peut être sous-estimé pour Keycloak, dont le tas peut monter à 70 % de la limite de 2000Mi [S14] | Mesurer pic et repos sur le golden repo, avec la limite retenue |
+| Prix de GKE : valeurs d'exemple de us-central1 [S83], grille illisible, région non choisie | Montants de la voie GKE en ordre de grandeur, pas un budget | Grille de la région retenue lue avant la GATE 2 (R-05) |
 
 ## 9. Sources
-
-<!--
-Une ligne par source, citée [Sn] dans le rapport. Source officielle d'abord
-(principe VIII) : dépôt, documentation, site du projet ou de la fondation.
-Une source tierce se signale dans la dernière colonne et ne justifie pas seule
-une note. URL entre chevrons, par exemple <https://example.org/page>.
--->
 
 | ID | URL | Lue le | Ce que la source établit | Officielle |
 | --- | --- | --- | --- | --- |
@@ -854,7 +758,7 @@ une note. URL entre chevrons, par exemple <https://example.org/page>.
 | S11 | <https://github.com/keycloak/keycloak/issues?q=is%3Aissue%20type%3ACVE%20created%3A%3E%3D2025-11-20> | 2026-11-20 | 330 tickets de type CVE en 12 mois, dont 228 hors dépendances (225 identifiants CVE) ; 10 de ces derniers encore ouverts, tous moyens ou faibles | Oui |
 | S12 | <https://github.com/keycloak/keycloak-quickstarts/blob/c598d34d3b2dd85976ac96614176df351ee1a4d5/kubernetes/keycloak.yaml> | 2026-11-20 | StatefulSet de deux répliques, image 26.8.2, `start`, `admin`/`admin` et mot de passe de base en clair, Postgres 17 éphémère, demandes 500m et 1700Mi, limites 2000m et 2000Mi ; SHA-256 `b4de5e35b234c11400192e805d4cb551c51e358f655be2196a51c2f9171fb9af` ; dépôt sous Apache-2.0 | Oui |
 | S13 | <https://www.keycloak.org/getting-started/getting-started-kube> | 2026-11-20 | Installation par `kubectl create -f` du manifest S12 ; compte initial `admin`/`admin` | Oui |
-| S14 | <https://www.keycloak.org/server/containers> | 2026-11-20 | `start-dev` à éviter en production ; construction optimisée par `kc.sh build` ; import au démarrage ; amorçage par `KC_BOOTSTRAP_ADMIN_USERNAME` et `KC_BOOTSTRAP_ADMIN_PASSWORD` ; tas à 70 % de la limite du conteneur ; santé sur le port 9000 | Oui |
+| S14 | <https://www.keycloak.org/server/containers> | 2026-11-20 | `start-dev` à éviter en production ; construction optimisée par `kc.sh build` ; import au démarrage ; amorçage par `KC_BOOTSTRAP_ADMIN_USERNAME` et `KC_BOOTSTRAP_ADMIN_PASSWORD`, exemple `KC_BOOTSTRAP_ADMIN_PASSWORD=change_me` ; tas à 70 % de la limite du conteneur ; santé sur le port 9000 | Oui |
 | S15 | <https://www.keycloak.org/server/importExport> | 2026-11-20 | `--import-realm`, import sauté si le royaume existe, substitution de variables d'environnement | Oui |
 | S16 | <https://www.keycloak.org/server/bootstrap-admin-recovery> | 2026-11-20 | Compte d'administration d'amorçage temporaire, créé au premier démarrage seulement, sans mot de passe par défaut | Oui |
 | S17 | <https://www.keycloak.org/server/db> | 2026-11-20 | PostgreSQL 14 à 18 pris en charge ; `dev-file` inadapté à la production | Oui |
@@ -866,7 +770,7 @@ une note. URL entre chevrons, par exemple <https://example.org/page>.
 | S23 | <https://github.com/zitadel/zitadel/blob/main/SECURITY.md> | 2026-11-20 | Signalement par le portail de l'éditeur | Oui |
 | S24 | <https://github.com/zitadel/zitadel/security/advisories> | 2026-11-20 | 55 avis depuis le 2025-11-20 : 6 critiques, 31 élevés, 13 moyens, 5 faibles (`gh api`) | Oui |
 | S25 | <https://github.com/zitadel/zitadel/blob/main/ADOPTERS.md> | 2026-11-20 | 16 lignes d'adoptants, liste tenue par les adoptants | Oui |
-| S26 | <https://zitadel.com/docs/self-hosting/deploy/kubernetes> | 2026-11-20 | Chart Helm, Kubernetes 1.30 ou plus, PostgreSQL 14 à 18, HTTP/2 de bout en bout pour la console, API en Go et connexion en Next.js, tâches d'initialisation, clé maître immuable, identifiants du démarrage rapide `Password1!` | Oui |
+| S26 | <https://zitadel.com/docs/self-hosting/deploy/kubernetes> | 2026-11-20 | Chart Helm, Kubernetes 1.30 ou plus, PostgreSQL 14 à 18, HTTP/2 de bout en bout pour la console, API en Go et connexion en Next.js, tâches d'initialisation, clé maître immuable, identifiants du démarrage rapide `Password1!` ; exemples `YourSecurePassword123!` et `your-secure-password`, relus le 2026-11-23 | Oui |
 | S27 | <https://zitadel.com/docs/self-hosting/manage/configure/configure> | 2026-11-20 | Section `FirstInstance` : organisation, administrateur `IAM_OWNER`, compte de service ; page lue en partie (167 431 caractères) | Oui |
 | S28 | <https://github.com/zitadel/zitadel-charts> | 2026-11-20 | Chart sous Apache-2.0 ; version 10.5.0 du 2026-11-05, `appVersion` v4.19.2 ; mots-clés `oidc` et `idp` | Oui |
 | S29 | <https://github.com/zitadel/zitadel/blob/main/.github/workflows/pack.yml> | 2026-11-20 | Images construites pour `linux/amd64` et `linux/arm64` ; aucune signature dans ce flux | Oui |
@@ -884,12 +788,12 @@ une note. URL entre chevrons, par exemple <https://example.org/page>.
 | S41 | <https://docs.goauthentik.io/customize/blueprints/> | 2026-11-20 | Plans YAML découverts dans `/blueprints`, appliqués à chaque modification et toutes les 60 minutes | Oui |
 | S42 | <https://github.com/goauthentik/helm/tree/authentik-2026.8.6/charts> | 2026-11-20 | Chart sous GPL-3.0, version 2026.8.6, mots-clés `oidc` et `idp` ; `serviceAccount.create: true` par défaut ; Role en écriture sur Secrets, Services, ConfigMaps, Deployments, Ingress et HTTPRoute du namespace | Oui |
 | S43 | <https://github.com/goauthentik/authentik/blob/main/.github/workflows/release-publish.yml> | 2026-11-20 | Attestations de provenance (`actions/attest-build-provenance`) ; images pour `linux/amd64` et `linux/arm64` | Oui |
-| S44 | <https://openid.net/developers/certified-openid-connect-implementations/> | 2026-11-20 | Keycloak 18.0.0 (déconnexion) et 15.0.2 (FAPI) certifiés par Red Hat ; authentik 2026.8.0 par son éditeur ; aucune ligne Zitadel trouvée | Oui |
+| S44 | <https://openid.net/developers/certified-openid-connect-implementations/> | 2026-11-20 | Keycloak 18.0.0 (déconnexion) et 15.0.2 (FAPI) certifiés par Red Hat ; authentik 2026.8.0 par son éditeur ; aucune ligne pour le serveur Zitadel, seule `zitadel/oidc` de CAOS, v0.15.7, Basic RP et Config RP | Oui |
 | S45 | <https://opensource.org/licenses> | 2026-11-20 | Apache-2.0, AGPL-3.0, MIT et GPL-3.0 approuvées ; aucune licence entreprise d'Authentik | Oui |
 | S46 | <https://docs.cloud.google.com/identity-platform/docs/product-comparison> | 2026-11-20 | OpenID Connect et SAML, locataires multiples, fonctions bloquantes, SLA de 99,95 % | Oui |
 | S47 | <https://docs.cloud.google.com/identity-platform/docs/concepts-authentication> | 2026-11-20 | Connexion par SDK et bibliothèques d'interface ; OpenID Connect et SAML en fournisseurs fédérés ; aucun rôle de serveur d'autorisation décrit | Oui |
 | S48 | <https://docs.cloud.google.com/identity-platform/docs/release-notes> | 2026-11-20 | GA le 2019-04-09, locataires en GA le 2019-11-18, dernière note le 2024-12-03 | Oui |
-| S49 | <https://cloud.google.com/identity-platform/pricing> | 2026-11-20 | Page illisible par l'outil ; extrait du moteur de recherche : premier palier gratuit de 0 à 50 000 utilisateurs actifs par mois | Oui, lue par extrait |
+| S49 | <https://cloud.google.com/identity-platform/pricing> | 2026-11-20 | Page illisible par l'outil ; extrait du moteur de recherche : premier palier gratuit de 0 à 50 000 utilisateurs actifs par mois ; relue le 2026-11-23 par [FINOPS], toujours illisible | Oui, lue par extrait |
 | S50 | <https://docs.cloud.google.com/identity-platform/docs/multi-tenancy-billing> | 2026-11-20 | Le palier dépend du fournisseur qui authentifie, pas du protocole entre l'application et Identity Platform | Oui |
 | S51 | <https://firebase.google.com/docs/auth/admin/verify-id-tokens> | 2026-11-20 | Jeton RS256, émetteur `https://securetoken.google.com/<projectId>`, clés publiques de Google, vérifiable par une bibliothèque JWT | Oui |
 | S52 | <https://github.com/hashicorp/terraform-provider-google/tree/main/website/docs/r> | 2026-11-20 | Ressources `google_identity_platform_config`, `_tenant`, `_oauth_idp_config`, `_inbound_saml_config` et leurs variantes ; provider v8.12.0 du 2026-11-17 | Oui |
@@ -905,20 +809,468 @@ une note. URL entre chevrons, par exemple <https://example.org/page>.
 | S62 | <https://github.com/zitadel/zitadel/blob/v4.20.5/proto/zitadel/session/v2/session_service.proto> | 2026-11-21 | `POST /v2/sessions` avec vérification de l'utilisateur (identifiant ou nom de connexion) puis du mot de passe | Oui |
 | S63 | <https://zitadel.com/docs/self-hosting/manage/database> | 2026-11-21 | Base et rôle préparés à la main : seule l'étape `init schema` (alias `init zitadel`) reste à lancer, le propriétaire de la base suffit | Oui |
 | S64 | <https://github.com/zitadel/zitadel-charts/tree/zitadel-10.5.0/charts/zitadel> | 2026-11-21 | Chart 10.5.0 : la tâche de setup range la clé et le PAT de `iam-admin` dans des Secrets par un conteneur `alpine/k8s` ; tâche de nettoyage en crochet `post-delete` ; options `masterkeySecretName`, `login.loginServiceKeySecretName`, `envVarsSecret` ; archive au SHA-256 `e216ca1a9b19e9e2982e76a2cf49c446eeb3a02cdf167834977978acb880f019` | Oui |
+| S65 | <https://github.com/keycloak-rel/keycloak-rel/tree/main/.github/workflows> (`x-keycloak-container.yml`, `respin-containers-conditionally.yml`, `.github/scripts/check-cve-updates-for-keycloak-image.sh`) | 2026-11-23 | Image poussée sur quay.io et Docker Hub par `docker/build-push-action@v2.10.0`, sans signature ni attestation ; un workflow quotidien la reconstruit quand une base neuve résout des CVE moyennes ou plus | Oui |
+| S66 | <https://quay.io/api/v1/repository/keycloak/keycloak/tag/?specificTag=26.8.2> | 2026-11-23 | Condensats `723b1d6e…` le 2026-11-09, `c68e286c…` le 2026-11-12 et `7e66a96e…` le 2026-11-19 (courant) ; aucun tag `sha256-7e66….sig` | Oui |
+| S67 | <https://www.redhat.com/licenses/EULA_Red_Hat_Universal_Base_Image_English_20190422.pdf> | 2026-11-23 | Contrat UBI de mars 2019 : composants sous licences permettant d'exécuter, copier, modifier et redistribuer ; contrat joint et aucun soutien de Red Hat allégué pour une image dérivée distribuée | Oui |
+| S68 | <https://api.github.com/advisories> (`ecosystem`, `affects`, `published>=2025-11-20`) ; <https://trivy.dev/latest/docs/coverage/language/golang/> | 2026-11-23 | Keycloak : 74 CVE (1 critique, 24 élevées) ; 16 des 20 CVE de tickets échantillonnées sans paquet. Zitadel : 24 avis revus sur 55 ; GHSA-g8gj, -pq2q, -45f2 et -738m sans module Go. Trivy lit la base de GitHub pour les modules Go | Oui |
+| S69 | <https://github.com/keycloak/keycloak/blob/26.8.2/services/src/main/java/org/keycloak/services/managers/RealmManager.java> | 2026-11-23 | Ligne 308 : `setBruteForceProtected(false)` à la création d'un royaume | Oui |
+| S70 | <https://www.keycloak.org/server/reverseproxy> | 2026-11-23 | En-têtes forgés par un client qui contourne le proxy ; toutes les adresses sont de confiance par défaut ; chemins à exposer : `/realms/`, `/resources/`, `/.well-known/` ; chemins à ne pas exposer : `/`, `/admin/`, `/metrics`, `/health` | Oui |
+| S71 | <https://www.keycloak.org/server/hostname> | 2026-11-23 | `hostname-strict=false` : injection d'en-tête Host ; « should always be set to true in production, unless your reverse proxy overwrites the Host header » ; `start` exige `--hostname` ou `--hostname-strict false` | Oui |
+| S72 | <https://www.keycloak.org/server/configuration-production>, <https://www.keycloak.org/server/caching> | 2026-11-23 | Canal sûr pour toute communication ; administration sur un autre nom ou chemin ; `http-max-queued-requests` sans limite par défaut ; `cache-embedded-mtls-enabled` à `true`, ports 7800 et 57800 | Oui |
+| S73 | <https://github.com/alpine-docker/k8s> (`Dockerfile`, `build.sh`, `.circleci/config.yml`) | 2026-11-23 | MIT, organisation non vérifiée, 64 commits du premier contributeur ; `FROM alpine:edge`, `curl` sans somme de contrôle, `--verify=false` ; SBOM et provenance sans signature | Oui |
+| S74 | <https://github.com/zitadel/zitadel-charts/tree/zitadel-10.5.0/examples> | 2026-11-23 | Clés maîtres `MasterkeyNeedsToHave32Characters` et `x123456789012345678901234567891y` ; base `zitadel` ; `Password1!` avec `PasswordChangeRequired: false` | Oui |
+| S75 | <https://github.com/zitadel/zitadel/pull/9597>, <https://github.com/zitadel/zitadel/pull/9645> | 2026-11-23 | #9597 fusionnée dans `v3.x` le 2025-03-27 ; #9645 dans `main` le 2025-04-02 | Oui |
+| S76 | <https://github.com/goauthentik/authentik/tree/version/2026.8.6> (`.dockerignore`, `authentik/enterprise/`, `.github/workflows/release-publish.yml`) | 2026-11-23 | `authentik/enterprise/` non exclu de l'image ; modèles et migrations propres ; `actions/attest` à la publication | Oui |
+| S77 | <https://firebase.google.com/docs/projects/api-keys> | 2026-11-23 | Clés d'API non secrètes mais à restreindre ; quota des points `identitytoolkit` à resserrer contre la force brute | Oui |
+| S78 | <https://busybox.net/downloads/BusyBox.html> | 2026-11-23 | `nc` : « -e PROG Run PROG after connect (must be last) », `-l` pour écouter | Oui |
+| S79 | <https://github.com/zitadel/zitadel/tree/v4.20.5/.github/workflows> | 2026-11-23 | `pack.yml` et `release.yml` sans cosign ni attestation ; actions épinglées par tag | Oui |
+| S80 | <https://github.com/wait4x/wait4x/blob/main/.github/workflows/ci.yaml> | 2026-11-23 | Apache-2.0 ; aucune étape de signature | Oui |
+| S81 | <https://github.com/cncf/toc/issues?q=keycloak> | 2026-11-23 | Aucune demande de graduation de Keycloak | Oui |
+| S82 | <https://firebase.google.com/pricing> | 2026-11-23 | Section « With Identity Platform » : « Monthly active users », sans frais jusqu'à 50K MAUs ; « Monthly active users - SAML/OIDC », sans frais jusqu'à 50 MAUs ; au-delà, renvoi à la page tarifaire d'Identity Platform (relevé de [FINOPS]) | Oui |
+| S83 | <https://docs.cloud.google.com/kubernetes-engine/cud> | 2026-11-23 | Exemple us-central1 : 0,0445 USD par vCPU-heure et 0,0049225 USD par Go-heure pour les pods Autopilot ; valeurs d'exemple, pas la grille (relevé de [FINOPS]) | Oui |
+| S84 | <https://docs.cloud.google.com/kubernetes-engine/docs/concepts/autopilot-resource-requests> | 2026-11-23 | Classe généraliste : rapport vCPU:Gio de 1:1 à 1:6,5 ; CPU arrondi à 0,25 vCPU sans rafale ; minimums 250m et 512 Mio sans rafale ; sans requête, 0,5 vCPU et 2 Gio ; stockage éphémère par défaut 1 Gio (relevé de [FINOPS]) | Oui |
 
 ## 10. Relectures
 
-<!--
-[SECU] relit licences, critères éliminatoires et sécurité. [FINOPS] relit le
-coût. Le statut passe à « relu » quand les deux avis sont rendus et leurs
-remarques traitées.
--->
-
 | Relecteur | Porte sur | Date | Avis |
 | --- | --- | --- | --- |
-| [SECU] | Licences, critères éliminatoires, sécurité | AAAA-MM-JJ | Favorable, réservé ou défavorable |
-| [FINOPS] | Coût | AAAA-MM-JJ | Favorable, réservé ou défavorable |
+| [SECU] | Licences, critères éliminatoires, sécurité | 2026-11-23 | Réservé, favorable à Keycloak sous conditions. Licences, gouvernance et élimination d'Authentik sont confirmées sur les sources, et la réserve sur UBI est levée. La maturité de Keycloak passe à 4, comme celle de tout projet Incubating de la CNCF dans BENCH-004 et BENCH-011 : 81 contre 62. Aucune image mesurée n'est signée, et la dérogation de l'ADR-012 ne couvre que `docker.io/library`, donc l'ADR-013 porte la sienne. Les réglages `start` mesurés restent sur le PC : nom d'hôte non strict, en-têtes de proxy acceptés de partout, HTTP, aucun `securityContext`, force brute désactivée. Conditions 1 à 10. |
+| [FINOPS] | Coût | 2026-11-23 | Favorable, avec corrections. Les chiffres de 4.4, 5.6 et 5.9 se retrouvent dans les données brutes de `series-4`. Les seuils ont été appliqués tels qu'écrits, donc 2/5 et 3/5 tiennent. Le cumul doit partir des 1 521,9 Mo de R-04, zot et Postgres de l'ADR-012 compris : 1 787,0 Mo et 158,8 % du budget avec Keycloak, 1 985,7 Mo et 176,5 % avec Zitadel. Avec Keycloak, le profil standard passe à 3,5 Gio de VM et tient sur 8 Gio au repos, avec 435,7 Mio de marge avant Mailpit. 5.9 reste à 4/5 pour les deux, avec une réserve réécrite : la franchise d'Identity Platform est lue, et Keycloak sur GKE coûte environ 44,4 USD par mois aux prix d'exemple. |
 
-[SECU] Remarques et suite donnée.
+[SECU] Licences (5.1). Je confirme Keycloak à 5 et Zitadel à 3. Keycloak est
+sous Apache-2.0 [S1]. La réserve sur l'image tombe. Le contrat de Red Hat
+Universal Base Image (mars 2019) laisse chaque composant sous une licence qui
+permet d'exécuter, copier, modifier et redistribuer. Il n'impose ni
+abonnement ni limite d'usage en production. Pour une image dérivée
+redistribuée, il demande seulement de joindre le contrat et de ne pas laisser
+croire à un soutien de Red Hat [S67]. CELIAN ne redistribue pas l'image. Pour
+Zitadel, une date est à préciser : la PR #9597 « change from Apache to AGPL »
+est fusionnée dans `v3.x` le 2025-03-27, puis arrive dans `main` le
+2025-04-02 avec la v3 (PR #9645) [S75]. Les contributions entrent sous
+Apache-2.0 et le projet sort sous AGPL, ce qui laisse à l'éditeur seul le
+choix d'une future licence [S21]. L'AGPL ne pèse que sur une version modifiée
+et exposée par le réseau. Le miroir zot ne transmet de copie à personne
+(ADR-011, condition 9) et ne redistribue donc rien.
 
-[FINOPS] Remarques et suite donnée.
+[SECU] Gouvernance (5.2). Je confirme 4 et 2. `MAINTAINERS.md` liste onze
+mainteneurs actifs : huit chez IBM, un chez Robert Bosch, un chez Hitachi et
+un chez Identity Tailor [S3]. Keycloak est dans le cas de CloudNativePG et de
+Cilium : une fondation porte le projet, une entreprise le dirige. Zitadel a
+un seul éditeur, comme Config Sync dans BENCH-009.
+
+[SECU] Maturité (5.3). Je ramène Keycloak à 4. Le critère nomme « le niveau
+de maturité dans la fondation ». Les rapports précédents donnent 5 à un
+projet gradué à la CNCF et 4 à un projet Incubating : CloudNativePG dans
+BENCH-011, Envoy Gateway dans BENCH-004. Keycloak est Incubating depuis son
+entrée le 2023-04-10, et la page de la CNCF n'affiche aucune autre date [S5].
+Les tickets de `cncf/toc` ne contiennent aucune demande de graduation [S81].
+Ses certifications OpenID ne portent que sur les versions 18.0.0 et 15.0.2
+[S44]. Le reste de la justification tient. Zitadel reste à 3 : la liste des
+fournisseurs certifiés ne le contient pas, seule la bibliothèque cliente
+`zitadel/oidc` de CAOS y figure, en v0.15.7 [S44]. Nouveau total : Keycloak
+81, Zitadel 62.
+
+[SECU] Sécurité de Keycloak (5.5). Je maintiens 3, mais la justification est
+à refaire. Les 21 avis du dépôt sont exacts [S9], sans donner le volume réel.
+Dans la base mondiale de GitHub, j'ai pris les avis revus publiés depuis le
+2025-11-20 pour quatre paquets Maven de Keycloak, ajouté les avis du dépôt,
+puis dédoublonné par CVE. Résultat : 74 CVE, dont 1 critique, 24 élevées, 35
+moyennes et 14 faibles [S68]. La critique, CVE-2026-18963, y figure depuis le
+2026-08-18, la veille de la 26.7.2 qui la corrige. Les tickets du projet
+citent 225 identifiants hors dépendances, et 157 manquent à ce compte. Sur un
+échantillon de 20 d'entre eux, 16 sont dans la base sans paquet associé : un
+scanner qui associe par paquet ne les voit pas [S68]. Deux faits manquaient
+au rapport. D'abord, l'image n'a aucune signature. Le workflow qui la pousse
+construit avec `docker/build-push-action@v2.10.0`, sans cosign ni
+attestation, et quay.io n'a aucun tag `sha256-7e66….sig` pour le condensat
+mesuré [S65], [S66]. Ensuite, le tag `26.8.2` a porté trois condensats : le
+2026-11-09, le 2026-11-12 et le 2026-11-19, celui de la mesure [S66]. Un
+workflow quotidien reconstruit l'image dès qu'une base neuve résout des CVE,
+et le Dockerfile tire cette base sans tag ni condensat [S18], [S65]. Enfin,
+la création d'un royaume, `master` compris, désactive la détection de force
+brute (`RealmManager.java`, ligne 308) [S69]. La réserve demande donc d'agir
+: suivre chaque mineure, couvrir l'absence de signature par une dérogation,
+et durcir les royaumes.
+
+[SECU] Sécurité de Zitadel (5.5). Je maintiens 2. Les comptes sont exacts (55
+avis, 6 critiques, 31 élevés) [S24], sauf un : entre le 2026-11-13 et le
+2026-11-18, il y a six avis élevés et non quatre. La base mondiale n'a revu
+que 24 des 55 avis, dont 2 des 6 critiques. Les quatre autres critiques,
+parmi lesquels les trois prises de compte sans authentification, n'y sont
+associés à aucun module Go. Or Trivy lit cette base pour les modules Go
+[S68]. Les workflows de la v4.20.5 ne signent rien, et leurs actions sont
+épinglées par tag [S29], [S79]. La tâche de setup lance deux conteneurs
+`docker.io/alpine/k8s` sous le compte de service `zitadel`, qui lit, crée,
+modifie et supprime tous les Secrets du namespace. Le pod de l'API tourne
+sous ce même compte (rendu, fichiers `09`, `10`, `04`). L'image `alpine/k8s`
+vient de l'organisation GitHub `alpine-docker`, non vérifiée et hors de
+`docker.io/library`. Elle est construite `FROM alpine:edge`, avec des
+binaires tirés par `curl` sans somme de contrôle et des greffons Helm en
+`--verify=false`, et n'est pas signée [S73]. Le PAT et la clé machine
+d'`iam-admin`, rôle `IAM_OWNER`, valent jusqu'au 2029-01-01 et restent dans
+des Secrets marqués `helm.sh/resource-policy=keep` (fichiers `08`, `12`).
+Enfin, rien ne verrouille un compte après des échecs [S60].
+
+[SECU] Élimination d'Authentik. Elle tient, vérifiée sur la 2026.8.6. Le
+Dockerfile copie tout `authentik/` à la ligne 224 [S57], et `.dockerignore`
+n'exclut pas `authentik/enterprise/` [S76]. `settings.py` importe
+`authentik.enterprise.apps` et l'insère dans `TENANT_APPS`, lignes 591 à 595
+[S34]. Le dossier porte ses propres modèles et migrations [S76]. La licence
+entreprise réserve la production aux abonnés et ne permet copie et
+modification que « for development and testing purposes » [S33]. Sur le PC,
+la lecture du DSI se défend. En on-prem, que vise aussi le principe III,
+recopier l'image dans un registre de production sortirait de cet usage. Un
+point pour Lucas s'il revient sur la décision : Authentik est la seule des
+trois options dont le flux de publication produit des attestations de
+provenance signées (`actions/attest`) [S76]. Je n'ai pas vérifié où elles
+sont rangées.
+
+[SECU] Secrets (R-20, ADR-007). Les couches versionnées ne laissent aucun
+identifiant par défaut. Keycloak ne fixe que le nom `admin`. Le mot de passe,
+les identifiants de base et le secret du client viennent de Secrets, ce
+dernier par substitution dans le royaume. Le rendu de Zitadel ne contient ni
+Secret ni valeur. Les deux annotations `gitleaks:allow` sont bien les SHA-256
+d'un saut de ligne et d'une chaîne vide, recalculés avec `shasum`. Dans les
+données gardées (`series-1` à `4`, `control-1`, `smoke-1` à `4`), je n'ai
+trouvé ni jeton, ni clé privée, ni certificat, ni valeur de Secret. Les
+seules chaînes à forte entropie sont des `kid`, qui sont publics. Les
+journaux ne gardent que « secret/… created », et les neuf `kubeconfig` font
+28 octets, sans clé. Deux écarts restent. M8 a testé les six valeurs de
+l'ADR-007 et `Password1!`, mais pas `mysecretpassword`, ajouté par la
+condition 10 de l'ADR-012. C'est sans effet sur le résultat, puisque la
+valeur du Secret est aléatoire. Dans le pod client, le PAT et l'en-tête
+`Basic` passent en argument de `sh /bench/http.sh`. Le corps des requêtes,
+mots de passe compris, passe par un fichier temporaire du pod, effacé à la
+sortie. C'est acceptable sur un cluster jetable, mais ce client ne doit pas
+entrer tel quel dans la matrice (FR-004).
+
+[SECU] Valeurs connues à ajouter à la condition 1 de l'ADR-007. Pour
+Keycloak, trois valeurs : `keycloak`, mot de passe de base du manifest de
+démarrage [S12] ; `change_me`, valeur d'exemple de la page des conteneurs
+[S14], qui diffère de `changeme` ; `Password1!`, défaut de Zitadel [S59] et
+valeur du démarrage rapide de son chart [S74]. Si Zitadel revenait, il
+faudrait aussi `zitadel`, `YourSecurePassword123!`, `your-secure-password`
+[S26], et les deux clés maîtres d'exemple du chart :
+`MasterkeyNeedsToHave32Characters` et `x123456789012345678901234567891y`
+[S74]. Ces deux clés font exactement 32 caractères et passeraient la règle de
+longueur : seule la liste les arrête. Le test doit viser toutes les clés
+secrètes de la couche, secret du client compris, et pas seulement les mots de
+passe (spec 001, E04). Le suffixe `a.Z9` répond à la politique de Zitadel. Il
+n'entre dans le golden repo que si une politique de mot de passe l'exige.
+
+[SECU] Signature et provenance (ENF-03, ADR-011, ADR-012). Aucune image
+mesurée n'est signée. Pour Keycloak, la base `ubi9-micro` est tirée sans tag
+ni condensat [S18]. Quelle que soit la signature de cette base, Kyverno ne
+voit que l'image dérivée. Côté Zitadel, `alpine/k8s` porte un SBOM et une
+provenance BuildKit sans enveloppe signée [S73], et `wait4x` n'a rien [S80].
+La dérogation de l'ADR-012 ne vise que `docker.io/library/`. Elle ne couvre
+ni `quay.io/keycloak/keycloak`, ni `ghcr.io/zitadel/*`, ni
+`docker.io/alpine/k8s`, ni `docker.io/wait4x/wait4x`. Keycloak demande donc
+sa propre dérogation dans l'ADR-013. Les republications pèsent : trois
+condensats en dix jours pour une même version, chacun à relire. Pour le
+miroir, `quay.io` entre dans la liste unique des registres (ADR-011,
+condition 10). Un tirage anonyme suffit (condition 13) et le condensat tient
+la condition 1.
+
+[SECU] Inventaire du script et client `nc`. L'inventaire est exact. La seule
+commande Docker qui écrit est `docker network rm kind`, dans le `trap`, et
+seulement si le script a créé ce réseau et qu'il est vide. Les autres ne font
+que lire : `version`, `info`, `ps -q`, `stats --no-stream`, `network
+inspect`, `manifest inspect -v`. Le script n'appelle ni curl, ni wget, ni
+python, ni node, ni perl. Il manque une mention, présente dans l'inventaire
+validé de BENCH-011 : `kind create cluster` lance le nœud par `docker run
+--privileged`. Deux sorties réseau sont aussi à nommer : `gh api` vers
+GitHub, avec le jeton de l'utilisateur, et `docker manifest inspect` vers les
+registres. Le verrou n'est pris que si `BENCH_LOCK` est défini. Pour `nc -e`,
+BusyBox documente « Run PROG after connect (must be last) » [S78]. `nc` agit
+en client, sans `-l`, et n'ouvre aucun port d'écoute. Le programme lancé est
+écrit par `http.sh` dans un dossier `mktemp -d` : il envoie la requête et
+copie la réponse dans un fichier, qui n'est jamais exécuté. Le pod tourne
+sous l'UID 65534, sans élévation ni capacité, et aucun Service ne le vise.
+`timeout 8` et `-w 8` bornent chaque requête. Rien n'ouvre d'accès inattendu.
+
+[SECU] Mode `start`, TLS et GCP. `start` est le mode de production [S14], et
+le garder sur le PC rapproche les deux cibles. Quatre réglages de la couche
+ne valent pourtant que pour un PC à un seul utilisateur.
+`KC_HOSTNAME_STRICT=false` rend les URL dynamiques ; la documentation le
+réserve au cas où le proxy réécrit l'en-tête Host, et signale le risque
+d'injection d'en-tête Host [S71]. `KC_PROXY_HEADERS=xforwarded` sans
+`proxy-trusted-addresses` fait confiance à toutes les adresses ; la
+documentation prévient qu'un client qui contourne le proxy peut forger ces
+en-têtes [S70], et tout pod du cluster joint `keycloak:8080`.
+`KC_HTTP_ENABLED=true` sert en clair, alors que le guide de production veut
+un canal sûr pour toute communication [S72]. Le pod n'a aucun
+`securityContext`, et le profil `restricted` le refuserait, même si l'image
+tourne déjà sous l'UID 1000 [S18]. D'autres points sont à traiter avant GKE.
+La console et l'API d'administration partagent le port de `/realms/`, alors
+que la documentation les garde internes [S70]. La force brute est désactivée
+[S69]. Le compte d'amorçage est temporaire : il faut créer un compte
+permanent, puis le supprimer [S16]. Le mTLS du cache entre répliques, lui,
+est actif par défaut [S72]. Aucun déploiement sur GKE n'a lieu en phase 2. Le
+premier attend l'accord de Lucas et un budget de [FINOPS] (principe X).
+
+[SECU] Dépôt public. Le gitleaks du hook pre-commit, figé en v8.30.1, a
+scanné `cf38f91..86053db` : trois commits, aucune fuite. Les lignes ajoutées
+ne contiennent aucun chemin `/Users/`, `/private/tmp` ou `scratchpad`, et
+aucun nom de compte. Auteur et committer utilisent l'adresse noreply.
+
+[SECU] Conditions proposées pour l'ADR-013 (Keycloak) :
+
+1. Image et dérogation à ENF-03. `quay.io/keycloak/keycloak` est désignée
+   par condensat et tirée par zot, avec `quay.io` dans la liste de la
+   condition 10 de l'ADR-011. La dérogation est datée, sur le modèle de la
+   condition 7 de l'ADR-012 : référence exacte, condensat compris, dans une
+   liste fermée tenue dans la PR du manifest. [SECU] la relit à chaque
+   montée. Elle tombe quand Keycloak signe ses images de façon vérifiable par
+   Kyverno, ou quand le projet signe sa propre image optimisée [S14], si
+   l'ADR-006 l'accepte. Contrôle : celui de l'ADR-012, étendu à
+   `quay.io/keycloak/`.
+2. Suivi. Keycloak corrige seulement sa dernière mineure, qui change
+   chaque trimestre [S2], [S7]. Renovate suit la mineure et le condensat. Une
+   republication ou une version qui corrige un avis passe par l'exception de
+   sécurité du principe VI. [OPS] vérifie comment `minimumReleaseAge` date
+   une montée de condensat. [SECU] lit chaque mois les avis et les tickets
+   `kind/cve` [S68].
+3. Durcissement. Le namespace applique le profil `restricted`. Le pod a
+   `runAsNonRoot`, `allowPrivilegeEscalation: false`, les capacités `ALL`
+   retirées, `seccompProfile: RuntimeDefault` et
+   `automountServiceAccountToken: false`. `readOnlyRootFilesystem` est à
+   essayer avec un `emptyDir`. Le port 9000 n'est dans aucun Service.
+   Contrôle : la matrice échoue sur un pod refusé par le profil.
+4. Nom d'hôte et proxy. `KC_HOSTNAME` est fixé sur les deux cibles, et
+   `hostname-strict` garde son défaut. `KC_PROXY_HEADERS` ne s'utilise
+   qu'avec `KC_PROXY_TRUSTED_ADDRESSES` limité à la gateway [S70], [S71]. Une
+   NetworkPolicy restreint le port 8080. [OPS] vérifie qu'elle s'applique
+   sous le CNI de kind, ainsi que le chemin interne de l'API vers l'émetteur.
+   Contrôle : un `X-Forwarded-Host` forgé ne change pas l'émetteur du
+   document de découverte.
+5. Chemins exposés. Sur `gcp`, la route n'expose que `/realms/`,
+   `/resources/` et `/.well-known/` [S70]. Sur `local`, la console reste en
+   boucle locale, écart listé au README. Contrôle : sur `gcp`, `/admin/`
+   répond 404 par la gateway.
+6. Identifiants (R-20). Les valeurs sont créées par `task up` selon la
+   condition 1 de l'ADR-007, avec la liste étendue appliquée à toutes les
+   clés secrètes. Le contrôle du type de M8 exige `invalid_grant`, reste sous
+   le seuil de force brute et ne passe aucun secret en argument. Sur `gcp`,
+   le compte d'amorçage est remplacé puis supprimé [S16].
+7. Force brute. `bruteForceProtected` est activé sur `master` et sur le
+   royaume de l'application [S69]. Contrôle : la matrice lit les deux
+   royaumes.
+8. Jetons. Les jetons de la mesure portent `aud: account`, d'où un mappeur
+   d'audience pour l'API ([ARCHI] vérifie son nom). L'API vérifie RS256,
+   l'émetteur, l'audience et l'expiration. Le front est un client public avec
+   PKCE, sans aucun secret dans le navigateur. Avec Identity Platform, l'API
+   exige `aud` égal au projet [S51], et la clé d'API est restreinte, avec
+   quotas resserrés [S77].
+9. Base et transport. Le rôle Keycloak n'est pas superutilisateur. Le HTTP
+   local est un écart listé au README. Sur `gcp`, TLS à la gateway ; le
+   tronçon jusqu'au pod et la connexion TLS à Cloud SQL se décident dans
+   l'ADR [S72]. `http-max-queued-requests` est fixé. À plusieurs répliques,
+   une NetworkPolicy limite les ports 7800 et 57800 aux pods de Keycloak.
+10. GKE. Aucun déploiement en phase 2. Le premier attend l'accord de Lucas
+    et un budget de [FINOPS]. L'import du royaume au démarrage, « may only
+    make sense » en mode dev [S14], ne sert pas sur `gcp` sans décision de
+    [ARCHI].
+
+[SECU] D'accord avec réserves : Keycloak reste devant, 81 contre 62. L'écart
+tient sur la licence, la gouvernance et la maturité. En sécurité, les deux
+options ont des CVE en partie invisibles aux scanners, et aucune n'a d'image
+signée. Zitadel y ajoute six avis critiques, une image tierce qui écrit les
+Secrets et un PAT d'administration valable jusqu'en 2029. Ce qui pèse sur
+Keycloak vient du déploiement que CELIAN écrit, et les conditions 3 à 9 le
+couvrent. Authentik reste éliminé.
+
+[SECU] Questions ouvertes : maturité de Keycloak à 4 (arbitrage du DSI) ;
+dérogation à ENF-03 pour Keycloak (Lucas) ; CVE sans paquet qui touchent les
+deux options : étendre R-32 ou ouvrir un risque. Non vérifié : référents OCI
+sur quay.io (pas de cosign ni d'oras sur le poste) ; comportement de Renovate
+sur les condensats ; NetworkPolicy sous kind ; noms des options de Keycloak
+pour l'audience et l'URL interne de l'émetteur.
+
+[FINOPS] Recalcul depuis la série du 2026-11-23 (`runs.tsv`, `summary.tsv`,
+`idle-pods.tsv`, `images.tsv`, `node-images.tsv`, `load.tsv` et
+`versions.tsv` de `series-4`). Le script prend la médiane de trois
+échantillons par exécution, puis la médiane des trois exécutions ; la couche
+est la médiane du nœud de l'option moins celle du nœud de base. M1, M2 au
+nœud, M9, la somme des pods, M3 et M7 se retrouvent au dixième près, écarts
+compris : 1 503,2 moins 660,0 font 843,2 Mio, et 922,9 moins 660,0 font
+262,9. Refaite échantillon par échantillon, la somme des pods de Zitadel
+donne 191,2, 185,0 et 189,4 Mio. M4 se retrouve aux octets : 265 083 135 pour
+Keycloak, et 463 782 772 pour Zitadel (`alpine/k8s` 316 686 555, connexion 78
+469 346, API 54 109 438, `wait4x` 14 517 433). Cela fait 212,1 et 371,0 s à
+10 Mbit/s. M5 se retrouve aussi : chaque exécution porte un événement
+`Pulled` pour chaque image de la couche, en 6,5 à 8,5 s pour Keycloak et en
+7,7 à 9,4 s pour `alpine/k8s`. Deux écarts, sans effet sur les notes.
+D'abord, les plages des pods de Zitadel écrites en 4.4 ne sont pas celles des
+données. Dans l'échantillon médian de chaque exécution, l'API va de 85,2 à
+93,0 Mio et la connexion de 98,2 à 99,8 ; sur les neuf échantillons, de 85,0
+à 122,7 et de 80,0 à 99,8. Ensuite, la valeur basse de la deuxième exécution
+de Keycloak (538,2 Mio au pod) reste isolée : les quatre exécutions complètes
+de Keycloak des séries du 2026-11-21, non retenues, donnent de 838,8 à 841,2
+Mio. Pour dimensionner, c'est donc la médiane de 843,2 Mio qu'il faut retenir.
+
+[FINOPS] Les seuils ont été appliqués tels qu'écrits. J'ai comparé une à une
+les lignes 231 à 290 du rapport à `section-4.1-2026-11-20.md` : les 60 lignes
+sont identiques. Le condensat de référence,
+`c502b917d962e33da0310c3ba4c39955f6e1cba4cd3d026e527f1da214eed13c`, a été
+relevé le 2026-11-20 à 20:10:29 UTC. Le premier test de fumée commence à
+23:33:44 UTC (`smoke-1/load.tsv`), la série de référence le 2026-11-23 à
+20:40:11 UTC. Seuil 1 : franchi par les deux options (265,1 et 463,8 Mo, pour
+112,5). Seuil 2 : franchi par les deux, avec un `Pulled` par image de la
+couche à chaque exécution. Seuil 3 : non franchi (25,7 et 21,6 s de médiane,
+43,8 s au pire). Seuil 4 : franchi par Keycloak seul (843,2 Mio pour 512 ;
+Zitadel reste à 262,9). Keycloak perd donc trois crans et finit à 2/5,
+Zitadel en perd deux et finit à 3/5. Aucune médiane n'est à moins de 10 %
+d'un seuil. Lue exécution par exécution, la deuxième de Keycloak donne 530,6
+Mio (1 184,8 moins 654,2), 3,6 % au-dessus du seuil : elle reste du même
+côté, donc même note. L'heure d'écriture des seuils et l'absence de lecture
+préalable des registres reposent sur la déclaration de [BENCH], faute de
+commit.
+
+[FINOPS] Cumul avec le premier `task up`. Depuis l'ADR-012, la base est celle
+de R-04 : 1 521,9 Mo en amd64 pour le profil standard, avec zot et
+`postgres:18.7-trixie`, hors Keycloak et Mailpit. Le rapport part encore des
+1 395,9 Mo d'avant zot et d'avant le Postgres retenu, d'où ses 1 661,0 Mo et
+ses 148 %. Aucune des deux options n'ajoute d'image Postgres, puisqu'elles
+utilisent la base partagée. Avec Keycloak, le premier `task up` passe à 1
+787,0 Mo : 1 429,6 s à 10 Mbit/s, 158,8 % du budget de 900 s, et un débit
+minimal de 15,9 Mbit/s au lieu de 13,5. Avec Zitadel, il passe à 1 985,7 Mo :
+1 588,5 s, 176,5 %, 17,7 Mbit/s. Sans miroir, la base vaut 1 444,2 Mo, et les
+totaux 1 709,3 et 1 908,0 Mo. Sur ce poste, Keycloak est le moins cher des
+deux, avec 198,7 Mo de moins, soit 159 s à 10 Mbit/s.
+
+[FINOPS] Registres et miroir. Keycloak vient de quay.io, que l'ADR-011 ne
+liste pas : le profil standard demanderait un troisième amont au miroir,
+après docker.io et ghcr.io. Or le mécanisme à plusieurs amonts n'est pas
+encore établi (montages a et b de l'ADR-011). Sans miroir pour quay.io, les
+265,1 Mo de Keycloak repartent d'Internet à chaque création du cluster, comme
+M5 le montre, soit 212 s à 10 Mbit/s. Le montage b ajouterait une instance de
+zot, environ 51 Mio d'après l'extrapolation non mesurée de l'ADR-011.
+Zitadel, lui, tire de docker.io et de ghcr.io, que le profil standard demande
+déjà pour Flux. Le stockage de zot est estimé à 566,5 Mo en amd64 pour le
+profil standard avec le Postgres retenu. Si toutes les images passent par le
+miroir, il monterait à 831,6 Mo avec Keycloak et à 1 030,3 Mo avec Zitadel.
+C'est une estimation pour le seuil d'avertissement de la condition 5 de
+l'ADR-011, qu'aucune mesure ne confirme.
+
+[FINOPS] Mémoire. J'applique la méthode de BENCH-005, reprise par BENCH-010
+et BENCH-011 : plancher multiplié par 1,5, arrondi au demi-gibioctet
+supérieur, plus 4 Gio pour le portable. Sur un portable de 16 Gio, je prends
+une VM de 8 Gio, comme BENCH-010. Je pars du majorant de BENCH-011 pour la
+partie connue du profil standard, Postgres retenu compris : 1 451,8 Mio, soit
+2,5 Gio de VM et 6,5 Gio de portable. Avec Keycloak, le plancher passe à 2
+295,0 Mio, la VM à 3,5 Gio et le portable à 7,5 Gio : deux paliers de plus.
+Sur un portable de 8 Gio, il reste 435,7 Mio de plancher pour Mailpit et le
+bruit de mesure. Il reste aussi 94,3 Mio avant le palier de 4,0 Gio, qui
+tient encore sur 8 Gio avec l'hypothèse des 4 Gio pour le système. Avec
+Zitadel, le plancher vaut 1 714,7 Mio, 8,0 Mio au-dessus du palier de 2,5 Gio
+: 3,0 Gio de VM, 7,0 Gio de portable, et 1 016,0 Mio de reste sur 8 Gio. Sur
+16 Gio, il reste 3 166,3 Mio avec Keycloak et 3 746,6 avec Zitadel. Les 580,3
+Mio d'écart au nœud valent 7,1 % d'un portable de 8 Gio et un palier de VM.
+
+[FINOPS] Le profil standard tient donc sur 8 Gio avec Keycloak au repos, de
+justesse, et deux lectures le font sortir de ce cadre. La première est la
+limite de la JVM : le manifest fixe 2000Mi, et le tas peut monter jusqu'à 70
+% de cette limite [S14]. Keycloak à sa limite porterait le plancher à environ
+3 475,1 Mio, soit 5,5 Gio de VM et 9,5 Gio de portable. Le profil ne
+tiendrait plus sur 8 Gio, mais tiendrait encore sur 16 Gio, avec 1 986,2 Mio
+de reste. La seconde est le pic de démarrage : la méthode de BENCH-005 le
+retient s'il dépasse le repos, et BENCH-012 ne le mesure pas. Pour que
+Keycloak à sa limite tienne sur 8 Gio avant Mailpit, la limite du pod devrait
+rester sous 1 255 Mi environ : 2 730,7 moins 1 451,8, moins les 23,3 Mio que
+le nœud compte en plus du pod. Aucune limite de ce niveau n'a été mesurée.
+Ces chiffres mêlent six séries : ce sont des ordres de grandeur.
+
+[FINOPS] Côté GCP, je n'ai lancé aucune action cloud, et aucun budget n'est
+validable : la région n'est pas choisie (R-05). Le 2026-11-23, l'outil ne
+rend que le titre de la grille de GKE comme de celle d'Identity Platform.
+Voie Identity Platform : la page tarifaire de Firebase, section « With
+Identity Platform », annonce un usage sans frais jusqu'à 50 000 utilisateurs
+actifs par mois, et jusqu'à 50 sur la ligne SAML/OIDC [S82]. Le palier dépend
+du fournisseur qui authentifie l'utilisateur [S50]. Une démo reste dans cette
+franchise, donc 0 USD. Je n'ai pas lu les prix par utilisateur au-delà, et je
+n'en écris aucun. Pour un SaaS B2B dont les clients fédèrent leur annuaire
+par SAML ou OIDC, la franchise s'arrête au cinquantième utilisateur fédéré du
+mois.
+
+[FINOPS] Voie Keycloak sur GKE Autopilot. La référence demande 500m et 1700Mi
+par réplique, avec deux répliques [S12]. Ce rapport reste dans la plage de
+1:1 à 1:6,5 qu'Autopilot accepte, et 500m est un multiple de 0,25 vCPU,
+l'arrondi qu'il impose sans rafale : la demande ne serait pas ajustée [S84].
+Aux prix d'exemple de us-central1, 0,0445 USD par vCPU-heure et 0,0049225 USD
+par Go-heure [S83], sur 730 heures, une réplique coûte environ 22,2 USD par
+mois et les deux 44,4 USD. Je compte la mémoire en Gio, comme BENCH-008 ; si
+l'unité de la page est le Go décimal, ces montants deviennent 22,6 et 45,3
+USD. Hors chiffre : le stockage éphémère (1 Gio par conteneur par défaut
+[S84]), la base dans Cloud SQL, un équilibreur si Keycloak ne passe pas par
+la Gateway de l'application (ADR-005), et les journaux. Voie Zitadel sur GKE
+: le chart 10.5.0 ne fixe aucune demande (`resources: {}`). Autopilot
+appliquerait alors 0,5 vCPU et 2 Gio à chacun des deux pods, soit environ
+46,9 USD par mois. Au minimum sans rafale, 250m et 512 Mio par pod, ce serait
+19,8 USD. Ni l'une ni l'autre de ces valeurs n'a été mesurée sur GKE.
+
+[FINOPS] Note de coût. 4/5 tient pour les deux options, avec une autre
+justification. Sur le PC, il n'y a ni licence ni service payant, et le temps
+d'exploitation est compté ailleurs : le suivi des mineures de Keycloak en
+5.5, les montées de majeure de Zitadel en 5.3, les gestes d'installation en
+5.8 (règle de BENCH-008). La réserve porte sur le cloud. Dans BENCH-011, la
+cible `gcp` gardait Cloud SQL quelle que soit l'option. Ici, l'option
+elle-même peut tourner sur GKE si l'ADR-013 prend la voie du `managed_gap`,
+avec des pods facturés à l'heure. La page des prix illisible n'est plus la
+réserve, puisque la franchise est lue sur une page officielle. Le coût ne
+départage pas : le pendant managé est le même, et les montants sur GKE sont
+du même ordre. Avec 5/5 aux deux, lecture de BENCH-011, les totaux
+passeraient à 85 et 63, et l'écart resterait le même.
+
+[FINOPS] Empreinte. La règle donne bien 2/5 et 3/5. Elle compte les seuils
+franchis, pas la hauteur du dépassement : Keycloak dépasse le seuil de
+mémoire de 64,7 %, Zitadel celui de volume de 312 %, et chacun perd un cran
+pour ça. Sur le PC, le coût réel se partage. Keycloak coûte un palier de VM
+et 580,3 Mio de plus, Zitadel 198,7 Mo de plus au premier `task up`. Pour le
+critère des 15 minutes, Keycloak est le meilleur des deux ; pour le portable
+de 8 Gio, c'est Zitadel.
+
+[FINOPS] D'accord avec réserves. Le coût ne départage pas, et le verdict
+tient sur les critères de lecture, avec 22 points d'écart. Sur le PC, chaque
+option a son prix : Keycloak télécharge 198,7 Mo de moins, Zitadel garde
+580,3 Mio de moins au nœud. Trois conditions pour l'ADR-013 : une limite
+mémoire de Keycloak fixée et mesurée sur le golden repo, pour que le profil
+standard tienne sur 8 Gio avec Mailpit ; quay.io dans la liste du miroir,
+sans quoi 265,1 Mo repartent d'Internet à chaque création du cluster ; R-04
+et ENF-01 mis à jour à 1 787,0 Mo. Si Lucas retient Keycloak sur GKE : une
+réplique dans le profil démo (environ 22,2 USD par mois aux prix d'exemple)
+et des requêtes explicites (condition 9 de l'ADR-008). Aucun apply avant un
+budget validé à la GATE 2.
+
+[FINOPS] Questions ouvertes : l'heure de `series-2` (correction 2) pour
+[BENCH] ; Mailpit (BENCH-013) décide si le profil standard reste à 3,5 Gio de
+VM ou passe à 4,0, la limite d'un portable de 8 Gio ; le pic de démarrage de
+Keycloak n'est pas mesuré ; la page de GKE écrit « per GB » (Go ou Gio, 2 %
+d'écart) ; les prix d'Identity Platform au-delà de la franchise restent non
+lus.
+
+[BENCH] Suite donnée. Les quatorze corrections de [SECU] et les seize de
+[FINOPS] sont intégrées dans les sections 1 à 9, avec la grille réconciliée
+par le DSI le 2026-11-24 : Keycloak 81, Zitadel 62 (section 6). L'écart de 22
+points cité dans la sensibilité de 5.6 suit la grille et passe à 19. Deux
+chiffres de [FINOPS] partent de la grille d'avant la relecture de [SECU], où
+Keycloak avait 84 : l'écart de 22 points de son avis vaut 19 dans la grille
+réconciliée, et la lecture à 5/5 en coût donnerait 82 et 63, et non 85 et 63.
+Les sources de [SECU] gardent leurs numéros, S65 à S81 ; celles de [FINOPS],
+qu'elle numérotait aussi S65 à S67, deviennent S82 à S84, renvois compris
+dans ses paragraphes ci-dessus. S49 reste citée dans la limite sur la page
+des prix (section 8). La question de [FINOPS] sur l'heure de `series-2` a sa
+réponse en 4.4 : la série a démarré pendant une veille capot fermé, et sa
+première exécution commence au réveil, à 21:18:04 UTC. La correction 14 de
+[SECU] passe par un commit à part, après celui qui garde le script mesuré.
+Avant la relecture, le script versionné a pour SHA-256
+`6db513d1af0fc80ff36c1add957f3bc1a1176997a433b8418926f3705c14faa7`, celui que
+l'essai de contrôle a relevé ; la série de référence, lancée avant le
+découpage des couches, a relevé
+`55535ce61b51f951815bbb0c6e1393c94ab707bde5deee94c2c1b9257be81b1b`. Après la
+correction 14, il a pour SHA-256
+`d9b986fa375a6eb910b7b0741a36ddbe1d7fe6967da1d455cf21d64281283fc8`. Les
+numéros de ligne cités par les deux relectures renvoient au rapport d'avant
+la relecture, dont les commentaires du gabarit sont retirés depuis. Les
+questions de [SECU] sur la maturité, la dérogation à ENF-03 et les CVE sans
+paquet sont tranchées par l'arbitrage de la section 7 et par R-36.
