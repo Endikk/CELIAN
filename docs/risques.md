@@ -44,6 +44,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-34 | Miroir de registres sur le PC, nouvelle brique exposée | Faible | Moyen, fort si une image désignée par tag passe par lui | OPS, SECU | Ouvert |
 | R-35 | Postgres local écrit à la main dans chaque projet généré | Moyenne | Moyen | DEV, SECU | Ouvert |
 | R-36 | Failles connues sans paquet associé, invisibles aux scanners | Moyenne | Moyen | SECU, OPS | Ouvert |
+| R-37 | Parcours de connexion différent entre le PC et GCP | Moyenne | Moyen | DEV, QA | Ouvert |
 
 ## Détail
 
@@ -534,6 +535,14 @@ jamais en argument de commande. Aucun objet `Secret` ni `secretGenerator` sous
 `kubectl apply -k`. Les valeurs locales ne passent jamais par un chart Helm,
 dont les Secrets de release les garderaient, jusqu'à dix révisions par défaut.
 
+ADR-013 (24/11/2026) : la liste des valeurs connues de la condition 1 de
+l'ADR-007 reçoit trois valeurs relevées par [SECU] dans BENCH-012 :
+`keycloak` (mot de passe de base du manifest de démarrage de Keycloak),
+`change_me` (exemple de la page des conteneurs de Keycloak, distinct de
+`changeme`) et `Password1!` (défaut de Zitadel). Le test vise toutes les clés
+secrètes d'une couche, secret du client compris, et non les seuls mots de
+passe.
+
 ### R-21. Application Design Center couvre le même besoin sur GCP
 
 L'analyse des outils existants
@@ -962,3 +971,25 @@ des composants de la stack, en plus du scan ; montée de version suivie à
 chaque correctif publié, avec l'exception de sécurité du principe VI ;
 contrôle croisé par une seconde source de failles à étudier à l'étape 18 du
 plan. Rôles : SECU, OPS.
+
+### R-37. Parcours de connexion différent entre le PC et GCP
+
+Ouvert le 24/11/2026 avec l'ADR-013, sur proposition de [ARCHI]. Le projet
+généré fait tourner Keycloak sur la cible `local` et utilise Identity Platform
+sur la cible `gcp` (décision de Lucas du 24/11/2026, principe III). Le front
+porte donc deux parcours de connexion : PKCE vers Keycloak d'un côté, SDK de
+Google de l'autre. Une erreur dans l'implémentation `gcp` du front ou dans la
+configuration d'Identity Platform ne se voit que sur GCP, au premier
+déploiement réel, qui demande une dépense et l'accord de Lucas (principe X).
+
+Probabilité moyenne : le parcours `gcp` ne tourne jamais en phase 2. Impact
+moyen : la démo sur GCP échouerait à la connexion, sans fuite de données.
+
+Mitigation :
+
+- contrat commun de vérification des jetons dans l'API, testé sur les deux
+  formats de clés (ADR-013) ;
+- tests unitaires de chaque implémentation du parcours de connexion du front ;
+- test du parcours réel avant toute proposition de la combinaison `gcp`, au
+  premier déploiement autorisé ;
+- écart listé au README du projet généré.
