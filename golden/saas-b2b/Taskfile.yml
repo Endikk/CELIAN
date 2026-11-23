@@ -1,0 +1,49 @@
+# Public tasks of the SaaS B2B golden repo (spec 001, contracts/task-cli.md).
+# No logic here: each task delegates to a Taskfile of its layer, local/tasks/
+# or gcp/tasks/, or to a script. A task not delivered yet fails with a
+# sentence that says so.
+#
+# Inventory of the commands that create or remove a container, a network or
+# a volume (ADR-011, condition 11), reviewed by [SECU]:
+#   none yet; step 6 adds the kind cluster and the zot mirror.
+
+version: '3'
+
+includes:
+  # Helpers of the public tasks below, hidden from `task --list`.
+  local:
+    taskfile: ./local/tasks/local.yml
+    internal: true
+  # gcp:validate, gcp:policy and gcp:scan arrive with step 13 (T105), which
+  # writes this file; `optional` goes away then.
+  gcp:
+    taskfile: ./gcp/tasks/gcp.yml
+    optional: true
+
+tasks:
+  up:
+    desc: Start or resume the local environment.
+    cmds:
+      - task: local:up
+
+  down:
+    desc: Remove the local cluster and the mirror container; keep the mirror volume.
+    cmds:
+      - task: local:down
+
+  reload:
+    desc: Rebuild and redeploy the API and the front, without touching the data.
+    cmds:
+      - task: local:reload
+
+  check:
+    desc: Run the static checks, without a cluster.
+    cmds:
+      - bash tests/run-static.sh
+
+  test:
+    desc: Run the unit tests of the API, the front and the scan decision.
+    silent: true
+    cmds:
+      - echo 'task test is not delivered yet. The unit tests arrive with steps 3 and 4 of spec 001.' >&2
+      - exit 1
