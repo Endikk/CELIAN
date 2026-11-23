@@ -16,10 +16,23 @@ subject="celian-bench-013-$(hostname)"
 auth=$(printf '%s:%s' "$UI_USER" "$UI_PASS" | base64 | tr -d '\n')
 
 # One HTTP/1.0 GET of the API through nc. $1: an extra header line with its
-# CRLF written as \r\n, or an empty string.
+# CRLF written as \r\n, or an empty string. The request goes through a FIFO
+# whose writer stays open for a few seconds: nc must not half-close the
+# connection right after the request, since smtp4dev (Kestrel) then sends no
+# answer (smoke test 3). nc returns as soon as the server closes the
+# connection, and the writer is stopped.
+fifo=/tmp/probe-request
+mkfifo "$fifo"
 request() {
-  printf 'GET %s HTTP/1.0\r\nHost: %s\r\n%bConnection: close\r\n\r\n' \
-    "$API_PATH" "$HTTP_HOST" "$1" | nc -w 5 "$HTTP_HOST" "$HTTP_PORT"
+  {
+    printf 'GET %s HTTP/1.0\r\nHost: %s\r\n%bConnection: close\r\n\r\n' \
+      "$API_PATH" "$HTTP_HOST" "$1"
+    sleep 5
+  } >"$fifo" &
+  feeder=$!
+  nc -w 5 "$HTTP_HOST" "$HTTP_PORT" <"$fifo"
+  kill "$feeder" 2>/dev/null
+  wait "$feeder" 2>/dev/null
 }
 status_of() { request "$1" | head -n 1 | cut -d' ' -f2; }
 uptime_s() { cut -d' ' -f1 /proc/uptime; }
