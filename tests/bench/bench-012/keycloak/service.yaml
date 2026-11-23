@@ -1,0 +1,17 @@
+# Service "keycloak" of the Keycloak layer; see statefulset.yaml for the
+# reference manifest and the changes made to it.
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  ports:
+    - protocol: TCP
+      port: 8080
+      targetPort: http
+      name: http
+  selector:
+    app: keycloak
+  type: ClusterIP

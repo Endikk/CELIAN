@@ -1,0 +1,17 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: bench-idp
+# One file per object of the chart rendering, in the order of helm template.
+resources:
+  - rendered/01-service-zitadel-login.yaml
+  - rendered/02-service-zitadel.yaml
+  - rendered/03-deployment-zitadel-login.yaml
+  - rendered/04-deployment-zitadel.yaml
+  - rendered/05-serviceaccount-zitadel-login.yaml
+  - rendered/06-serviceaccount-zitadel.yaml
+  - rendered/07-configmap-zitadel-login-config-dotenv.yaml
+  - rendered/08-configmap-zitadel-config-yaml.yaml
+  - rendered/09-role-zitadel.yaml
+  - rendered/10-rolebinding-zitadel.yaml
+  - rendered/11-job-zitadel-init.yaml
+  - rendered/12-job-zitadel-setup.yaml

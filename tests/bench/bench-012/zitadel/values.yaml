@@ -1,0 +1,37 @@
+# Values passed to the ZITADEL Helm chart 10.5.0 for BENCH-012, rendered once
+# with `helm template` into rendered.yaml (see ../README.md). Every
+# credential comes from a Secret that tests/bench/bench-012-identity.sh
+# creates by a pipe before applying the rendered manifest: none is written
+# here or in the rendered file.
+image:
+  tag: "v4.20.5@sha256:cb21fe73badfe44972bb24a66cf0ebce6a8dc63ab8ed24567af6b731bd8bbf45"
+login:
+  enabled: true
+  loginServiceKeySecretName: zitadel-login-key
+  image:
+    tag: "v4.20.5@sha256:bbab3b26a44093c1a9636a6b89c3ab31c2f6eb2f2cafc681c6f676e74e96845c"
+tools:
+  kubectl:
+    image:
+      tag: "1.36.4@sha256:358ddfc2d6ff3f00dd461dbd79aaa6d6738709f225b8da0945bb63bd4dbc304e"
+  wait4x:
+    image:
+      tag: "3.6@sha256:bec7ac18547781d854562c3729d3195c3880116d6758c49fdf4573ad58805f14"
+zitadel:
+  masterkeySecretName: zitadel-masterkey
+  configmapConfig:
+    ExternalDomain: idp.bench.test
+    ExternalPort: 8080
+    ExternalSecure: false
+    TLS:
+      Enabled: false
+# ZITADEL_DATABASE_POSTGRES_DSN and ZITADEL_FIRSTINSTANCE_ORG_HUMAN_PASSWORD.
+envVarsSecret: zitadel-env
+# The role and the database exist before the install (shared Postgres of the
+# stack): only the schema step of `zitadel init` runs.
+initJob:
+  command: zitadel
+# Helm runs this Job only after `helm uninstall`; applied by kubectl it would
+# run at install time and delete the Secrets that the setup Job writes.
+cleanupJob:
+  enabled: false

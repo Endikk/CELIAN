@@ -1,0 +1,174 @@
+# Source: zitadel/templates/job_setup.yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: "zitadel-setup"
+  namespace: bench-idp
+  labels:
+    helm.sh/chart: zitadel-10.5.0
+    app.kubernetes.io/name: zitadel
+    app.kubernetes.io/instance: zitadel
+    app.kubernetes.io/version: "v4.20.5"
+    app.kubernetes.io/managed-by: Helm
+    app.kubernetes.io/component: setup
+  annotations:
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-delete-policy: before-hook-creation
+    helm.sh/hook-weight: "2"
+spec:
+  backoffLimit: 5
+  activeDeadlineSeconds: 300
+  template:
+    metadata:
+      labels:
+        helm.sh/chart: zitadel-10.5.0
+        app.kubernetes.io/name: zitadel
+        app.kubernetes.io/instance: zitadel
+        app.kubernetes.io/version: "v4.20.5"
+        app.kubernetes.io/managed-by: Helm
+        app.kubernetes.io/component: setup
+    spec:
+      serviceAccountName: zitadel
+      securityContext:
+        fsGroup: 1000
+        runAsNonRoot: true
+        runAsUser: 1000
+      enableServiceLinks: false
+      restartPolicy: Never
+      containers:
+        - name: zitadel-setup
+          securityContext:
+              privileged: false
+              readOnlyRootFilesystem: true
+              runAsNonRoot: true
+              runAsUser: 1000
+          image: "ghcr.io/zitadel/zitadel:v4.20.5@sha256:cb21fe73badfe44972bb24a66cf0ebce6a8dc63ab8ed24567af6b731bd8bbf45"
+          imagePullPolicy: IfNotPresent
+          args:
+            - setup
+            - --masterkeyFromEnv
+            - --config
+            - /config/zitadel-config-yaml
+            - --steps
+            - /config/zitadel-config-yaml
+            - --init-projections=true
+          env:
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  apiVersion: v1
+                  fieldPath: status.podIP
+            - name: ZITADEL_MASTERKEY
+              valueFrom:
+                secretKeyRef:
+                  name: zitadel-masterkey
+                  key: masterkey
+            - name: ZITADEL_FIRSTINSTANCE_MACHINEKEYPATH
+              value: "/machinekey/sa.json"
+            - name: ZITADEL_FIRSTINSTANCE_PATPATH
+              value: "/machinekey/pat"
+            - name: ZITADEL_DATABASE_POSTGRES_AWAITINITIALCONN
+              value: "5m"
+
+          envFrom:
+            - secretRef:
+                name: zitadel-env
+          volumeMounts:
+          - name: zitadel-config-yaml
+            mountPath: /config
+            readOnly: true
+          - name: machinekey
+            mountPath: "/machinekey"
+          resources:
+            {}
+        - name: zitadel-machinekey
+          securityContext:
+              privileged: false
+              readOnlyRootFilesystem: true
+              runAsNonRoot: true
+              runAsUser: 1000
+          image: docker.io/alpine/k8s:1.36.4@sha256:358ddfc2d6ff3f00dd461dbd79aaa6d6738709f225b8da0945bb63bd4dbc304e
+          imagePullPolicy: 'IfNotPresent'
+          command:
+            - sh
+            - -c
+            - |
+              until [ -n "$(kubectl --namespace=bench-idp get pod ${POD_NAME} --output=jsonpath="{.status.containerStatuses[?(@.name=='zitadel-setup')].state.terminated}")" ]; do
+                echo 'waiting for zitadel-setup container to terminate';
+                sleep 5;
+              done &&
+              echo 'zitadel-setup container terminated' &&
+              if [ -f /machinekey/sa.json ]; then
+                kubectl --namespace=bench-idp create secret generic iam-admin \
+                  --from-file=iam-admin.json=/machinekey/sa.json \
+                  --dry-run=client --output=yaml | \
+                kubectl annotate --local --filename=- \
+                  helm.sh/resource-policy=keep \
+                  --output=yaml | \
+                kubectl label --local --filename=- \
+                  app.kubernetes.io/managed-by=Zitadel \
+                  app.kubernetes.io/name=zitadel \
+                  app.kubernetes.io/instance=zitadel \
+                  --output=yaml | \
+                kubectl apply --server-side --field-manager=zitadel-setup --filename=-;
+              fi;
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: machinekey
+              mountPath: "/machinekey"
+              readOnly: true
+          resources:
+            {}
+        - name: zitadel-machine-pat
+          securityContext:
+              privileged: false
+              readOnlyRootFilesystem: true
+              runAsNonRoot: true
+              runAsUser: 1000
+          image: docker.io/alpine/k8s:1.36.4@sha256:358ddfc2d6ff3f00dd461dbd79aaa6d6738709f225b8da0945bb63bd4dbc304e
+          imagePullPolicy: 'IfNotPresent'
+          command:
+            - sh
+            - -c
+            - |
+              until [ -n "$(kubectl --namespace=bench-idp get pod "${POD_NAME}" --output=jsonpath="{.status.containerStatuses[?(@.name=='zitadel-setup')].state.terminated}")" ]; do
+                echo 'waiting for zitadel-setup container to terminate';
+                sleep 5;
+              done &&
+              echo 'zitadel-setup container terminated' &&
+              if [ -f /machinekey/pat ]; then
+                kubectl --namespace=bench-idp create secret generic iam-admin-pat \
+                  --from-file=pat=/machinekey/pat \
+                  --dry-run=client --output=yaml | \
+                kubectl annotate --local --filename=- \
+                  helm.sh/resource-policy=keep \
+                  --output=yaml | \
+                kubectl label --local --filename=- \
+                  app.kubernetes.io/managed-by=Zitadel \
+                  app.kubernetes.io/name=zitadel \
+                  app.kubernetes.io/instance=zitadel \
+                  --output=yaml | \
+                kubectl apply --server-side --field-manager=zitadel-setup --filename=-;
+              fi;
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+          volumeMounts:
+            - name: machinekey
+              mountPath: "/machinekey"
+              readOnly: true
+          resources:
+            {}
+      volumes:
+      - name: zitadel-config-yaml
+        configMap:
+          name: zitadel-config-yaml
+          defaultMode: 0440
+      - name: machinekey
+        emptyDir: { }
