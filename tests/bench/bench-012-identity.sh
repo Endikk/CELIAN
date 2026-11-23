@@ -5,8 +5,9 @@
 # Inventory of the commands that create, modify or delete a container or a
 # network ([SECU] rule of 2026-11-20). No other line of this script does:
 #   kind create cluster --name celian-bench-012 ...
-#       creates the node container celian-bench-012-control-plane, and the
-#       "kind" Docker network if it does not exist yet (kind's own calls);
+#       creates the node container celian-bench-012-control-plane, which kind
+#       starts with "docker run --privileged", and the "kind" Docker network
+#       if it does not exist yet (kind's own calls);
 #   kind delete cluster --name celian-bench-012 ...
 #       deletes that container;
 #   docker network rm kind
@@ -20,6 +21,7 @@
 # No curl, wget, python, node or perl: HTTP requests go through
 # bench-012/client/http.sh (busybox nc) in a client pod, and the token
 # signature is checked on the host with openssl.
+# Outbound reads: gh api (GitHub), docker manifest inspect (registries).
 #
 # Options:
 #   keycloak  Keycloak 26.8.2, `start --import-realm`, manifest derived from
@@ -115,9 +117,10 @@ readonly READY_TIMEOUT=900
 readonly SECRET_TIMEOUT=300
 readonly MAX_CLOCK_DRIFT=30
 # Known values of ADR-007, condition 1, plus the documented defaults of the
-# two options (Keycloak quickstart: admin; ZITADEL steps.yaml: Password1!).
-# EMPTY stands for the empty string.
-readonly KNOWN_VALUES="root admin postgres password changeme EMPTY Password1!"
+# two options (Keycloak quickstart: admin; ZITADEL steps.yaml: Password1!),
+# and mysecretpassword (ADR-012, condition 10), added after the series of
+# 2026-11-23. EMPTY stands for the empty string.
+readonly KNOWN_VALUES="root admin postgres password changeme EMPTY Password1! mysecretpassword"
 
 OPTIONS="${OPTIONS:-none keycloak zitadel}"
 RUNS="${RUNS:-3}"
