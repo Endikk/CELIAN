@@ -102,6 +102,49 @@ Pourquoi : ADR-006, condition 6 ; ADR-007, condition 1 (bash 3.2 de macOS, hered
 
 À vérifier avant l'étape 1 : version de Task, sa syntaxe d'inclusion, le mode silencieux et la détection de sources modifiées utile à `task reload`. Porteur : [DEV].
 
+### Relevé du 2026-11-23 (T001)
+
+Fait par [DEV]. Sources officielles seulement : l'API GitHub du dépôt `go-task/task`, lue par `gh api`, et la documentation de taskfile.dev, dont chaque page lue s'annonce en v3.54.0.
+
+Version retenue : Task v3.54.0, publiée le 2026-10-01, dernière release stable (la release `nightly` est une pré-version, écartée). Elle a 53 jours au 2026-11-23 et passe le délai de 7 jours (principe VI). Licence MIT.
+
+Gouvernance (ADR-006, question 5) : le dépôt appartient à l'organisation `go-task`, qui compte trois membres publics, `andreynering`, `pd93` et `vmaerten`. Aucune fondation n'est citée. Sur un an, du 2025-11-23 au 2026-11-23, le dépôt reçoit 401 commits, dont 326 d'auteurs humains (robots `renovate[bot]`, `dependabot[bot]` et `task-bot` exclus), venus de 50 auteurs. `vmaerten` en signe 158 (48,5 %), `andreynering` 76 (23,3 %) et `pd93` 26 (8,0 %) : 79,8 % pour les trois membres. Employeurs déclarés sur leur profil GitHub : « @charmbracelet » pour `andreynering`, « Senior Software Engineer @oneid » pour `pd93`, aucun pour `vmaerten`. Lecture : un projet communautaire, sans fondation, porté par trois personnes, sans entreprise dominante déclarée. Ce relevé donne les faits ; le classement au titre du principe V reste à Lucas, et la question 5 de l'ADR-006 n'est pas close par lui.
+
+Intégrité : la release publie un fichier de sommes, `task_checksums.txt`. Elle n'est pas immuable (`immutable: false`) et l'API des attestations répond 404 pour le binaire linux amd64. Comme pour kind (ADR-004, condition 5), la somme publiée dans la même release protège de la corruption, pas d'une substitution. Les sommes ci-dessous sont lues dans `task_checksums.txt` (asset 604090275, lu par l'API) ; elles sont égales au champ `digest` que l'API des releases donne pour chaque archive.
+
+| Archive | SHA-256 |
+| --- | --- |
+| `task_linux_amd64.tar.gz` | `680859dbb4d881a9c72d4d9a8f510825450849af8567deacd7302c01124416fb` |
+| `task_linux_arm64.tar.gz` | `d7189d439d4a6058e39e1b2acd7c8b27acd4856691b408f23b242e4294e1df5b` |
+| `task_darwin_amd64.tar.gz` | `0543b0844a725814c0412d3f4bed12873ce9ed0da207b15775f63a97d734aac0` |
+| `task_darwin_arm64.tar.gz` | `12a69fcf37bb8d5bc9150c44f9a936775b73e59ff044c2c245232f198c135637` |
+
+Inclusion des Taskfiles : clé `includes`, forme courte (`nom: chemin`) ou longue (`taskfile:` et `dir:`). Sans `dir`, une tâche incluse s'exécute dans le dossier d'exécution du Taskfile qui l'inclut, pas dans celui de son fichier. `optional: true` tolère un fichier absent ; `internal: true` cache toutes les tâches du fichier, qui ne servent plus qu'aux tâches publiques ; `flatten: true` les expose sans espace de noms. Une tâche incluse s'appelle `espace:tache`, en ligne de commande comme depuis les `cmds` d'une autre tâche. Les Taskfiles inclus portent la même version de schéma, `version: '3'`.
+
+Mode silencieux : `silent: true` à la racine, sur une tâche ou sur une commande, ou l'option `--silent` (`-s`). Il cache le texte de la commande que Task affiche, pas la sortie de la commande, et la page le dit : « Silent mode is not a substitute for secret masking. » C'est ce que l'ADR-007 (condition 1, S53) relevait déjà : une valeur ne passe jamais par un argument ni une variable de Task.
+
+Sources modifiées : `sources` et `generates` acceptent fichiers et motifs, relatifs au dossier de la tâche, avec des entrées `exclude:`. La méthode par défaut, `checksum`, compare le contenu des sources à une empreinte gardée dans `.task/`, sous le dossier du projet (à ignorer dans Git ; `TASK_TEMP_DIR` le déplace). `timestamp` et `none` sont les deux autres méthodes ; `status` saute la tâche quand chaque contrôle sort en 0 ; `--force` (`-f`) la relance. Pour `task reload`, `sources` sur `src/Api/` et `src/front/` avec la méthode `checksum` permettrait de ne reconstruire que l'image touchée ; le choix se fait à l'étape 9.
+
+Exécution : Task lance les commandes par son interpréteur intégré, sans le shell de l'utilisateur ; chaque entrée de `cmds` a son propre contexte, et un script bash s'appelle explicitement par `bash`. Une commande en échec arrête sa tâche. Codes de sortie de la CLI : 201 pour une commande en échec, 200 pour une tâche inconnue, 202 pour l'appel direct d'une tâche interne.
+
+Effets : `golden/saas-b2b/Taskfile.yml` (T009) inclut `local/tasks/` en `internal` et `gcp/tasks/` en `optional` ; `golden/saas-b2b/tests/tools/install.sh` et `SHA256SUMS` (T011) installent v3.54.0 par ces sommes.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://api.github.com/repos/go-task/task/releases> | 2026-11-23 | v3.54.0 publiée le 2026-10-01, dernière stable ; `nightly` en pré-version ; release non immuable |
+| <https://github.com/go-task/task/releases/download/v3.54.0/task_checksums.txt> | 2026-11-23 | Les quatre SHA-256 du tableau, lus par l'API (asset 604090275) |
+| <https://api.github.com/repos/go-task/task> | 2026-11-23 | Licence MIT, dépôt non archivé, organisation `go-task` |
+| <https://api.github.com/orgs/go-task/public_members> | 2026-11-23 | Trois membres publics |
+| <https://api.github.com/repos/go-task/task/commits?since=2025-11-23T00:00:00Z> | 2026-11-23 | Commits de l'année par auteur |
+| <https://api.github.com/repos/go-task/task/attestations/sha256:680859dbb4d881a9c72d4d9a8f510825450849af8567deacd7302c01124416fb> | 2026-11-23 | 404 : aucune attestation |
+| <https://taskfile.dev/docs/guide/includes> | 2026-11-23 | Syntaxe d'inclusion, `dir`, `optional`, `internal`, `flatten`, appel `espace:tache` |
+| <https://taskfile.dev/docs/guide/output> | 2026-11-23 | Mode silencieux et sa limite |
+| <https://taskfile.dev/docs/guide/up-to-date> | 2026-11-23 | `sources`, `generates`, `method`, `.task/`, `status`, `--force` |
+| <https://taskfile.dev/docs/guide/defining-tasks> | 2026-11-23 | `version: '3'`, `desc`, `dir`, tâche `internal` |
+| <https://taskfile.dev/docs/guide/errors-and-cleanup> | 2026-11-23 | Une commande en échec arrête sa tâche ; exemples en `exit 1` |
+| <https://taskfile.dev/docs/guide/platforms> | 2026-11-23 | Interpréteur intégré, contexte par entrée de `cmds`, appel explicite de `bash` |
+| <https://taskfile.dev/docs/reference/cli> | 2026-11-23 | Codes de sortie, `--silent`, `--dir`, `--taskfile`, `--list` |
+
 ## RS-10. Secrets locaux
 
 Décision : `db-auth`, `cache-auth`, `db-superuser` et `gateway-tls` en profil lite, `cache-auth` à partir de l'étape 19 (RS-11) ; valeurs de 40 caractères alphanumériques tirées de `/dev/urandom`, comme l'essai de BENCH-011, passées par un tube à `kubectl create -f -`, seulement si le Secret manque. Contrat : [contracts/secrets.md](contracts/secrets.md).
@@ -183,6 +226,29 @@ Les jobs du workflow racine qui doivent bloquer la fusion (statique, tests unita
 
 À vérifier avant l'étape 1 (porteur [OPS]) : que GitHub ne lance pas de workflow depuis un sous-dossier, et que Renovate et release-please ne lisent pas une configuration placée dans `golden/saas-b2b/` ; le comportement d'un workflow filtré par chemin face aux contrôles requis du ruleset de `main` ; l'option de `check-yaml` pour les fichiers YAML à plusieurs documents ; ce qu'actionlint lit hors de `.github/workflows/` à la racine ; la présence et la version de Docker sur les runners `ubuntu-latest` (Docker Engine 28.0.0 au moins, ADR-011) ; la disponibilité de runners arm64 pour un dépôt public.
 
+### Relevé du 2026-11-23 (T003)
+
+Fait par [DEV] à la place d'[OPS], porteur désigné, qui relit. Il lève les cinq points que T003 attend avant l'étape 1. Docker sur `ubuntu-latest` reste à T040, les runners arm64 restent ouverts.
+
+1. Workflows d'un sous-dossier. GitHub ne lit les workflows que dans `.github/workflows` à la racine du dépôt : « You must store workflow files in the `.github/workflows` directory of your repository. » Rien de `golden/saas-b2b/.github/` ne tourne dans CELIAN, et X01 reste le seul moyen d'exercer ces workflows.
+2. Renovate et release-please. Renovate lit un seul fichier de configuration, le premier trouvé dans une liste fixe de chemins (`renovate.json`, `.github/renovate.json`, `.gitlab/renovate.json`, `.renovaterc` et leurs variantes, `package.json`) : `golden/saas-b2b/renovate.json` n'en fait pas partie et n'est jamais lu. En revanche, les gestionnaires de la configuration de CELIAN trouvent leurs fichiers dans tout le dépôt. Celui des actions GitHub lit `(^|/)(workflow-templates|\.(?:github|gitea|forgejo)/(?:workflows|actions))/.+\.ya?ml$` et `(^|/)action\.ya?ml$`, celui de pre-commit `(^|/)\.pre-commit-config\.ya?ml$` ; ce dernier est coupé par défaut, mais `renovate.json` de CELIAN l'active. Les PR de mise à jour des workflows et des hooks du golden repo viendront donc de la configuration de CELIAN, sous ses règles (7 jours, exception de sécurité). Conséquence pour S23 et T098 : `golden/saas-b2b/renovate.json` se contrôle de façon statique et ne s'exerce que dans X01 ou dans le futur dépôt miroir. Le gestionnaire maison de CELIAN pour les variables `_IMAGE` reste limité à `^\.github/workflows/`. release-please ne lit que les chemins que lui passe le workflow de CELIAN (`config-file`, « Path to the release-please config in the repository », et `manifest-file`) : les fichiers release-please du golden repo sont ignorés. Le paquet `.` de CELIAN couvre tout le dépôt, et un commit sur `golden/` compte dans le journal des versions de CELIAN.
+3. Workflow filtré par chemin et contrôles requis. Un workflow sauté par un filtre de chemins, de branches ou par le message de commit laisse ses contrôles en attente (« Pending ») et bloque la fusion ; la page conseille : « Avoid requiring workflows that can be skipped. » Un job sauté par sa condition `if` rend « Success » ; un job qui dépend d'un job en échec est sauté et peut ne pas bloquer la fusion, d'où `always()` avec `needs` pour un contrôle requis. Seuls comptent les contrôles nés d'événements éligibles, dont `push` et `pull_request`. Décision : le workflow `golden-saas-b2b.yml` ne porte aucun filtre de chemins, et son job `static`, rapide, tourne à chaque PR de CELIAN. Un job coûteux (sur kind, à partir de T051) qui voudrait un filtre passera par une condition de job alimentée par un job de détection des changements, avec la garde `always()`, à trancher avec [OPS] à ce moment-là. Le ruleset de `main` nomme déjà ses contrôles par le `name` de leur job (`pre-commit`, `secrets (full history)`) ; le job s'appelle donc `static`, et T014 l'ajoute sous ce nom.
+4. YAML à plusieurs documents. `check-yaml` de pre-commit-hooks v6.0.0 (le tag pointe sur le SHA figé dans `.pre-commit-config.yaml`) accepte `--allow-multiple-documents`. `--unsafe` l'implique mais ne fait plus qu'une analyse de syntaxe, « removes all guarantees of portability » : écarté. Décision : une seconde entrée de `check-yaml` avec `--allow-multiple-documents`, limitée à `golden/`, où vivront les manifests Kubernetes ; le reste de CELIAN garde la règle d'un document par fichier (T013).
+5. actionlint hors de `.github/workflows/`. Le hook `actionlint` de v1.7.12 (tag égal au SHA figé) porte `files: ^\.github/workflows/` : il ne voit pas `golden/saas-b2b/.github/workflows/`. actionlint vérifie tout fichier passé en argument : « When paths to YAML workflow files are given as arguments, actionlint checks them. » Décision : T013 élargit `files` du hook aux workflows du golden repo, avant qu'ils arrivent à l'étape 2.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax> | 2026-11-23 | Emplacement des workflows ; contrôles en attente si le workflow est sauté par un filtre ; `permissions` (`id-token`, `contents`) |
+| <https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/collaborating-on-repositories-with-code-quality-features/troubleshooting-required-status-checks> | 2026-11-23 | Contrôles requis sautés, job sauté qui rend « Success », dépendance en échec et `always()`, événements éligibles, rulesets |
+| <https://docs.renovatebot.com/configuration-options/> | 2026-11-23 | Liste des fichiers de configuration, premier trouvé |
+| <https://docs.renovatebot.com/modules/manager/github-actions/> | 2026-11-23 | Motifs de fichiers par défaut du gestionnaire des actions |
+| <https://docs.renovatebot.com/modules/manager/pre-commit/> | 2026-11-23 | Motif par défaut, gestionnaire coupé par défaut |
+| <https://github.com/googleapis/release-please-action/blob/45996ed1f6d02564a971a2fa1b5860e934307cf7/README.md> | 2026-11-23 | Entrées `config-file`, `manifest-file` et `path` de la version figée dans CELIAN |
+| <https://github.com/googleapis/release-please/blob/main/docs/manifest-releaser.md> | 2026-11-23 | Paquet `.` à la racine du dépôt, chemins relatifs à la racine |
+| <https://github.com/pre-commit/pre-commit-hooks/blob/3e8a8703264a2f4a69428a0aa4dcb512790b2c8c/README.md> | 2026-11-23 | Options `--allow-multiple-documents` et `--unsafe` de `check-yaml` ; tag v6.0.0 égal à ce SHA |
+| <https://github.com/rhysd/actionlint/blob/914e7df21a07ef503a81201c76d2b11c789d3fca/.pre-commit-hooks.yaml> | 2026-11-23 | `files: ^\.github/workflows/` du hook ; tag v1.7.12 égal à ce SHA |
+| <https://github.com/rhysd/actionlint/blob/914e7df21a07ef503a81201c76d2b11c789d3fca/docs/usage.md> | 2026-11-23 | Fichiers passés en argument vérifiés |
+
 ## RS-18. Outils de test
 
 Décision : scripts bash pour les tests sur kind et les contrôles préalables, comme les scripts de BENCH ; politiques en Rego exécutées par conftest, outil que nomment les ADR-005 à ADR-011 ; validation de schéma par kubeconform, nommé par US-007, outil à confirmer avec [QA] (ADR-005, condition 5) ; Trivy pour le HCL, le SBOM et le scan des images (RS-22) ; conftest aussi pour la décision du scan (RS-23).
@@ -190,6 +256,56 @@ Décision : scripts bash pour les tests sur kind et les contrôles préalables, 
 À vérifier avant usage, avec version, licence, date et somme de contrôle du binaire : conftest, kubeconform, cosign (qui vérifie aussi la signature de Trivy à chaque montée, RS-22), le framework de test .NET, celui du front, le validateur de configuration de Renovate. Trivy : 0.76.2 lue le 2026-11-23 (RS-22), somme et signature à vérifier à l'installation. Porteur : [DEV], avec [QA] pour le choix final.
 
 Alternatives : des tests en Python, écartés parce que le projet généré n'aurait pas Python dans ses prérequis d'exécution (ENF-07) ; Kyverno en CLI, réservé au profil full.
+
+### Relevé du 2026-11-23 : conftest (T002)
+
+Fait par [DEV]. Sources : l'API GitHub du dépôt `open-policy-agent/conftest`, lue par `gh api`, ses fichiers au tag v0.71.1, et les pages de conftest.dev et de la CNCF.
+
+Version retenue : conftest v0.71.1, publiée le 2026-10-06, dernière release. Elle a 48 jours au 2026-11-23 et passe le délai de 7 jours (principe VI). Licence Apache-2.0, d'après le fichier `LICENSE` (« Licensed under the Apache License, Version 2.0 ») ; l'API GitHub, elle, répond `NOASSERTION`, parce que le fichier commence par un en-tête de copyright.
+
+Gouvernance : le dépôt appartient à l'organisation `open-policy-agent`, celle d'OPA, projet gradué à la CNCF (accepté le 2018-03-29, gradué le 2021-01-29). La page de la CNCF ne nomme pas conftest. La gouvernance de l'organisation (`GOVERNANCE.md` d'OPA) vote par organisation, « so that no single organization can dominate an area of expertise ». `MAINTAINERS.md` d'OPA donne à conftest un seul mainteneur propre, James Alseth (`@jalseth`, « Independent », renouvelé le 2026-09-30), plus deux mainteneurs de tous les dépôts, employés d'Apple. Sur un an, du 2025-11-23 au 2026-11-23, 157 commits, dont 51 humains, de 23 auteurs ; `jalseth` en signe 24 (47 %). Lecture : porté par l'organisation d'un projet de fondation, avec un seul mainteneur actif déclaré pour conftest.
+
+Intégrité : la release publie `checksums.txt` et un SBOM par archive ; elle n'est pas immuable. L'API des attestations en donne une pour l'archive linux amd64 ; elle n'est pas vérifiée ici, faute d'archive téléchargée, et pourra l'être par [SECU]. Les sommes ci-dessous sont lues dans `checksums.txt` (asset 614476987, lu par l'API) ; elles sont égales au champ `digest` de l'API des releases.
+
+| Archive | SHA-256 |
+| --- | --- |
+| `conftest_0.71.1_Linux_x86_64.tar.gz` | `c3f6b2a753bd56e377a1e51a95ae3e057f926f2e9139f7d5b5dfbbaf810f7985` |
+| `conftest_0.71.1_Linux_arm64.tar.gz` | `218c682e110ae7e826dc14a746a6f9b43eb782643dbe730b771fd305634e3f47` |
+| `conftest_0.71.1_Darwin_x86_64.tar.gz` | `a309853b5763c18486768157442d440248ee683b20a2aa1f6b28214e818bd780` |
+| `conftest_0.71.1_Darwin_arm64.tar.gz` | `e1cc50d2590b6c5e3da6912666a71264bae82d60bdd62d7ae2b99971ccc8eedd` |
+
+Fonctions relevées :
+
+- plusieurs fichiers en une seule entrée : `conftest test --combine`. L'entrée devient une liste dont chaque élément porte `path`, « the relative file path of the file being evaluated », et `contents`, le document lu. S21 s'en sert pour comparer `platform.yaml` aux fichiers qui répètent ses valeurs ;
+- Dockerfile : analyseur `dockerfile`, choisi d'office pour un fichier nommé `Dockerfile`, `Dockerfile.*` ou `*.Dockerfile` (`parser/parser.go` au tag), forçable par `--parser` ;
+- fichier de données : `--data` (`-d`), qui cherche récursivement les fichiers JSON et YAML des chemins donnés et les expose sous `data.` ;
+- tests Rego : `conftest verify --policy <dossier>` lance les règles `test_` ; `--namespace` ne garde que les résultats des paquets nommés, et le code de sortie est non nul si un test échoue ;
+- syntaxe : `--rego-version` vaut `v1` par défaut, pour `test` comme pour `verify` (règles en `deny contains msg if`). conftest v0.71.1 embarque OPA v1.21.1 (`go.mod`) ; `regex.match`, `is_string`, `object.get`, `sprintf` et `count` existent depuis OPA v0.23.0 au plus tard ;
+- `conftest test` lit le paquet `main` par défaut, `--namespace` en choisit un autre, et sort en 1 quand une politique échoue ;
+- piège : un nom de paquet qui n'existe pas ne lève aucune erreur, ni pour `test` ni pour `verify` (`runner/test.go` et `runner/verify.go` au tag), et le contrôle passe sans rien vérifier. Le lanceur des contrôles statiques (T004) refuse donc une politique dont le paquet ne porte pas le nom du fichier, ou qui n'a pas son fichier de tests dans le même paquet.
+
+Effets : les politiques de `golden/saas-b2b/policy/` sont en Rego v1, un paquet par fichier, nommé comme lui, avec ses tests dans le même paquet ; `golden/saas-b2b/tests/tools/install.sh` et `SHA256SUMS` (T011) installent v0.71.1 par ces sommes.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://api.github.com/repos/open-policy-agent/conftest/releases> | 2026-11-23 | v0.71.1 publiée le 2026-10-06, dernière release, non immuable |
+| <https://github.com/open-policy-agent/conftest/releases/download/v0.71.1/checksums.txt> | 2026-11-23 | Les quatre SHA-256 du tableau, lus par l'API (asset 614476987) |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/LICENSE> | 2026-11-23 | Apache-2.0 |
+| <https://api.github.com/repos/open-policy-agent/conftest/attestations/sha256:c3f6b2a753bd56e377a1e51a95ae3e057f926f2e9139f7d5b5dfbbaf810f7985> | 2026-11-23 | Une attestation, non vérifiée |
+| <https://github.com/open-policy-agent/opa/blob/main/GOVERNANCE.md> | 2026-11-23 | Vote par organisation |
+| <https://github.com/open-policy-agent/opa/blob/main/MAINTAINERS.md> | 2026-11-23 | Mainteneur de conftest, mainteneurs de tous les dépôts |
+| <https://www.cncf.io/projects/open-policy-agent-opa/> | 2026-11-23 | OPA gradué, dates ; conftest non nommé |
+| <https://api.github.com/repos/open-policy-agent/conftest/commits?since=2025-11-23T00:00:00Z> | 2026-11-23 | Commits de l'année par auteur |
+| <https://www.conftest.dev/options/> | 2026-11-23 | `--combine`, `--data`, `--parser`, `--policy`, sorties, code de sortie |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/docs/options.md> | 2026-11-23 | Clés `path` et `contents` de l'entrée combinée |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/docs/index.md> | 2026-11-23 | `conftest verify`, tests en `test_` avec `with input as`, syntaxe v1 des exemples |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/parser/parser.go> | 2026-11-23 | Détection des Dockerfile, analyseurs disponibles |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/internal/commands/test.go> | 2026-11-23 | Options de `test`, `--rego-version` à `v1`, paquet `main` par défaut |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/internal/commands/verify.go> | 2026-11-23 | Options de `verify`, sortie non nulle sur échec |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/runner/verify.go> | 2026-11-23 | Filtre de `--namespace` sur le paquet des tests ; aucun paquet trouvé, aucune erreur |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/runner/test.go> | 2026-11-23 | Paquet nommé lu tel quel, sans contrôle d'existence |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/go.mod> | 2026-11-23 | OPA v1.21.1 |
+| <https://www.openpolicyagent.org/docs/policy-reference/builtins> | 2026-11-23 | Signatures et version d'apparition des fonctions citées |
 
 ## RS-19. Mesures de la gate
 
