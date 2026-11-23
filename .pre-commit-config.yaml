@@ -25,6 +25,13 @@ repos:
       - id: mixed-line-ending
         args: [--fix=lf]
       - id: check-yaml
+        exclude: ^golden/
+      # The golden repo keeps Kubernetes manifests with several documents per
+      # file; elsewhere, one document per file (research RS-17).
+      - id: check-yaml
+        name: check yaml (golden repo, several documents allowed)
+        files: ^golden/
+        args: [--allow-multiple-documents]
       - id: check-json
       - id: check-toml
       - id: check-merge-conflict
@@ -47,6 +54,9 @@ repos:
     rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
     hooks:
       - id: actionlint
+        # Upstream lints ^\.github/workflows/ only; the workflows of the
+        # golden repo live in its own .github/workflows/ (research RS-17).
+        files: ^(\.github/workflows/|golden/saas-b2b/\.github/workflows/)
 
   - repo: https://github.com/shellcheck-py/shellcheck-py
     rev: 745eface02aef23e168a8afb6b5737818efbea95  # frozen: v0.11.0.1
