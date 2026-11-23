@@ -30,7 +30,9 @@ spec:
           env:
             - {name: HOME, value: /tmp}
             - {name: ASPNETCORE_HTTP_PORTS, value: "5000"}
-            - {name: ServerOptions__Urls, value: "http://*:5000"}
+            # Same name as the ENV of the image (SERVEROPTIONS__URLS=http://*:80):
+            # a differently cased ServerOptions__Urls loses to it (smoke test 2).
+            - {name: SERVEROPTIONS__URLS, value: "http://*:5000"}
             - {name: ServerOptions__Port, value: "2525"}
             - {name: ServerOptions__ImapPort, value: "1143"}
             - {name: ServerOptions__Pop3Port, value: "1110"}

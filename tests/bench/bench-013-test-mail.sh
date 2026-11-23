@@ -103,7 +103,7 @@ mailpit/service.yaml 962df83006ec6d8a5787c7f992d538e660b8886d5bd25daca84f5eae53e
 maildev/deployment.yaml cc1bc08934544059b1a1805161db3474f0bfe7ee6948048415a22d69e8eb3f7e
 maildev/kustomization.yaml f22e12ddb0b475c6d4239aeb43753d5a9ee239f98d5234247683f2a753ea92e5
 maildev/service.yaml 1558259740d19cce9d39e746ea8dbde875ccfde8eba744bd35a524b90dba154a
-smtp4dev/deployment.yaml cee8e88cf43170b3aa448add4dea6c51958d37cd125ae4b7f1b7c6fa2b1b2509
+smtp4dev/deployment.yaml b6e97065f27169c3d0440abdef51cbfe5b805d149faedb9c7107832ad71cb811
 smtp4dev/kustomization.yaml c904044d52b4a70273af4958522f284eabc7797850bfe992188060f10d534606
 smtp4dev/service.yaml 65e4c44f3b4cb28e440e4b44cf27bd431a6fe6cfc698fcc8ebd33ced679e5c31
 none/kustomization.yaml 0d9bc050f58dd213fb8187eebe00e420462cb6caa3c83292573cc8cc70b2ab01
@@ -450,7 +450,8 @@ record_failure() {
   local opt=$1 log_file=$2 reasons
   kube get pods -n "$NAMESPACE" -o wide >>"$log_file" 2>&1 || true
   kube logs deployment/mail -n "$NAMESPACE" --tail=50 >>"$log_file" 2>&1 || true
-  reasons=$(kube get events -A --field-selector type=Warning -o json 2>/dev/null |
+  kube get events -n "$NAMESPACE" -o wide >>"$log_file" 2>&1 || true
+  reasons=$(kube get events -n "$NAMESPACE" --field-selector type=Warning -o json 2>/dev/null |
     jq -r '[.items[] | .message | .[0:200]] | unique | .[0:3] | join(" || ")' 2>/dev/null || true)
   tsv functional.tsv "$opt" install-ready no "${reasons:-see $log_file}"
 }
@@ -492,7 +493,7 @@ timed_run() {
     record_failure "$opt" "$log_file"
     record_pulls "$opt" "$run"
     tsv runs.tsv "$opt" "$run" "$started" "$(seconds_between "$t_create" "$t_cluster")" \
-      "$(seconds_between "$t0" "$t1")" not-ready no - - - - - - - - "$arch"
+      "$(seconds_between "$t0" "$t1")" not-ready unknown - - - - - - - - "$arch"
     delete_cluster >>"$log_file" 2>&1 || die "$opt run $run: delete failed"
     RUN_OK=0
     return 0
