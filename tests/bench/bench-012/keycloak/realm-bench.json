@@ -1,0 +1,17 @@
+{
+  "realm": "bench",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "bench-client",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${BENCH_CLIENT_SECRET}",
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false
+    }
+  ]
+}

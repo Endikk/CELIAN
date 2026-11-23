@@ -1,0 +1,114 @@
+# Keycloak layer of BENCH-012 (this file, service.yaml and
+# service-discovery.yaml), derived from kubernetes/keycloak.yaml of
+# keycloak/keycloak-quickstarts at commit
+# c598d34d3b2dd85976ac96614176df351ee1a4d5 (SHA-256
+# b4de5e35b234c11400192e805d4cb551c51e358f655be2196a51c2f9171fb9af, checked by
+# tests/bench/bench-012-identity.sh). Changes from the reference, and only
+# these:
+#   - one replica instead of two (the reference's own comment allows it);
+#   - image pinned by digest;
+#   - no Postgres of its own: the shared Postgres of the stack
+#     (postgres.bench-db), with a role and a database made for Keycloak;
+#   - no credential in clear: the admin password, the database credentials
+#     and the secret of the test client come from Secrets that the script
+#     creates by a pipe (ADR-007);
+#   - `start --import-realm`, with the test realm of realm-bench.json mounted
+#     where the import reads it.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  serviceName: keycloak-discovery
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.8.2@sha256:7e66a96e4739239070aeaf72e4c5decf0f7f682cfc725b9f7ea2b336eaba38b3
+          args: ["start", "--import-realm"]
+          env:
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              value: "admin"
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: idp-admin, key: password}
+            - name: KC_PROXY_HEADERS
+              value: "xforwarded"
+            - name: KC_HTTP_ENABLED
+              value: "true"
+            - name: KC_HOSTNAME_STRICT
+              value: "false"
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: 'KC_CACHE'
+              value: 'ispn'
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: KC_CACHE_EMBEDDED_NETWORK_BIND_ADDRESS
+              value: '$(POD_IP)'
+            - name: 'KC_DB_URL_DATABASE'
+              value: 'keycloak'
+            - name: 'KC_DB_URL_HOST'
+              value: 'postgres.bench-db.svc.cluster.local'
+            - name: 'KC_DB'
+              value: 'postgres'
+            - name: 'KC_DB_PASSWORD'
+              valueFrom:
+                secretKeyRef: {name: idp-db, key: password}
+            - name: 'KC_DB_USERNAME'
+              valueFrom:
+                secretKeyRef: {name: idp-db, key: username}
+            - name: BENCH_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: {name: idp-client, key: secret}
+          ports:
+            - name: http
+              containerPort: 8080
+            - name: jgroups
+              containerPort: 7800
+            - name: jgroups-fd
+              containerPort: 57800
+          startupProbe:
+            httpGet:
+              path: /health/started
+              port: 9000
+            periodSeconds: 1
+            failureThreshold: 600
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 9000
+            periodSeconds: 10
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 9000
+            periodSeconds: 10
+            failureThreshold: 3
+          resources:
+            limits:
+              cpu: 2000m
+              memory: 2000Mi
+            requests:
+              cpu: 500m
+              memory: 1700Mi
+          volumeMounts:
+            - name: realm
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+      volumes:
+        - name: realm
+          configMap:
+            name: keycloak-realm

@@ -1,0 +1,13 @@
+# Headless service "keycloak-discovery" of the Keycloak layer; see
+# statefulset.yaml for the reference manifest and the changes made to it.
+apiVersion: v1
+kind: Service
+metadata:
+  labels:
+    app: keycloak
+  name: keycloak-discovery
+spec:
+  selector:
+    app: keycloak
+  clusterIP: None
+  type: ClusterIP
