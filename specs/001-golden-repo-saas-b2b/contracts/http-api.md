@@ -8,7 +8,7 @@ Règles communes :
 - chaque entrée est validée côté serveur ; une erreur de validation nomme le champ et la règle ;
 - les réponses ne portent que les champs listés ici ;
 - les erreurs suivent le format standard d'ASP.NET Core pour les détails de problème, à vérifier ; jamais de trace de pile ni de message de la base ;
-- aucune authentification : l'exemple n'a pas d'utilisateur. Le risque d'une exposition publique sur GCP est noté dans le plan.
+- aucune authentification en local : l'exemple n'a pas d'utilisateur. Elle arrive avec l'ADR-013, et aucun déploiement réel sur GCP ne se fait sans elle (décision du DSI du 2026-11-21, research RS-25).
 
 ## `GET /api/healthz`
 

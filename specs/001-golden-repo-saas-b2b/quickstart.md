@@ -12,7 +12,7 @@ Guide de validation du golden repo, une fois construit. Il dit quoi lancer et ce
 | Task | à vérifier | ADR-006, question 5 |
 | Git | à vérifier | |
 
-Pour contribuer, en plus : pre-commit et les outils de `task check` (conftest, kubeconform, OpenTofu 1.11 au moins, Trivy), versions à vérifier (research RS-18).
+Pour contribuer, en plus : pre-commit et les outils de `task check` (conftest, kubeconform, OpenTofu 1.11 au moins), versions à vérifier (research RS-18), et Trivy, 0.71.1 au moins, binaire vérifié contre le SHA-256 du dépôt (research RS-22).
 
 Le golden repo vit dans `golden/saas-b2b/` du dépôt de CELIAN. Les commandes se lancent depuis ce dossier.
 
@@ -91,6 +91,18 @@ Contrôles : S06, S07, S20.
 | Mauvaise version de kind | refus avec la version attendue | P01 |
 | Kubeconfig de l'utilisateur sur un autre contexte | ignoré, `task up` réussit sans le modifier | P05, E24 |
 | Profil lite | aucun contrôleur de Flux dans le cluster | E14 |
+| Profil standard | contrôleurs de Flux présents, chaque liaison suspendue | E14, S28 |
+
+## Scénario 9 : contenu des images et failles connues (récit 7)
+
+1. Environnement démarré par `task up`. Lancer `task test:images`.
+   Attendu : chaque image en marche, dans le cluster et sur le moteur, figure dans l'inventaire scanné ; un SBOM CycloneDX par image construite ; le scan passe, ou échoue en nommant l'image et la vulnérabilité au seuil `HIGH` sans exception valide.
+2. `task test`.
+   Attendu : la décision du scan, jouée sur des rapports d'exemple à date fixée, refuse une faille au seuil sans exception, accepte une exception complète et non échue, refuse de nouveau une exception échue ou incomplète.
+3. Relire l'exécution de CI d'une PR qui touche `golden/saas-b2b/`.
+   Attendu : les SBOM des images construites en artefacts ; le job du scan parmi les contrôles requis ; avec une source de base qui ne résout pas, le scan échoue en le disant.
+
+Contrôles : S25, S26, S27, U03, E25, E26, E27.
 
 ## Mesure de la gate (étape 17)
 

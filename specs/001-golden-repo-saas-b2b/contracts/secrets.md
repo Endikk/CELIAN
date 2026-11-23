@@ -7,7 +7,7 @@ L'application lit le même Secret, de même nom et de mêmes clés, sur les deux
 | Secret | Type | Clés | Producteur `local` | Producteur `gcp` | Lu par |
 | --- | --- | --- | --- | --- | --- |
 | `db-auth` | `kubernetes.io/basic-auth` | `username` (`app`), `password` | `task up` | synchronisation de GKE depuis Secret Manager (ADR-007) | API ; script d'initialisation de la base sur `local` |
-| `cache-auth` | `Opaque` | `password` | `task up` | en attente du moteur et de l'authentification de Memorystore (research RS-11) | API ; Valkey sur `local` |
+| `cache-auth` | `Opaque` | `password`, clés définitives fixées par l'ADR-015 | `task up`, à partir de l'étape 19 | selon l'authentification de Memorystore retenue par l'ADR-015, étape 20 (research RS-11) | API ; le cache sur `local` |
 | `db-superuser` | `kubernetes.io/basic-auth` | `username`, `password` | `task up` | aucun : Cloud SQL ne donne pas de superutilisateur (ADR-012) | conteneur Postgres seulement ; jamais l'application |
 | `gateway-tls` | `kubernetes.io/tls` | `tls.crt`, `tls.key` | `task up`, méthode à trancher (research RS-10) | à trancher par [OPS] et [SECU] avec la classe de GKE | Gateway |
 

@@ -20,7 +20,7 @@ Le test de parité, qui rend les deux cibles, n'a de sens que si les deux sont p
 | --- | --- | --- |
 | `k8s/base/` | commune | namespace, Deployments et Services de l'API et du front, Gateway et HTTPRoute ; références à `app-config` et aux Secrets du [contrat](secrets.md) |
 | `k8s/overlays/{local,staging,prod}/` | commune | réglages par environnement, neutres vis-à-vis de l'outil et du fournisseur (ADR-010, condition 1) |
-| composant de cible `local` | `local` | `gatewayClassName` d'Envoy Gateway, `app-config` local, Postgres et Valkey |
+| composant de cible `local` | `local` | `gatewayClassName` d'Envoy Gateway, `app-config` local, Postgres, et le cache après l'ADR-015 |
 | composant de cible `gcp` | `gcp` | `gatewayClassName` de GKE, `app-config` de GCP, `SecretProviderClass` et `SecretSync`, règle d'admission sur les `requests` |
 | `local/k8s/lite/`, `local/k8s/standard/` | `local` | overlay `local` et composant de cible local ; en standard, les couches entrées (Keycloak, Mailpit) |
 | `gcp/k8s/prod/` | `gcp` | overlay `prod` et composant de cible `gcp` |
@@ -30,8 +30,20 @@ Le mécanisme proposé pour les composants de cible est celui des composants de 
 Objets appliqués hors de cette composition :
 
 - la plate-forme locale (CRD Gateway API, Envoy Gateway, EnvoyProxy, GatewayClass), par fichiers vendorés vérifiés, avant l'application ;
-- Flux et ses objets de liaison en profil standard (`local/gitops/`) ;
+- Flux et ses objets de liaison en profil standard (`local/gitops/`), liaison suspendue tant que Lucas n'a pas tranché ce que lit Flux (décision du 2026-11-21) ;
 - le `RootSync` de Config Sync (`gcp/k8s/`), jamais appliqué en phase 2.
+
+## Fichiers du scan des images
+
+| Fichier (noms provisoires) | Couche | Contenu |
+| --- | --- | --- |
+| `security/scan-policy.yaml` | commune | seuil de gravité, `HIGH` |
+| `security/scan-exceptions.yaml` | commune | exceptions des images construites |
+| `policy/` (Rego de décision) | commune | décision du scan sur le rapport, les exceptions et la date du jour |
+| `local/security/scan-exceptions.yaml` | `local` | exceptions des images de la couche `local` |
+| `local/security/unlisted-images` | `local` | images qu'aucun fichier ne nomme, par condensat |
+
+Une exception qui vise une image de la couche `local` vit dans la couche `local` : la couche commune ne nomme ni zot, ni Envoy Gateway, ni Flux (S06). Détail : [data-model.md](../data-model.md), sections « Inventaire des images » et « Exception au scan ».
 
 ## Règle de parité
 

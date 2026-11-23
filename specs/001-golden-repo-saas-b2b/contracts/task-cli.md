@@ -54,7 +54,7 @@ Retire le conteneur du miroir, après contrôle de son nom, de son étiquette et
 
 ## `task app:down`
 
-Garde le cluster. En profil standard, suspend d'abord la liaison de Flux. Retire le conteneur du miroir comme `task down`, puis supprime le namespace de l'application, avec la base, son volume et ses Secrets. Le `task up` suivant réutilise le cluster sans tirer d'image et tire de nouveaux Secrets. Affiche la mémoire que garde le cluster.
+Garde le cluster. En profil standard, suspend d'abord la liaison de Flux, si elle ne l'est pas déjà : elle est livrée suspendue tant que la question 1 de l'ADR-010 reste ouverte. Retire le conteneur du miroir comme `task down`, puis supprime le namespace de l'application, avec la base, son volume et ses Secrets. Le `task up` suivant réutilise le cluster sans tirer d'image et tire de nouveaux Secrets. Affiche la mémoire que garde le cluster.
 
 ## `task mirror:purge`
 
@@ -64,10 +64,11 @@ Dit d'abord que le `task up` suivant demandera le réseau, puis supprime le volu
 
 | Commande | Contenu | Cluster | Contrôles |
 | --- | --- | --- | --- |
-| `task test` | tests unitaires de l'API et du front | non | U01, U02 |
-| `task check` | contrôles statiques, rendus et parité, contrôles préalables simulés | non | S01 à S23, P01 à P06 |
+| `task test` | tests unitaires de l'API et du front, tests de la décision du scan | non | U01 à U03 |
+| `task check` | contrôles statiques, rendus et parité, contrôles préalables simulés, inventaire, politique et exceptions du scan | non | S01 à S23, S25 à S28, P01 à P06 |
 | `task test:e2e` | tests sur kind du profil courant | oui, créé et supprimé | E01 à E09, E11 à E24 selon le profil |
 | `task test:offline` | T2 du profil courant | oui | E10 |
+| `task test:images` | relevé des images en marche, SBOM des images construites, scan de l'inventaire du profil courant ; demande le réseau pour la base de vulnérabilités | oui, déjà démarré | E25 à E27 |
 | `task gcp:validate` | init en lecture seule du verrou, puis validation | non | S14 |
 | `task gcp:policy` | politiques conftest sur le HCL et les manifests `gcp` | non | S15, S16 |
 | `task gcp:scan` | Trivy sur le HCL | non | S15 |
