@@ -1,6 +1,6 @@
 # Registre des risques
 
-Tenu par le DSI. Mis à jour le 21/11/2026. Probabilité et impact sont notés
+Tenu par le DSI. Mis à jour le 24/11/2026. Probabilité et impact sont notés
 faible, moyen ou fort : ce sont des jugements, pas des mesures. Un risque se
 ferme quand sa mitigation est en place et vérifiée.
 
@@ -43,6 +43,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-33 | Écrire sur la branche suivie, c'est administrer le cluster | Moyenne | Fort | SECU, OPS | Ouvert |
 | R-34 | Miroir de registres sur le PC, nouvelle brique exposée | Faible | Moyen, fort si une image désignée par tag passe par lui | OPS, SECU | Ouvert |
 | R-35 | Postgres local écrit à la main dans chaque projet généré | Moyenne | Moyen | DEV, SECU | Ouvert |
+| R-36 | Failles connues sans paquet associé, invisibles aux scanners | Moyenne | Moyen | SECU, OPS | Ouvert |
 
 ## Détail
 
@@ -181,6 +182,13 @@ Postgres retenu par Lucas, `postgres:18.7-trixie` sans opérateur, la remplace
 et ajoute 48,3 Mo nets. Le premier `task up` du profil standard, hors
 Keycloak et Mailpit, passe à 1 444,2 Mo sans miroir et à 1 521,9 Mo avec
 zot, soit 135,3 % du budget de 900 s à 10 Mbit/s. ENF-01 est à mettre à jour
+dans le PRD.
+
+BENCH-012 (2026-11-24, relecture [FINOPS]) : Keycloak ajoute 265,1 Mo en
+amd64 ; le premier `task up` du profil standard, Mailpit non compté, passe à
+1 787,0 Mo avec zot et le Postgres de l'ADR-012, soit 158,8 % du budget de
+900 s à 10 Mbit/s et 15,9 Mbit/s au minimum. Le profil standard passe à
+3,5 Gio de VM et 7,5 Gio de portable au repos. ENF-01 est à mettre à jour
 dans le PRD.
 
 Reste à mesurer : le temps à froid, la compilation de la vraie stack (front
@@ -935,3 +943,22 @@ Mitigation :
   vérifiable par Kyverno ;
 - relecture [SECU] de toute modification du StatefulSet de la couche
   `local`.
+
+### R-36. Failles connues sans paquet associé, invisibles aux scanners
+
+Ouvert le 24/11/2026 avec BENCH-012 (relecture [SECU]). Dans la base mondiale
+de GitHub, une partie des failles publiées n'est associée à aucun paquet :
+16 des 20 CVE de tickets de Keycloak échantillonnées, et 31 des 55 avis de
+Zitadel, dont 4 des 6 critiques, sans module Go. Un scanner qui associe les
+failles par paquet, comme Trivy pour les modules Go, ne les voit pas : le
+scan de FR-021 peut passer au vert sur une image qui porte une faille
+critique connue. Le même angle mort touchait déjà les moteurs GitOps (R-32).
+
+Probabilité moyenne : le cas est fréquent dans les deux projets mesurés.
+Impact moyen : une faille connue partirait dans chaque projet généré.
+
+Mitigation : lecture mensuelle par [SECU] des avis et des tickets de sécurité
+des composants de la stack, en plus du scan ; montée de version suivie à
+chaque correctif publié, avec l'exception de sécurité du principe VI ;
+contrôle croisé par une seconde source de failles à étudier à l'étape 18 du
+plan. Rôles : SECU, OPS.
