@@ -1,0 +1,36 @@
+# Ignore rules of the golden repo. They also hold in a standalone copy of
+# this folder (control X01), where the rules of CELIAN do not apply.
+
+# OS and editors
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+*.swp
+
+# Secrets and local environment: never versioned (principle IX). The
+# kubeconfig of the local cluster lives outside the repository (research
+# RS-21); these patterns catch a copy left here by mistake.
+.env
+.env.*
+*.pem
+*.key
+kubeconfig*
+*.kubeconfig
+
+# Task: file fingerprints of up-to-date checks (research RS-09)
+.task/
+
+# .NET and the front, as in CELIAN; step 4 adds the build outputs of the
+# front once its tools are checked.
+bin/
+obj/
+*.user
+node_modules/
+
+# OpenTofu (the .terraform.lock.hcl file stays versioned)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log

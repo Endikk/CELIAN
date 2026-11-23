@@ -1,0 +1,43 @@
+name: golden-saas-b2b
+
+# CI of the SaaS B2B golden repo (spec 001, research RS-17). Each job calls
+# a task of golden/saas-b2b/, so that the logic exists once, in the tasks.
+# No path filter: a required check whose workflow a filter skips stays
+# "Pending" and blocks the merge (research RS-17), and the static job is fast.
+# Principle X: no cloud credential, and no plan, apply or destroy; test S17
+# (golden/saas-b2b/tests/static/s17-workflows.sh) enforces both.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: golden-saas-b2b-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: static
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: golden/saas-b2b
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Release archives checked against tests/tools/SHA256SUMS before use,
+      # without any third-party action.
+      - name: Install Task and conftest
+        run: |
+          bash tests/tools/install.sh "$RUNNER_TEMP/golden-tools"
+          echo "$RUNNER_TEMP/golden-tools" >> "$GITHUB_PATH"
+
+      - name: Run the static checks
+        run: task check

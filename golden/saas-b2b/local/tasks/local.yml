@@ -1,0 +1,25 @@
+# Tasks of the local layer, called by the public tasks of the root
+# Taskfile.yml, which includes this file as internal. They run in the folder
+# of the root Taskfile (research RS-09). Each stub below gives way to the
+# real task in the step it names (spec 001, tasks.md).
+
+version: '3'
+
+tasks:
+  up:
+    silent: true
+    cmds:
+      - echo 'task up is not delivered yet. It arrives with steps 5 to 9 of spec 001.' >&2
+      - exit 1
+
+  down:
+    silent: true
+    cmds:
+      - echo 'task down is not delivered yet. It arrives with step 6 of spec 001.' >&2
+      - exit 1
+
+  reload:
+    silent: true
+    cmds:
+      - echo 'task reload is not delivered yet. It arrives with step 9 of spec 001.' >&2
+      - exit 1

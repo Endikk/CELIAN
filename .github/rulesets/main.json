@@ -44,6 +44,9 @@
           },
           {
             "context": "secrets (full history)"
+          },
+          {
+            "context": "static"
           }
         ]
       }

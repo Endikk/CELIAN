@@ -1,0 +1,11 @@
+# Values shared by both layers, kept once (spec 001, data-model, "Valeurs
+# partagées"). Test S21 keeps every file that repeats them in step. In
+# phase 3 they become variables of the blueprint.
+#
+# Strings on purpose: YAML would read an unquoted 1.30 as the number 1.3.
+
+# Kubernetes minor of the clusters (ADR-004, version rule).
+kubernetes_minor: "1.36"
+
+# Postgres major, the same on both targets (ADR-012, condition 5).
+postgres_major: "18"
