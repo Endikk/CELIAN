@@ -31,11 +31,20 @@
 
 ## Notes
 
-- Les technos ne sont nommées que dans la description d'origine et dans les
-  hypothèses : elles sont fixées par les ADR-001 à ADR-010, acceptés à la
-  GATE 1. Les exigences et les critères de succès restent formulés en
-  capacités (démarrer, joindre, protéger, valider) et renvoient aux ADR.
+- Les technos ne sont nommées que dans la description d'origine, dans les
+  hypothèses et dans FR-006, qui écrit la composition du profil standard
+  choisie par Lucas. Elles sont fixées par les ADR-001 à ADR-010, acceptés à
+  la GATE 1, puis par les ADR-011 et ADR-012, acceptés par Lucas le
+  2026-11-21. Les autres exigences et les critères de succès restent formulés
+  en capacités (démarrer, joindre, protéger, valider) et renvoient aux ADR.
 - Le seul marqueur [NEEDS CLARIFICATION], la composition du profil standard
   (FR-006), est levé : Lucas a choisi lite, Flux, Keycloak et Mailpit.
-- FR-016 et FR-017 dépendent de BENCH-010 et de BENCH-011, en cours : ce sont
-  des dépendances, pas des points flous.
+- Révision du 2026-11-21. FR-016, FR-017 et SC-009 ne dépendent plus de
+  benchmarks en cours : BENCH-010 et BENCH-011 sont rendus, et les ADR-011 et
+  ADR-012 fixent les mécanismes. Les trois sont écrits en résultats, sans
+  nommer le miroir ni la forme de la base (principe II).
+- Révision du 2026-11-21. FR-020 à FR-022, SC-010 et le récit 7 ajoutent le
+  SBOM et le scan des images, décision de Lucas. Ils ne nomment aucun outil :
+  US-009 du PRD, R-34 et la condition 8 de l'ADR-011 les citent, et le plan
+  les reprendra. La signature et le contrôle d'admission restent hors de la
+  spec, en phase 4 (hypothèses).
