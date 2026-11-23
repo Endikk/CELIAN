@@ -1,6 +1,6 @@
 # Feuille de route
 
-Mise à jour le 20/11/2026, au lancement de la phase 2. Le DSI tient ce fichier
+Mise à jour le 23/11/2026, à la fin de la session 4. Le DSI tient ce fichier
 à jour à la fin de chaque session.
 
 ## Phase en cours : 2, golden repo SaaS B2B
@@ -12,19 +12,19 @@ la main dans `golden/saas-b2b/`, spécifié par Spec Kit
 
 ### Plan de la phase 2
 
-1. Spec Kit : `/speckit-specify` (spec 001, PR #29), puis `/speckit-plan` et
-   `/speckit-tasks`, une fois BENCH-010 et BENCH-011 rendus.
-2. Prérequis : BENCH-010 (démarrage hors réseau), BENCH-011 (Postgres local),
-   BENCH-012 (Keycloak) et BENCH-013 (Mailpit), la configuration de Renovate,
-   les versions relues et datées.
+1. Spec Kit : spec 001 (PR #29, amendée par #39), plan (#37) et tâches (#40)
+   fusionnés. Reste `/speckit-implement`, étape par étape.
+2. Prérequis : BENCH-010 et BENCH-011 rendus (ADR-011, ADR-012) ;
+   BENCH-012 (identité) mesuré, en relecture ; BENCH-013 (mail de test) en
+   mesure ; BENCH-014 (cache) ouvert, mesures à venir.
 3. Squelette : couches commune, `local` et `gcp`, Taskfile, kind, conventions
    Git.
 4. Application d'exemple : API .NET et front React.
-5. Cible PC : Envoy Gateway, Secrets créés par `task up`, Postgres, Valkey,
-   profils lite et standard.
+5. Cible PC : Envoy Gateway, miroir zot, Secrets créés par `task up`,
+   Postgres, cache, profils lite et standard.
 6. Cible GCP : OpenTofu écrit à la main, `tofu validate`, conftest et Trivy,
    sans `plan` ni `apply`.
-7. Tests et CI.
+7. Tests et CI, dont le SBOM et le scan des images.
 
 Gate de la phase : une démo de `task up` sur un poste propre, en profil
 standard, avec le temps et le volume mesurés (R-04).
@@ -70,6 +70,18 @@ standard, avec le temps et le volume mesurés (R-04).
   démarré à 0.1.0, principe VI amendé (constitution 1.2.0), règles de notation
   dans le gabarit de benchmark, PRD aligné, ADR-001 à ADR-010 acceptés,
   entrées `gateway`, `secrets` et `gitops` du catalogue.
+- Phase 2, sessions 3 et 4 (20 au 23/11/2026), PR #29 à #40 :
+  - spec 001 (#29), décisions de phase 2 dans le PRD et la feuille de route
+    (#30), exception de sécurité de Renovate au délai de 7 jours (#31) ;
+  - BENCH-010 (#32) et ADR-011 (#34) : miroir local zot 2.1.23 lancé par
+    `task up`, seul mécanisme qui recrée le cluster hors réseau ; R-34 ouvert ;
+  - BENCH-011 (#35) et ADR-012 (#36) : Postgres sans opérateur sur `local`
+    (87 contre CloudNativePG 83), dérogation datée à ENF-03 pour les images
+    officielles Docker ; R-35 ouvert ;
+  - ADR-011 et ADR-012 acceptés (#38) ;
+  - moins de demandes de confirmation dans les réglages du projet (#33) ;
+  - spec 001 alignée sur les ADR-011 et 012, SBOM et scan des images ajoutés
+    (#39) ; plan (#37) et 160 tâches (#40).
 
 ### Décisions de Lucas
 
@@ -105,6 +117,18 @@ standard, avec le temps et le volume mesurés (R-04).
   Mailpit ; Keycloak et Mailpit passent chacun par un benchmark avant d'entrer
   dans le golden repo (BENCH-012, BENCH-013). Ces décisions sont reportées dans
   le PRD (US-005, ENF-01, ENF-05, section 7).
+- 20/11/2026, session 4 : `docker run` autorisé pour le seul registre miroir
+  de BENCH-010.
+- 21/11/2026 : réglages du projet sans les 8 règles `ask` fréquentes ni le
+  blocage des lectures (#33) ; Postgres sans opérateur sur `local` ;
+  dérogation datée à ENF-03 pour les images officielles Docker ; mesure du
+  redémarrage du nœud de BENCH-011 autorisée ; ADR-011 et ADR-012 acceptés
+  avec les réponses proposées ; moteur du cache par un benchmark court
+  (BENCH-014) ; Flux livré avec sa liaison suspendue dans le profil standard ;
+  SBOM et scan des images dans la spec 001.
+- 23/11/2026 : Trivy seul pour le SBOM et le scan (écart avec Syft, nommé par
+  le PRD, à reporter dans le PRD) ; aucune image de cache provisoire, le
+  profil lite attend l'ADR-015.
 
 ### Décisions du DSI pendant l'absence de Lucas, confirmées à la GATE 1
 
@@ -122,49 +146,64 @@ standard, avec le temps et le volume mesurés (R-04).
   aurait gardé Argo CD ; elle n'a pas joué.
 - R-04 et R-25 passés en probabilité forte.
 
+### Décisions du DSI, session 4
+
+- Arbitrages de BENCH-010 (zot dans tous les profils, garder le cluster en
+  commande explicite seulement) et de BENCH-011 (grille réconciliée des deux
+  relectures).
+- BENCH-012 : Authentik éliminé sur le critère de licence, à titre provisoire
+  (code sous licence non OSI chargé au démarrage de l'image officielle) ;
+  Keycloak mesuré en mode `start` ; le fournisseur d'identité partage le
+  Postgres de la stack, avec sa propre base et son propre rôle.
+- BENCH-013 : l'interface web est requise ; Mailpit mesuré en v1.34.0 sous
+  l'exception de sécurité du principe VI.
+- BENCH-014 : la version locale du cache suit la ligne que Memorystore sert
+  par défaut.
+- Golden repo : aucune authentification de l'exemple en local, elle arrive
+  avec l'ADR-013, et aucun déploiement réel sur GCP sans elle ; CI du golden
+  repo dans CELIAN seulement ; tests unitaires dans l'image de construction.
+- Pas de deuxième palier de volume pour BENCH-012 et BENCH-013, dont les
+  seuils étaient déjà hachés ; il ira dans le gabarit pour les suivants.
+
 ### Prochain
 
-1. La spec 001 du golden repo est fusionnée (#29). Cette mise à jour du PRD
-   et de la feuille de route suit, puis la PR Renovate, fusionnées par Lucas
-   une à la fois.
-2. BENCH-010, en cours par [OPS] : faire démarrer `task up` sur kind sans
-   réseau (R-25, condition 7 de l'ADR-004, condition 4 des ADR-005 et 006).
-   ADR-011 à suivre.
-3. BENCH-011, en cours par [BENCH] : Postgres dans le cluster local, sans
-   opérateur, avec CloudNativePG ou avec un troisième opérateur. ADR-012 à
-   suivre.
-4. Renovate, PR #31 : exempter les correctifs de sécurité du délai de 7 jours
-   (principe VI), syntaxe vérifiée sur sa documentation, sans `automerge`.
-5. BENCH-012 (Keycloak) et BENCH-013 (Mailpit), ouverts le 20/11/2026,
-   mesurés après BENCH-010 et BENCH-011 : les benchmarks se partagent le
-   verrou de mesure.
-6. Chaque benchmark passe par une relecture [SECU] et [FINOPS], un arbitrage
-   du DSI, un ADR écrit par [ARCHI], puis une PR.
-7. `/speckit-plan` puis `/speckit-tasks` sur
-   `specs/001-golden-repo-saas-b2b`, une fois BENCH-010 et BENCH-011 rendus.
+1. `/speckit-implement`, étape 1 du plan (squelette du golden repo et
+   vérifications de versions datées), sur feu vert de Lucas. Les étapes 2 à 5
+   suivent ; l'étape 13 (GCP sans Memorystore) peut démarrer à partir du
+   24/11/2026.
+2. BENCH-012 : relectures [SECU] et [FINOPS] en cours, puis arbitrage, ADR-013
+   et PR. Lucas tranche la voie GCP (Identity Platform ou Keycloak sur GKE)
+   et confirme ou non l'élimination d'Authentik.
+3. BENCH-013 : série en cours, puis relectures, arbitrage, ADR-014 et PR.
+4. BENCH-011 : mesure du redémarrage du nœud, après BENCH-013, puis une PR qui
+   complète le rapport.
+5. BENCH-014 : test de fumée et série sous le verrou, puis relectures,
+   arbitrage et ADR-015. Il débloque 57 tâches du golden repo.
+6. Petite PR pour reporter dans le plan les écarts relevés par les tâches ;
+   reporter dans le PRD le choix de Trivy pour le SBOM.
 
 La PR release-please « release 0.1.0 » (#22) reste ouverte : pas de release
 tant qu'il n'y a rien à publier.
 
-Points restés ouverts, repris dans les ADR (sections « Réponses de la
-GATE 1 ») : la lecture de « arrête et supprime l'environnement » (US-005), qui
-attend BENCH-010 ; la gouvernance de Task ; ce que lit Flux sur le PC ; les
-identifiants de services tiers sur le PC ; la portée de la règle de fraîcheur
-du catalogue. Le profil de mesure du critère des 15 minutes, ouvert à la
-GATE 1, est tranché : le profil standard.
+Points restés ouverts : ce que lit Flux sur le PC (ADR-010, question 1) ; la
+gouvernance de Task ; les identifiants de services tiers sur le PC ; la
+portée de la règle de fraîcheur du catalogue ; la fabrication du certificat
+HTTPS local ; le TLS vers la base et le cache.
 
 Actions de Lucas, hors GATE :
 
 - lire les grilles tarifaires de GKE, Cloud SQL, Memorystore, du réseau et de
   Cloud Monitoring pour la région choisie, avant la GATE 2 (R-05) ;
 - terminer le changement de jeton `gh` et révoquer l'ancien jeton classique
-  (R-07) ; la première tentative a échoué, le presse-papiers ne contenait pas
-  le jeton ;
+  (R-07) ;
 - installer l'app GitHub Renovate et Pixel Agents ;
 - mettre Claude Code en 2.1.324 ou plus pour figer les marketplaces (R-02) ;
-- les sous-agents demandent encore une autorisation Bash en mode bypass :
-  `"defaultMode": "bypassPermissions"` ou « ne plus demander » à chaque
-  demande.
+- redémarrer la session Claude Code une fois les agents arrêtés, pour que le
+  retrait du blocage des lectures prenne effet (#33) ;
+- garder le Mac branché et le capot ouvert pendant les séries de mesure : la
+  veille capot fermé coupe les séries (BENCH-012) ;
+- lancer `scripts/github/apply-settings.sh` quand le scan des images entrera
+  dans les contrôles requis de `main` (étape 18 du plan).
 
 ## Les six phases du MVP
 
