@@ -16,7 +16,8 @@
 #   - kubectl apply, create and delete, against that cluster only: pods run
 #     in the containerd of the node, never as containers of the host engine.
 # Read-only Docker commands: docker version, docker info, docker network
-# inspect, docker manifest inspect (registry metadata, no pull), docker stats.
+# inspect, docker manifest inspect (registry metadata, no layer download),
+# docker stats.
 # Never used: docker run, start, restart, exec, cp, build, pull, rm and
 # network rm; kind load; kubectl exec, cp, debug and port-forward; curl, wget,
 # python, node, perl.
@@ -29,8 +30,9 @@
 #       pod (kubelet Summary API), IDLE_WAIT s after the probe, 3 samples 10 s
 #       apart; the layer is node minus the base node (option "none", M7);
 #   M3  CPU of the pod at the same moments;
-#   M4  compressed size per architecture from the registry, and the images
-#       the node pulled (Pulled events);
+#   M4  compressed size per architecture, read from the platform manifests
+#       in the registry (no layer download), and the images the node pulled
+#       (Pulled events);
 #   M5  one mail sent over SMTP from a probe pod and read back through the
 #       HTTP API, timed inside the pod from /proc/uptime;
 #   M6  node architecture and platform entries of the image index;
@@ -52,6 +54,8 @@
 #     BENCH_LOCK=DIR  lock directory shared with other benchmarks: created with
 #                     mkdir after the start-up checks (exit code 75 if it
 #                     exists), holds an "owner" file, removed by the EXIT trap
+#     SIZES=1         record the compressed sizes (two manifest requests per
+#                     option); 0 skips them, to spare the registry's pull quota
 #   Results (TSV) in TRIAL_DIR: versions.tsv, manifests.tsv, images.tsv,
 #   runs.tsv, functional.tsv, idle.tsv, node-images.tsv, load.tsv,
 #   summary.tsv; command output in TRIAL_DIR/logs/. No credential is ever
@@ -128,7 +132,8 @@ OPTIONS="${OPTIONS:-mailpit maildev smtp4dev}"
 RUNS="${RUNS:-3}"
 IDLE_WAIT="${IDLE_WAIT:-120}"
 BENCH_LOCK="${BENCH_LOCK:-}"
-readonly OPTIONS RUNS IDLE_WAIT BENCH_LOCK
+SIZES="${SIZES:-1}"
+readonly OPTIONS RUNS IDLE_WAIT BENCH_LOCK SIZES
 
 TRIAL_DIR=""
 LOGS=""
@@ -223,34 +228,50 @@ EOF
   fi
 }
 
-# "arch=digest" of each linux platform entry of an image index, sorted.
+# Registry metadata, with as few manifest requests as possible: Docker Hub
+# counts each platform manifest fetched as one pull (100 per 6 hours for an
+# anonymous address), and the -v form fetches every platform of an index.
+# One retry after 10 s; errors go to logs/registry.log.
+registry_get() {
+  local try out
+  for try in 1 2; do
+    if out=$(docker manifest inspect "$1" 2>>"$LOGS/registry.log"); then
+      printf '%s\n' "$out"
+      return 0
+    fi
+    log "registry: no answer for $1 (try $try)"
+    sleep 10
+  done
+  return 1
+}
+
+# "arch[/variant]=digest" of each linux entry of an index, sorted: one request.
 registry_platforms() {
-  docker manifest inspect -v "$1" 2>/dev/null | jq -r '
-    [if type == "array" then .[] else . end
-     | select((.Descriptor.platform.os // "linux") == "linux")
-     | "\(.Descriptor.platform.architecture)=\(.Descriptor.digest)"] | sort | join(",")' 2>/dev/null || true
+  registry_get "$1" | jq -r '
+    [.manifests[]? | select(.platform.os == "linux")
+     | "\(.platform.architecture)\(if .platform.variant then "/" + .platform.variant else "" end)=\(.digest)"]
+    | sort | join(",")' 2>>"$LOGS/registry.log" || true
 }
 
-# Compressed size (layers plus config) of the amd64 and arm64 entries.
-registry_sizes() {
-  docker manifest inspect -v "$1" 2>/dev/null | jq -r '
-    [if type == "array" then .[] else . end
-     | select((.Descriptor.platform.os // "linux") == "linux")
-     | (.SchemaV2Manifest // .OCIManifest) as $m
-     | "\(.Descriptor.platform.architecture)=\(([$m.layers[]?.size] | add) + ($m.config.size // 0))"]
-    | map(select(startswith("arm64=") or startswith("amd64="))) | join(",")' 2>/dev/null || true
+# Compressed size of one platform manifest: layers plus config.
+registry_size() {
+  registry_get "$1" | jq -r '([.layers[]?.size] | add) + (.config.size // 0)' 2>>"$LOGS/registry.log" || true
 }
 
-# The pinned index and the tag must both resolve to the pinned amd64 and arm64
-# manifests; then record the compressed sizes (M4).
+# The pinned index and the tag must both list the pinned amd64 and arm64
+# manifests; then, if SIZES=1, record their compressed sizes (M4). For the
+# probe image, the pinned index only has to resolve.
 verify_image() {
-  local opt=$1 ref=$2 amd=$3 arm=$4 tag pinned by_tag sizes entries
+  local opt=$1 ref=$2 amd=$3 arm=$4 tag repo pinned by_tag=- sizes=- entries
   tag=${ref%@*}
-  pinned="${tag%:*}@${ref#*@}"
-  by_tag=$(registry_platforms "$tag")
-  for entries in "$(registry_platforms "$pinned")" "$by_tag"; do
-    [ -n "$entries" ] || die "$opt: registry did not answer for $ref"
-    if [ -n "$amd" ]; then
+  repo=${tag%:*}
+  pinned="$repo@${ref#*@}"
+  entries=$(registry_platforms "$pinned")
+  [ -n "$entries" ] || die "$opt: registry did not answer for $pinned, see $LOGS/registry.log"
+  if [ -n "$amd" ]; then
+    by_tag=$(registry_platforms "$tag")
+    [ -n "$by_tag" ] || die "$opt: registry did not answer for $tag, see $LOGS/registry.log"
+    for entries in "$entries" "$by_tag"; do
       case ",$entries," in
         *",amd64=$amd,"*) ;;
         *) die "$opt: amd64 manifest of $ref is not $amd ($entries)" ;;
@@ -259,10 +280,12 @@ verify_image() {
         *",arm64=$arm,"*) ;;
         *) die "$opt: arm64 manifest of $ref is not $arm ($entries)" ;;
       esac
+    done
+    if [ "$SIZES" = 1 ]; then
+      sizes="amd64=$(registry_size "$repo@$amd"),arm64=$(registry_size "$repo@$arm")"
     fi
-  done
-  sizes=$(registry_sizes "$pinned")
-  tsv images.tsv "$opt" "$ref" "${sizes:--}" "$by_tag"
+  fi
+  tsv images.tsv "$opt" "$ref" "$sizes" "$by_tag"
 }
 
 verify_images() {

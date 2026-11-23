@@ -335,10 +335,15 @@ sur le moteur. Il n'emploie ni `docker run`, `start`, `restart`, `exec` ou
    le 2026-11-20 dans l'API de Docker Hub : `axllent/mailpit:v1.34.0`,
    `maildev/maildev:3.0.0`, `rnwood/smtp4dev:3.16.1`, et `busybox:1.37.0`,
    celle de BENCH-009, pour la sonde. Sous le verrou, avant la première
-   exécution, `docker manifest inspect` vérifie dans le registre, sans rien
-   tirer, que l'index figé et le tag pointent sur les mêmes manifests amd64
-   et arm64 que ceux relevés, puis relève les tailles compressées par
-   architecture (M4).
+   exécution, `docker manifest inspect` vérifie dans le registre, sans
+   télécharger de couche, que l'index figé et le tag pointent sur les mêmes
+   manifests amd64 et arm64 que ceux relevés, puis relève les tailles
+   compressées de ces deux manifests (M4). Le script lit chaque index en une
+   requête et ne demande que ces deux manifests de plate-forme : Docker Hub
+   compte un tirage par architecture demandée, dans une limite de 100 par
+   tranche de 6 heures pour une adresse anonyme [S65]. La forme `-v`, qui
+   les demande toutes, est la cause probable, non prouvée, de l'échec du
+   premier test de fumée (section 4.4).
 2. Profil « Restricted ». Le namespace `mail-test` porte les étiquettes
    `pod-security.kubernetes.io/enforce: restricted` et `warn: restricted`, à
    la version v1.36 du nœud [S61], [S64] : le serveur d'API refuse tout pod
@@ -437,6 +442,18 @@ Une ligne par mesure et par option. La médiane sert à la notation, l'écart
 (maximum moins minimum) montre la dispersion. Ajouter une colonne par
 exécution au-delà de trois.
 -->
+
+[BENCH] Premier test de fumée, lancé le 2026-11-21 à 23:27 UTC sous le
+verrou, après la série de BENCH-012. Le script n'a rien écrit pendant onze
+heures, entre son lancement et la fin des contrôles de démarrage (10:23 UTC
+le 2026-11-22) : veille du poste ou moteur indisponible, la cause n'est pas
+établie. La vérification des images a ensuite confirmé les manifests amd64
+et arm64 figés des trois options et relevé leurs tailles, puis échoué sur
+l'index de busybox après 15 minutes sans réponse du registre. Aucun cluster
+n'a été créé, aucune mesure prise. Corrections avant la reprise : requêtes
+au registre réduites (section 4.3, étape 1), erreurs du registre gardées
+dans `logs/registry.log`, et exécution sous `caffeinate -i`, qui empêche la
+mise en veille du poste pendant la série.
 
 [BENCH] Mesures lancées le AAAA-MM-JJ, sur la machine de la section 4.2.
 
@@ -826,6 +843,7 @@ pages web sont lues par WebFetch le même jour.
 | S62 | <https://github.com/axllent/mailpit/tree/develop/.github/workflows> | 2026-11-20 | Actions figées par SHA ; images construites pour linux/386, amd64 et arm64 ; aucune signature ni attestation trouvée | Oui |
 | S63 | <https://github.com/maildev/maildev/tree/main/.github/workflows> | 2026-11-20 | Deux workflows (`ci.yml`, `draft-release.yml`) ; aucune signature ni attestation trouvée | Oui |
 | S64 | <https://kubernetes.io/docs/concepts/security/pod-security-admission/> | 2026-11-21 | Étiquettes de namespace `pod-security.kubernetes.io/<MODE>: <LEVEL>` et `<MODE>-version: <VERSION>`, modes `enforce`, `audit`, `warn` | Oui |
+| S65 | <https://docs.docker.com/docker-hub/usage/> et <https://docs.docker.com/docker-hub/usage/pulls/> | 2026-11-21, 2026-11-23 | 100 tirages par tranche de 6 heures pour une adresse IPv4 anonyme ; une requête GET de manifest compte, pas une requête HEAD ; un tirage d'image multi-architecture compte un tirage par architecture | Oui |
 
 ## 10. Relectures
 
