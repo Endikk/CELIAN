@@ -11,7 +11,8 @@
 Le golden repo est le projet de référence que CELIAN générera plus tard. Il se
 construit à la main avant toute mise en template, pour que le blueprint reproduise
 un dépôt qui a déjà fonctionné. Les choix de technos sont faits : les ADR-001 à
-ADR-010, acceptés à la GATE 1 du 2026-11-20, les fixent. Cette spécification dit
+ADR-010, acceptés à la GATE 1 du 2026-11-20, puis les ADR-011 et ADR-012,
+acceptés par Lucas le 2026-11-21, les fixent. Cette spécification dit
 ce que le dépôt doit permettre et comment on le vérifie ; le plan dira comment le
 construire.
 
@@ -135,8 +136,10 @@ Après un premier démarrage avec réseau, la développeuse arrête puis relance
 l'environnement sans accès aux registres publics, dans un train ou derrière un
 réseau d'entreprise qui bloque Docker Hub.
 
-**Why this priority**: les ADR-004, 005 et 006 en font une condition (R-25), mais
-la solution dépend de BENCH-010, en cours.
+**Why this priority**: les ADR-004, 005 et 006 en font une condition (R-25).
+BENCH-010 a rendu son verdict, et l'ADR-011, accepté par Lucas le 2026-11-21,
+fixe le mécanisme. Le récit reste en P3 : le critère des 15 minutes compte le
+premier démarrage, qui demande le réseau de toute façon.
 
 **Independent Test**: premier démarrage avec réseau, arrêt, puis démarrage sans
 accès aux registres, jusqu'à l'état prêt.
@@ -144,6 +147,38 @@ accès aux registres, jusqu'à l'état prêt.
 **Acceptance Scenarios**:
 
 1. **Given** un premier démarrage réussi avec réseau, **When** l'environnement est relancé sans accès aux registres publics, **Then** il atteint l'état prêt.
+2. **Given** un premier démarrage réussi avec réseau, puis la suppression du cluster local, **When** la commande de démarrage est relancée sans accès aux registres publics, **Then** le cluster est recréé et l'environnement atteint l'état prêt.
+3. **Given** un environnement déjà démarré une fois avec réseau, **When** la développeuse lance la commande documentée qui retire du poste ce que garde le démarrage pour le redémarrage hors réseau, **Then** la commande dit, avant d'agir, que le démarrage suivant demandera le réseau, puis ne laisse rien de ce stockage sur le poste.
+
+---
+
+### User Story 7 - Connaître le contenu des images et bloquer les failles connues (Priority: P2)
+
+Un tech lead veut savoir de quoi sont faites les images de la stack, et refuser
+qu'une faille connue d'une gravité donnée arrive sur la branche principale. La
+CI produit le SBOM de chaque image qu'elle construit, c'est-à-dire la liste de
+ses composants et de leurs versions. Elle scanne toutes les images que la stack
+fait tourner, et bloque la fusion dès qu'une vulnérabilité atteint le seuil
+écrit dans le dépôt, sauf exception datée et justifiée.
+
+**Why this priority**: le PRD veut une CI qui produit un SBOM et scanne les
+images (US-009, ENF-03), et l'ADR-011 fait entrer l'image du miroir de registres
+dans ce scan (condition 8, R-34). Décision de Lucas du 2026-11-21. Le démarrage
+passe avant, mais une faille connue qui passe en silence partirait dans chaque
+projet généré.
+
+**Independent Test**: ouvrir une PR qui ajoute une image porteuse d'une
+vulnérabilité connue qui atteint le seuil et constater le refus ; ajouter une
+exception justifiée et datée et constater le passage ; passer sa date
+d'échéance et constater de nouveau le refus.
+
+**Acceptance Scenarios**:
+
+1. **Given** une PR conforme, **When** la CI construit les images, **Then** chaque image construite a son SBOM, gardé avec l'exécution de la CI.
+2. **Given** l'environnement démarré dans chaque profil livré, **When** le contrôle relève les images en marche, dans le cluster et sur le moteur du poste, **Then** chacune figure parmi les images scannées, et le contrôle échoue sur toute image absente du scan.
+3. **Given** une image porteuse d'une vulnérabilité qui atteint le seuil écrit dans le dépôt, sans exception, **When** la CI tourne, **Then** le scan échoue en nommant l'image et la vulnérabilité, et la PR ne peut pas fusionner.
+4. **Given** la même vulnérabilité couverte par une exception complète et non échue, **When** la CI tourne, **Then** le scan passe.
+5. **Given** une exception échue ou incomplète, **When** la CI tourne, **Then** le scan échoue de nouveau sur la vulnérabilité visée.
 
 ---
 
@@ -156,6 +191,7 @@ accès aux registres, jusqu'à l'état prêt.
 - Un environnement existe déjà : le démarrage le reprend, garde ses secrets et ses données, ou refuse en expliquant.
 - Le poste est en arm64 : même résultat qu'en amd64.
 - Un contexte de cluster cloud est configuré sur le poste : aucune commande du dépôt ne s'y adresse ; le démarrage local cible explicitement le cluster local (décision de la GATE 1 : aucun contexte GKE sur le poste avant la GATE 2).
+- La base de vulnérabilités du scan est injoignable : le scan échoue en le disant, sans passer au vert.
 
 ## Requirements *(mandatory)*
 
@@ -176,10 +212,13 @@ accès aux registres, jusqu'à l'état prêt.
 - **FR-013**: Le dépôt MUST porter les conventions Git du projet généré : messages de commit vérifiés en local et en CI, mêmes hooks en local et en CI, recherche de secrets sur tout l'historique, versions tenues automatiquement, mises à jour de dépendances par PR après 7 jours sauf correctif de sécurité, actions de CI figées par SHA.
 - **FR-014**: La CI MUST faire tourner les tests unitaires de l'API et du front, et un test de bout en bout qui démarre l'environnement sur un runner amd64 et appelle l'API et le front au travers de la gateway.
 - **FR-015**: La commande de démarrage MUST mesurer et afficher la durée de chaque étape et la durée totale ; la démo relève aussi le volume téléchargé au premier démarrage (R-04).
-- **FR-016**: Après un premier démarrage avec réseau, un démarrage sans accès aux registres publics MUST atteindre l'état prêt, selon la solution que retiendra BENCH-010 (R-25).
-- **FR-017**: La base de données locale MUST suivre le verdict de BENCH-011 ; tant qu'il n'est pas rendu, la couche locale de la base reste à écrire.
+- **FR-016**: Après un premier démarrage avec réseau, un démarrage sans accès aux registres publics MUST atteindre l'état prêt dans chaque profil livré, y compris quand le cluster local a été supprimé entre-temps (ADR-004, condition 7 ; R-25). La commande de démarrage MUST mettre en place elle-même ce qui le permet, sans autre étape (principe VII). Ce qu'elle garde sur le poste pour ce redémarrage MUST rester hors de l'arborescence du projet, et n'être jamais versionné ni publié. Une commande documentée MUST le retirer du poste, en disant avant d'agir que le démarrage suivant demandera le réseau. Le mécanisme est celui de l'ADR-011 (décision de Lucas du 2026-11-21) ; ses conditions vérifiables automatiquement MUST être contrôlées en CI, chacune par un contrôle qui la nomme en cas d'échec, dont un test qui joue ce redémarrage, cluster recréé, dans chaque profil livré (ADR-011, conditions 1 et 10 ; R-34).
+- **FR-017**: La base de données locale MUST tourner dans le cluster local sans aucun composant qui obtienne des droits sur l'API du cluster, sous la forme et les conditions de l'ADR-012 (décision de Lucas du 2026-11-21). Elle MUST avoir la même version majeure que la base de la cible cloud, et l'utilisateur de l'application MUST NOT y être superutilisateur, puisque la cible cloud n'en donne pas (ENF-02, R-35). Les conditions de l'ADR-012 vérifiables sans cloud MUST être contrôlées en CI, chacune par un contrôle qui la nomme en cas d'échec.
 - **FR-018**: Le README MUST lister les prérequis avec leur version, licence et date, citer d'abord un moteur de conteneurs libre (R-26), lister les écarts entre le PC et la cible cloud (ENF-02), et dire que les secrets locaux sont en clair dans le cluster (R-28).
 - **FR-019**: Les commandes du dépôt MUST cibler explicitement le cluster local ; aucune ne s'adresse à un cluster cloud pendant cette phase.
+- **FR-020**: La CI MUST produire, pour chaque image qu'elle construit, un SBOM lisible par machine, qui liste les composants de l'image et leurs versions, et le garder comme artefact de son exécution (US-009, ENF-03, Q9 ; décision de Lucas du 2026-11-21).
+- **FR-021**: La CI MUST rechercher les vulnérabilités connues dans chaque image de l'inventaire des images : celles qu'elle construit, celles que le cluster local tire d'un registre dans chaque profil livré, et celles que la commande de démarrage lance sur le moteur du poste, image du miroir de registres comprise (ADR-011, condition 8 ; R-34). Un contrôle MUST relever les images en marche après le démarrage de chaque profil livré, dans le cluster et sur le moteur du poste, y compris celles qu'aucun manifest du projet ne nomme, et échouer sur toute image absente du scan (décision de Lucas du 2026-11-21).
+- **FR-022**: Une vulnérabilité dont la gravité atteint ou dépasse le seuil écrit dans le dépôt MUST faire échouer le scan et bloquer la fusion de la PR, sauf exception écrite dans le dépôt. Chaque exception MUST nommer la vulnérabilité et l'image visées, et porter sa justification, sa date d'écriture et sa date d'échéance ; une exception échue ou incomplète MUST NOT être prise en compte (décision de Lucas du 2026-11-21).
 
 ### Key Entities *(include if feature involves data)*
 
@@ -188,6 +227,8 @@ accès aux registres, jusqu'à l'état prêt.
 - **Couche**: commune, locale ou cloud ; seule une couche de cible diffère d'une cible à l'autre.
 - **Secret local**: une valeur aléatoire propre à un environnement, jamais versionnée.
 - **Exemple de l'application**: une donnée écrite et relue dans la base, et mise en cache, que le front affiche.
+- **Inventaire des images**: toutes les images qu'un profil livré fait tourner : celles que la CI construit, celles que le cluster local tire d'un registre, et celles que la commande de démarrage lance sur le moteur du poste, dont l'image du nœud du cluster et celle du miroir de registres.
+- **Exception au scan**: une vulnérabilité admise malgré le seuil, écrite dans le dépôt avec l'image visée, sa justification, sa date d'écriture et sa date d'échéance.
 
 ## Success Criteria *(mandatory)*
 
@@ -201,13 +242,17 @@ accès aux registres, jusqu'à l'état prêt.
 - **SC-006**: Chaque PR de la phase passe la CI, et la cible cloud passe ses trois contrôles sans qu'aucune ressource payante ne soit créée : 0 euro dépensé.
 - **SC-007**: Les rendus des deux cibles ne diffèrent que dans la couche de cible : 0 écart dans la couche commune.
 - **SC-008**: Le profil lite tient sur un portable de 8 Gio de mémoire.
-- **SC-009**: Après un premier démarrage, un redémarrage sans accès aux registres publics atteint l'état prêt, si BENCH-010 retient une solution qui le permet.
+- **SC-009**: Après un premier démarrage avec réseau, un redémarrage sans accès aux registres publics, cluster local supprimé puis recréé, atteint l'état prêt dans chaque profil livré : 100 % des passages du test de FR-016 (ADR-011).
+- **SC-010**: Sur chaque exécution de la CI du golden repo : 0 image construite sans SBOM, 0 image en marche absente du scan, et 0 PR fusionnée avec une vulnérabilité qui atteint le seuil sans exception valide.
 
 ## Assumptions
 
-- Les choix de technos sont ceux des ADR-001 à ADR-010, acceptés à la GATE 1 du 2026-11-20 : cluster kind, Envoy Gateway, aucun outil de boucle, Secrets natifs, OpenTofu écrit à la main sur GKE Autopilot, Flux sur le PC et Config Sync sur GKE. Le plan les nomme ; cette spécification n'y revient pas.
+- Les choix de technos sont ceux des ADR-001 à ADR-010, acceptés à la GATE 1 du 2026-11-20, et des ADR-011 et ADR-012, acceptés par Lucas le 2026-11-21 : cluster kind, Envoy Gateway, aucun outil de boucle, Secrets natifs, OpenTofu écrit à la main sur GKE Autopilot, Flux sur le PC et Config Sync sur GKE, miroir de registres local lancé par la commande de démarrage, Postgres local sans opérateur. Le plan les nomme ; cette spécification n'y revient pas.
 - La stack applicative suit le brief (section 6) : une API .NET, un front React, Postgres et un cache Valkey. Chaque version est lue sur sa source officielle et datée avant usage (principe VIII).
-- La base locale dépend de BENCH-011, le démarrage hors réseau de BENCH-010, tous deux en cours le 2026-11-20.
+- BENCH-010 et BENCH-011 sont rendus. Le redémarrage hors réseau suit l'ADR-011, la base locale l'ADR-012. Leurs points non mesurés se vérifient sur le golden repo, et un échec suit la condition de révision de l'ADR concerné.
+- Comme dans BENCH-010, le test de FR-016 coupe les registres publics pour le seul cluster : le poste garde son réseau, et la construction de l'API et du front avec lui. Le redémarrage sur un poste réellement coupé du réseau, construction comprise, reste à vérifier ; l'ADR-011 confie cet essai à Lucas.
+- Le SBOM et le scan des images entrent dans cette spécification par décision de Lucas du 2026-11-21 (US-009, ENF-03). La signature des images et le contrôle d'admission qui refuse les images non signées (Kyverno) en restent hors : ils arrivent en phase 4. D'ici là, la dérogation datée de l'ADR-012 pour les images officielles de Docker n'a pas d'effet.
+- Le plan fixe l'outil de scan et celui du SBOM, le format du SBOM et la valeur du seuil de gravité. Le SBOM reste un artefact de la CI, sans serveur d'analyse (Q9). Q8, où publier et signer les images avant que GCP existe, n'est pas tranchée ; FR-020 n'en dépend pas.
 - Le débit visé du critère d'acceptation sera fixé par [FINOPS] après le golden repo (décision de la GATE 1).
 - Aucun déploiement réel sur la cible cloud pendant la phase 2 (décision de Lucas du 2026-11-20) ; le premier se fera avec son accord explicite et un budget, après sa lecture des grilles tarifaires.
 - Systèmes visés : macOS et Linux (Q5) ; Windows reste hors périmètre.
