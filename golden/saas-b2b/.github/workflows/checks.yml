@@ -51,7 +51,7 @@ jobs:
           bash tests/tools/install.sh "$RUNNER_TEMP/tools"
           echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
 
-      # Fails with a sentence that says so until steps 3 and 4 of spec 001
-      # deliver the unit tests of the API and the front.
+      # U01 in the build image of the API, with the runner's Docker; step 4 of
+      # spec 001 adds the tests of the front.
       - name: Run the unit tests
         run: task test

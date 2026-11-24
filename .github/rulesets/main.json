@@ -50,6 +50,9 @@
           },
           {
             "context": "e2e-lite"
+          },
+          {
+            "context": "unit"
           }
         ]
       }

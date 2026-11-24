@@ -14,6 +14,9 @@
 #   local/scripts/mirror.sh: docker container rm
 #   local/scripts/mirror.sh: docker run
 #   local/scripts/mirror.sh: docker volume rm
+# Outside the inventory: `task test` builds the test stage of the API image
+# with `docker build`, keeping the build cache and no image
+# (tests/unit/u01-api.sh).
 
 version: '3'
 
@@ -56,12 +59,12 @@ tasks:
 
   test:
     desc: Run the unit tests of the API, the front and the scan decision.
-    silent: true
     cmds:
-      - echo 'task test is not delivered yet. The unit tests arrive with steps 3 and 4 of spec 001.' >&2
-      - exit 1
+      # U01, in the build image of the API: Docker, and no .NET SDK.
+      - bash tests/unit/u01-api.sh
 
   test:e2e:
     desc: Run the tests on kind of the current profile; the cluster is created, then deleted.
     cmds:
       - task: local:test-e2e
+
