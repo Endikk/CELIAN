@@ -131,6 +131,9 @@ Contre la fuite d'identifiants (R-07), le même fichier :
   `security`, l'ajout ou la modification d'un remote, et un `git push` vers
   une URL.
 
+Pour que seul Lucas coche le tableau de bord de Renovate (ADR-016, condition
+5), le même fichier refuse `gh issue edit` et les appels `gh api` en `PATCH`.
+
 Le fichier ne porte plus aucune règle `ask` depuis le 24/11/2026, décision de
 Lucas : une règle `ask` demande confirmation même en mode bypass, et Lucas ne
 veut plus aucune demande d'autorisation. Les huit dernières sont devenues des
@@ -192,7 +195,9 @@ section 8 du brief), puis par un ADR (`docs/adr/ADR-XXX-sujet.md`).
 - release-please tient les versions et `CHANGELOG.md`. Renovate propose les
   mises à jour, une fois la version publiée depuis au moins 7 jours. Un
   correctif de sécurité passe sans ce délai si sa PR passe toute la matrice
-  (principe VI, constitution 1.2.0).
+  (principe VI, constitution 1.2.0). Renovate ne date pas les images de
+  ghcr.io, quay.io et mcr.microsoft.com : leurs mises à jour attendent que
+  Lucas les coche sur le tableau de bord, jamais un agent (ADR-016).
 - Réglages GitHub en code : `scripts/github/apply-settings.sh` (fusion en
   squash seule, permissions des workflows) et `.github/rulesets/main.json`. Le
   dépôt est public depuis le 15/11/2026, par décision de Lucas. Le script

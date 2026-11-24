@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-24 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, décision du 2026-11-24 sur la relecture [SECU] de la PR #46 ; validation de l'ADR en attente |
+| Décideur | Lucas : décision du 2026-11-24 sur la relecture [SECU] de la PR #46, puis réponses aux questions 1 à 4 le même jour ; acceptation par la fusion de la PR de cet ADR |
 | BENCH lié | aucun : la décision règle un outil déjà en place, Renovate, et ses variantes se comparent sur sa documentation, sans mesure |
 | Remplace | aucun |
 
@@ -107,11 +107,11 @@ L'exception de sécurité. Si le condensat ou la version corrige un avis publié
 
 La décision ne vaut qu'avec elles. Les conditions 1 et 2 reprennent les contrôles proposés par [SECU] ; les conditions 3 à 7 sont des ajouts de [ARCHI].
 
-1. Bloc contrôlé dans le golden repo. S23 n'accepte `timestamp-optional` et `dependencyDashboardApproval` que dans une entrée identique au bloc, description mise à part, et refuse toute autre entrée qui pose `dependencyDashboardApproval`. Tests : une entrée sans approbation, une entrée qui ajoute docker.io, une entrée avec un critère de plus, l'entrée conforme. Porteur : [DEV].
+1. Bloc contrôlé dans le golden repo. S23 exige une entrée identique au bloc, description mise à part, et n'accepte `timestamp-optional` et `dependencyDashboardApproval` que dans cette entrée. `dependencyDashboardApproval` est refusé partout ailleurs : autre entrée, tête du fichier, gestionnaire, type de mise à jour, `vulnerabilityAlerts`, groupe, tous lus par Renovate (`lib/config/options/scopes.ts`, 44.247.1). Tests : une entrée sans approbation, une entrée qui ajoute docker.io, une entrée avec un critère de plus, une seconde entrée qui pose l'approbation, l'entrée conforme. Porteur : [DEV]. L'exigence de présence et le refus hors de `packageRules` vont plus loin que la proposition de [SECU] : sans l'entrée, le fichier retombe dans le statu quo écarté plus haut (arbitrage du DSI du 2026-11-24).
 2. Le même contrôle pour CELIAN. Le `renovate.json` de CELIAN reçoit le bloc et les deux clés de tête qu'il n'écrivait pas. La partie « délai » de S23 s'applique aux deux fichiers, par un paquet commun ou une politique jumelle, lancée par un hook ou un job de la CI de CELIAN ; [DEV] choisit.
 3. Avant l'application Renovate. Les conditions 1 et 2 sont fusionnées avant que Lucas installe l'application sur le dépôt. Sans elles, les cinq images se figent dès le premier passage.
 4. Trois registres, pas un de plus. Un registre de plus élargit la dérogation et passe par un ADR. Le contrôle de la condition 10 de l'ADR-011 vérifie que chaque hôte de registre est docker.io ou l'un des trois, et le même contrôle lit les `depName` des variables `_IMAGE` des workflows. Un hôte inconnu fait échouer le contrôle, puisque Renovate ne daterait pas ses images. Premier cas à relever : les images de la forme libre de Config Sync, que le test de la condition 5 de l'ADR-010 fait tourner sur kind, et dont cet ADR n'a pas lu le registre.
-5. Lucas seul, vérifié. [SECU] vérifie que le jeton des agents ne peut pas modifier le ticket du tableau de bord. La page des permissions de GitHub range la modification d'un ticket (`PATCH /repos/{owner}/{repo}/issues/{issue_number}`) en écriture sous « Issues » et sous « Pull requests », avec la marque des permissions multiples. Le jeton que décrit `docs/securite/jeton-github.md` n'a pas « Issues », mais il a « Pull requests » en écriture, et que cette seule permission suffise n'est pas vérifié. L'ancien jeton classique reste par ailleurs à révoquer (`ROADMAP.md`, R-07). Proposition au DSI : des règles `deny` sur `gh issue edit` et sur les écritures de `gh api` vers `/issues/` dans `.claude/settings.json`, filtre de motifs qui ne remplace pas le jeton (`CLAUDE.md`, « Garde-fous »).
+5. Lucas seul, vérifié. [SECU] vérifie que le jeton des agents ne peut pas modifier le ticket du tableau de bord. La page des permissions de GitHub range la modification d'un ticket (`PATCH /repos/{owner}/{repo}/issues/{issue_number}`) en écriture sous « Issues » et sous « Pull requests », avec la marque des permissions multiples. Le jeton que décrit `docs/securite/jeton-github.md` n'a pas « Issues », mais il a « Pull requests » en écriture, et que cette seule permission suffise n'est pas vérifié. L'ancien jeton classique reste par ailleurs à révoquer (`ROADMAP.md`, R-07). Le DSI pose dans `.claude/settings.json`, dans la PR de cet ADR, des règles `deny` sur `gh issue edit` et sur les appels `gh api` en `PATCH`, filtre de motifs qui ne remplace pas le jeton (`CLAUDE.md`, « Garde-fous »).
 6. Trace. Chaque PR de Renovate sur ces registres porte en commentaire la date lue et sa source, ou l'avis corrigé. Un agent peut l'écrire ; Lucas la relit avant de fusionner. [SECU] relit ces traces à sa lecture mensuelle des avis.
 7. Projet généré. `golden/saas-b2b/renovate.json` porte le même bloc. Dans le projet généré, c'est une personne qui maintient le projet qui coche, jamais un agent, et le README dit comment lire la date pour chaque registre (question 1).
 
@@ -139,7 +139,7 @@ Restent hors de cette décision :
 
 ### Négatives
 
-- R-38, proposé au DSI : la mise à jour des images sans date dépend d'une personne. Une absence retarde un correctif, une date mal lue fait entrer une version de moins de 7 jours. L'image la plus exposée est l'image d'exécution de l'API, bâtie sur une base de mcr.microsoft.com, la seule des cinq qui part sur GKE.
+- R-38, ouvert au registre le 2026-11-24 : la mise à jour des images sans date dépend d'une personne. Une absence retarde un correctif, une date mal lue fait entrer une version de moins de 7 jours. L'image la plus exposée est l'image d'exécution de l'API, bâtie sur une base de mcr.microsoft.com, la seule des cinq qui part sur GKE.
 - Charge pour Lucas, non mesurée. Chaque condensat neuf demande une case : Keycloak republie ses tags (trois condensats en dix jours pour 26.8.2), mcr.microsoft.com modifie des tags après leur création (`10.0-alpine3.24-amd64` de `dotnet/sdk`, créé le 2026-07-01, modifié le 2026-11-10), et zot a publié treize releases en douze mois (ADR-011).
 - Aucune alerte automatique pour ces images. Un correctif ne se voit que par la lecture des avis de [SECU] ou par le scan des images (FR-021), qui ne voit que ce qu'il sait associer à un paquet (R-36).
 - « Lucas seul » ne tient aujourd'hui que par la règle. Le jeton des agents n'est pas vérifié (condition 5), et le ruleset de `main` demande zéro approbation (`required_approving_review_count: 0`) : rien ne réserve techniquement la fusion à Lucas.
@@ -153,15 +153,15 @@ La porte reste ouverte. La règle nomme des registres, pas une cible. La page de
 
 ### Ce que l'ADR change ailleurs
 
-Aucun de ces fichiers n'est modifié par cet ADR. Chaque changement passe par sa PR, chez son porteur.
+La PR de cet ADR modifie les deux `renovate.json`, S23 et ses tests, le contrôle de CELIAN ([DEV]), ainsi que `CLAUDE.md`, le registre des risques et `.claude/settings.json` (DSI). Les autres changements passent chacun par leur PR, chez leur porteur.
 
 - Les deux `renovate.json`, S23 et ses tests, le contrôle de CELIAN : [DEV], dans la PR de cet ADR.
 - ADR-011, condition 8. Il n'est pas remplacé. L'image de zot y est « suivie par Renovate, avec le délai de 7 jours et l'exception de sécurité » : sur ghcr.io, le délai se compte désormais par la lecture de Lucas, sous cet ADR. Renovate doit aussi trouver le condensat de zot dans le Taskfile ; la tâche qui l'écrit lui en donne le moyen, comme le rappelle l'en-tête de S23.
 - ADR-013, conditions 1 et 2. Il n'est pas remplacé. La vérification que la condition 2 confiait à [OPS], comment `minimumReleaseAge` date une montée de condensat, a sa réponse : sur quay.io, il ne la date pas, et sans cet ADR la montée attendrait sans fin. La liste fermée de la condition 1 change dans la PR que la case cochée fait ouvrir. Le paragraphe « Registre et miroir » laissait ouverte l'identité du condensat sur Docker Hub : elle est relevée pour 26.8.2 (section « Options considérées »).
 - ADR-010. Les images de Flux sur ghcr.io passent sous approbation ; sa condition 6, images par condensat, ne change pas.
-- Étape 3 du golden repo, images .NET. Les motifs par défaut du gestionnaire `dockerfile` font entrer les Dockerfile du golden repo dans le Renovate de CELIAN, point que le DSI doit trancher avant l'étape 3 (research, RS-17, point 2). Dans les deux cas, ces images tombent sous le bloc, présent dans les deux fichiers. La PR de l'étape 3 choisit des condensats dont la date, lue dans l'API de catalogue de mcr.microsoft.com, a au moins 7 jours, ou qui corrigent un avis publié, et écrit la date et sa source dans sa description. Chaque `FROM` porte le tag et le condensat (FR-008).
-- `CLAUDE.md`, section « Conventions », pour le DSI : la phrase sur Renovate et les 7 jours renvoie à cet ADR pour les trois registres.
-- Registre des risques, pour le DSI : R-38 ; la mitigation de R-34 qui dit l'image de zot « suivie par Renovate avec l'exception de sécurité » renvoie à cet ADR.
+- Étape 3 du golden repo, images .NET. Les motifs par défaut du gestionnaire `dockerfile` font entrer les Dockerfile du golden repo dans le Renovate de CELIAN. Le DSI les y garde (décision du 2026-11-24, research, RS-17, point 2, écrite par la PR de l'étape 3) : leurs images montent par des PR de CELIAN, comme les workflows et les hooks du golden repo. Elles tombent sous le bloc, présent dans les deux fichiers. La PR de l'étape 3 choisit des condensats dont la date, lue dans l'API de catalogue de mcr.microsoft.com, a au moins 7 jours, ou qui corrigent un avis publié, et écrit la date et sa source dans sa description. Chaque `FROM` porte le tag et le condensat (FR-008).
+- `CLAUDE.md`, sections « Conventions » et « Garde-fous », par le DSI dans la PR de cet ADR : la phrase sur Renovate et les 7 jours renvoie à cet ADR pour les trois registres ; les règles `deny` de la condition 5 y sont citées.
+- Registre des risques, par le DSI dans la PR de cet ADR : R-38 ; la mitigation de R-34 qui dit l'image de zot « suivie par Renovate avec l'exception de sécurité » renvoie à cet ADR.
 - README du projet généré, pour [DOC] : la case à cocher, qui la coche, comment lire la date.
 
 ### Suites
@@ -170,16 +170,21 @@ Aucun de ces fichiers n'est modifié par cet ADR. Chaque changement passe par sa
 - [SECU] : la condition 5 ; la relecture des traces (condition 6) ; la lecture mensuelle des avis de gitleaks, de Flux et des images .NET, en plus de ceux de zot et de Keycloak déjà suivis (R-34, R-36).
 - [OPS], avec [SECU] : la copie de Docker Hub au cas par cas (question 3).
 - [DOC] : le README du projet généré.
-- DSI : R-38 au registre ; les règles `deny` de la condition 5 ; la phrase de `CLAUDE.md` ; l'état des trois tickets à chaque relecture de la dérogation.
+- DSI : R-38 au registre, les règles `deny` de la condition 5 et la phrase de `CLAUDE.md`, faits dans la PR de cet ADR ; l'état des trois tickets à chaque relecture de la dérogation.
 - Lucas : installer l'application Renovate une fois les conditions 1 et 2 fusionnées.
 
-### Questions ouvertes
+### Questions tranchées
 
-1. Qui coche dans le projet généré, pour Lucas. Sa décision du 2026-11-24 vise CELIAN. Avis de [ARCHI] : le même bloc, coché par une personne qui maintient le projet, jamais un agent, et un README qui explique la lecture de la date registre par registre.
-2. Date de relecture de la dérogation, pour Lucas. Proposée au plus tard le 2027-02-24, à trois mois, et à la fermeture de chacun des trois tickets. Avis de [ARCHI] : cette date, parce que la PR 47353 est ouverte et qu'une levée partielle pour quay.io peut venir avant.
-3. Docker Hub pour gitleaks, pour [OPS], [SECU] puis Lucas. Le condensat est le même sur les deux registres, l'image ne sert qu'en CI et ne passe pas par le miroir : la tirer de `zricethezav/gitleaks` la sortirait de l'approbation et rendrait les 7 jours à Renovate. Avis de [ARCHI] : l'essayer dans une PR à part. Pour Keycloak, attendre l'étape 15, parce que le changement réécrit la dérogation de l'ADR-013.
-4. Rythme de lecture du tableau de bord, pour Lucas. Avis de [ARCHI] : une fois par semaine, et sur alerte de [SECU] pour un avis publié.
-5. Une source de dates propre au projet, pour [DEV] après le golden repo. quay.io et mcr.microsoft.com donnent une date par condensat dans leurs API. Que Renovate accepte une source maison qui porte cette date n'a pas été vérifié. Si c'est le cas, la dérogation pourrait se lever pour ces deux registres sans attendre les tickets.
+Lucas a répondu le 2026-11-24 aux quatre questions qui lui revenaient. Il a suivi l'avis d'[ARCHI] sur chacune.
+
+1. Qui coche dans le projet généré. Le même bloc, coché par une personne qui maintient le projet, jamais un agent. Le README du projet généré explique la lecture de la date registre par registre.
+2. Date de relecture de la dérogation. Au plus tard le 2027-02-24, et à la fermeture de chacun des trois tickets : la PR 47353 est ouverte, et une levée partielle pour quay.io peut venir avant.
+3. Docker Hub pour gitleaks. À essayer dans une PR à part, après vérification des condensats et du workflow de publication par [OPS] et [SECU]. Le condensat est le même sur les deux registres, et l'image ne sert qu'en CI sans passer par le miroir : la tirer de `zricethezav/gitleaks` la sortirait de l'approbation et rendrait les 7 jours à Renovate. Keycloak attend l'étape 15, parce que le changement réécrit la dérogation de l'ADR-013.
+4. Rythme de lecture du tableau de bord. Une fois par semaine, et sur alerte de [SECU] pour un avis publié.
+
+### Question ouverte
+
+Question 5. Une source de dates propre au projet, pour [DEV] après le golden repo. quay.io et mcr.microsoft.com donnent une date par condensat dans leurs API. Que Renovate accepte une source maison qui porte cette date n'a pas été vérifié. Si c'est le cas, la dérogation pourrait se lever pour ces deux registres sans attendre les tickets.
 
 ## Conformité à la constitution
 
@@ -218,7 +223,7 @@ La décision se rouvre dans ces cas :
 - [SECU] montre qu'un agent peut cocher et qu'aucune barrière technique ne tient (condition 5) : la décision se rouvre vers une barrière technique ;
 - une mise à jour de ces registres attend plus de 30 jours sur le tableau de bord, seuil proposé par [ARCHI] : la décision se rouvre vers la copie de Docker Hub ou une source de dates maison (questions 3 et 5) ;
 - un registre sans date de plus entre dans la stack (condition 4) ;
-- Lucas retient une autre voie pour le projet généré (question 1).
+- Lucas revient sur sa réponse à la question 1, pour le projet généré.
 
 La levée, registre par registre, ne rouvre pas la décision : la PR qui retire un hôte du filtre l'indique ici par un lien. Sans l'un de ces faits, relecture au plus tard le 2027-02-24.
 
