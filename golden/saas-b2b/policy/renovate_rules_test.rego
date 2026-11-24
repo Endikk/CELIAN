@@ -31,15 +31,55 @@ valid_rules := [postgres_rule, node_rule, kind_group, envoy_group]
 
 celian_presets := ["config:recommended", "helpers:pinGitHubActionDigests", "customManagers:githubActionsVersions"]
 
-config_with(package_rules) := {
+# The regex managers see tests/: the list of :ignoreModulesAndTests without
+# **/tests/**.
+regex_object := {
+	"description": "The installer of the test tools lives under tests/.",
+	"ignorePaths": [
+		"**/node_modules/**",
+		"**/bower_components/**",
+		"**/vendor/**",
+		"**/examples/**",
+		"**/__tests__/**",
+		"**/test/**",
+		"**/__fixtures__/**",
+	],
+}
+
+image_manager := {
+	"customType": "regex",
+	"description": "Container images in workflow env vars ending in _IMAGE",
+	"managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
+	"matchStrings": ["# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_IMAGE"],
+}
+
+# The manager of tests/tools/install.sh, next to platform.yaml.
+golden_tools_manager := {
+	"customType": "regex",
+	"description": "Task and conftest, in tests/tools/install.sh.",
+	"managerFilePatterns": ["/^tests/tools/install\\.sh$/"],
+	"matchStrings": [`# renovate: datasource=(?<datasource>github-releases) depName=(?<depName>\S+)\s+[A-Z0-9_]+_VERSION="(?<currentValue>[^"\s]+)"`],
+	"extractVersionTemplate": "^v(?<version>.*)$",
+	"versioningTemplate": "semver",
+}
+
+# The same manager in CELIAN, where platform.yaml is
+# golden/saas-b2b/platform.yaml.
+celian_tools_manager := with_value(golden_tools_manager, "managerFilePatterns", ["/^golden/saas-b2b/tests/tools/install\\.sh$/"])
+
+config_for(package_rules, managers) := {
 	"extends": celian_presets,
 	"minimumReleaseAge": "7 days",
 	"minimumReleaseAgeBehaviour": "timestamp-required",
 	"internalChecksFilter": "strict",
 	"vulnerabilityAlerts": {"minimumReleaseAge": null},
 	"osvVulnerabilityAlerts": true,
+	"regex": regex_object,
+	"customManagers": managers,
 	"packageRules": package_rules,
 }
+
+config_with(package_rules) := config_for(package_rules, [image_manager, golden_tools_manager])
 
 valid_config := config_with(valid_rules)
 
@@ -52,6 +92,12 @@ without(obj, key) := object.remove(obj, {key})
 checked(renovate, values) := [
 	{"path": "renovate.json", "contents": renovate},
 	{"path": "platform.yaml", "contents": values},
+]
+
+# The files as check-renovate.sh gives them in CELIAN.
+in_celian(renovate) := [
+	{"path": "renovate.json", "contents": renovate},
+	{"path": "golden/saas-b2b/platform.yaml", "contents": valid_platform},
 ]
 
 accepted(files) if {
@@ -71,34 +117,48 @@ test_s23_accepts_the_rules_of_the_constitution_and_the_adrs if {
 
 test_s23_accepts_files_under_a_folder if {
 	accepted([
-		{"path": "golden/saas-b2b/renovate.json", "contents": valid_config},
+		{"path": "golden/saas-b2b/renovate.json", "contents": config_for(valid_rules, [image_manager, celian_tools_manager])},
 		{"path": "golden/saas-b2b/platform.yaml", "contents": valid_platform},
 	])
 }
 
+test_s23_accepts_the_layout_of_celian if {
+	accepted(in_celian(config_for(valid_rules, [image_manager, celian_tools_manager])))
+}
+
+test_s23_accepts_a_description_on_each_entry if {
+	rules := [rule |
+		some entry in valid_rules
+		rule := with_value(entry, "description", "Why this entry exists.")
+	]
+	accepted(checked(config_with(rules), valid_platform))
+}
+
 # Both renovate.json files, the one of CELIAN and the one of the golden repo,
 # write these entries, then the entry of ADR-016. The two packages accept
-# that layout, and no image is caught both by the entry of ADR-016 and by an
-# entry of this package, so their order does not change what Renovate does.
+# that layout. The entries of this package set allowedVersions or groupName,
+# the entry of ADR-016 the delay behaviour and the approval: no key is set
+# twice, so their order does not change what Renovate does. No image is
+# caught by both sides either.
 
 test_s23_accepts_the_rules_before_the_entry_of_adr_016_in_both_packages if {
-    rules := array.concat(valid_rules, [renovate_delay.undated_registries_rule])
-    files := checked(config_with(rules), valid_platform)
-    accepted(files)
-    count(renovate_delay.deny) == 0 with input as files
+	rules := array.concat(valid_rules, [renovate_delay.undated_registries_rule])
+	files := checked(config_with(rules), valid_platform)
+	accepted(files)
+	count(renovate_delay.deny) == 0 with input as files
 }
 
 test_s23_the_entry_of_adr_016_catches_no_watched_image if {
-    every name in watched_names {
-        not catches(renovate_delay.undated_registries_rule, name)
-    }
+	every name in watched_names {
+		not catches(renovate_delay.undated_registries_rule, name)
+	}
 }
 
 test_s23_the_watched_entries_catch_no_image_of_adr_016 if {
-    undated_images := {"ghcr.io/gitleaks/gitleaks", "ghcr.io/project-zot/zot", "quay.io/keycloak/keycloak", "mcr.microsoft.com/dotnet/aspnet"}
-    every rule in valid_rules {
-        not catches_any(rule, undated_images)
-    }
+	undated_images := {"ghcr.io/gitleaks/gitleaks", "ghcr.io/project-zot/zot", "quay.io/keycloak/keycloak", "mcr.microsoft.com/dotnet/aspnet"}
+	every rule in valid_rules {
+		not catches_any(rule, undated_images)
+	}
 }
 
 test_s23_accepts_exact_names_and_case_insensitive_regexes if {
@@ -212,11 +272,116 @@ test_s23_rejects_envoy_gateway_without_a_group if {
 	denied_with(checked(renovate, valid_platform), "no packageRules entry puts the charts and the controller image of Envoy Gateway")
 }
 
+# Entries that look right but match nothing, or that a later entry undoes.
+# Renovate applies an entry only when all its criteria match.
+
+test_s23_rejects_a_postgres_entry_narrowed_to_some_files if {
+	rule := with_value(postgres_rule, "matchFileNames", ["nothing/**"])
+	renovate := config_with([rule, node_rule, kind_group, envoy_group])
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps the postgres image")
+}
+
+test_s23_rejects_a_postgres_entry_narrowed_to_a_current_version if {
+	rule := with_value(postgres_rule, "matchCurrentVersion", "/^17\\./")
+	renovate := config_with([rule, node_rule, kind_group, envoy_group])
+	denied_with(checked(renovate, valid_platform), "packageRules[0] sets allowedVersions; only the postgres and node entries set it")
+}
+
+test_s23_rejects_a_node_entry_narrowed_to_some_update_types if {
+	rule := with_value(node_rule, "matchUpdateTypes", ["patch"])
+	renovate := config_with([postgres_rule, rule, kind_group, envoy_group])
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps the kind node image")
+}
+
+test_s23_rejects_a_postgres_entry_with_a_negated_pattern if {
+	rule := with_value(postgres_rule, "matchPackageNames", ["/^(docker\\.io/)?(library/)?postgres$/", "!postgres"])
+	renovate := config_with([rule, node_rule, kind_group, envoy_group])
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps the postgres image")
+}
+
+test_s23_rejects_a_later_glob_entry_that_sets_allowed_versions if {
+	rule := {"matchPackageNames": ["*"], "allowedVersions": "/.*/"}
+	renovate := config_with(array.concat(valid_rules, [rule]))
+	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions; only the postgres and node entries set it")
+}
+
+test_s23_rejects_a_later_dep_name_entry_that_sets_allowed_versions if {
+	rule := {"matchDepNames": ["postgres"], "allowedVersions": "/^19\\./"}
+	renovate := config_with(array.concat(valid_rules, [rule]))
+	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions; only the postgres and node entries set it")
+}
+
+test_s23_rejects_a_kind_group_narrowed_to_some_files if {
+	group := with_value(kind_group, "matchFileNames", ["nothing/**"])
+	renovate := config_with([postgres_rule, node_rule, group, envoy_group])
+	denied_with(checked(renovate, valid_platform), "so that kind and its node image move in one PR")
+}
+
+test_s23_rejects_an_envoy_group_with_a_negated_pattern if {
+	group := with_value(envoy_group, "matchPackageNames", ["/^(docker\\.io/)?envoyproxy/gateway(-helm|-crds-helm)?$/", "!envoyproxy/gateway"])
+	renovate := config_with([postgres_rule, node_rule, kind_group, group])
+	denied_with(checked(renovate, valid_platform), "no packageRules entry puts the charts and the controller image of Envoy Gateway")
+}
+
+# The manager of tests/tools/install.sh, and the regex object that lets the
+# regex managers see tests/.
+
+test_s23_rejects_a_config_without_the_tools_manager if {
+	renovate := config_for(valid_rules, [image_manager])
+	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of tests/tools/install.sh")
+}
+
+test_s23_rejects_the_tools_manager_of_the_golden_repo_in_celian if {
+	denied_with(in_celian(valid_config), "no customManagers entry is the manager of golden/saas-b2b/tests/tools/install.sh")
+}
+
+test_s23_rejects_the_tools_manager_of_celian_in_the_golden_repo if {
+	renovate := config_for(valid_rules, [image_manager, celian_tools_manager])
+	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of tests/tools/install.sh")
+}
+
+test_s23_rejects_a_tools_manager_without_the_v_prefix if {
+	manager := without(golden_tools_manager, "extractVersionTemplate")
+	renovate := config_for(valid_rules, [image_manager, manager])
+	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of tests/tools/install.sh")
+}
+
+test_s23_rejects_a_tools_manager_for_another_datasource if {
+	manager := with_value(golden_tools_manager, "matchStrings", [`# renovate: datasource=(?<datasource>\S+) depName=(?<depName>\S+)\s+[A-Z0-9_]+_VERSION="(?<currentValue>[^"\s]+)"`])
+	renovate := config_for(valid_rules, [image_manager, manager])
+	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of tests/tools/install.sh")
+}
+
+test_s23_rejects_a_config_without_the_regex_object if {
+	denied_with(checked(without(valid_config, "regex"), valid_platform), "regex must hold ignorePaths and nothing else")
+}
+
+test_s23_rejects_regex_ignore_paths_that_still_hide_tests if {
+	paths := array.concat(regex_object.ignorePaths, ["**/tests/**"])
+	renovate := with_value(valid_config, "regex", with_value(regex_object, "ignorePaths", paths))
+	denied_with(checked(renovate, valid_platform), "regex must hold ignorePaths and nothing else")
+}
+
+test_s23_rejects_another_key_in_the_regex_object if {
+	renovate := with_value(valid_config, "regex", with_value(regex_object, "pinDigests", true))
+	denied_with(checked(renovate, valid_platform), "regex must hold ignorePaths and nothing else")
+}
+
+test_s23_rejects_a_regex_object_that_is_not_an_object if {
+	renovate := with_value(valid_config, "regex", "tests")
+	denied_with(checked(renovate, valid_platform), "regex must hold ignorePaths and nothing else")
+}
+
+test_s23_accepts_a_regex_object_without_a_description if {
+	renovate := with_value(valid_config, "regex", without(regex_object, "description"))
+	accepted(checked(renovate, valid_platform))
+}
+
 # Messages.
 
 test_s23_names_its_requirements_in_each_message if {
 	msgs := deny with input as checked({}, valid_platform)
-	count(msgs) == 4
+	count(msgs) == 6
 	every msg in msgs {
 		startswith(msg, "S23 (FR-013")
 	}
