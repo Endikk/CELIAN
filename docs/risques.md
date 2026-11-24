@@ -46,6 +46,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-36 | Failles connues sans paquet associé, invisibles aux scanners | Moyenne | Moyen | SECU, OPS | Ouvert |
 | R-37 | Parcours de connexion différent entre le PC et GCP | Moyenne | Moyen | DEV, QA | Ouvert |
 | R-38 | Mise à jour des images sans date suspendue à une personne | Moyenne | Moyen, fort pour l'image d'exécution de l'API | SECU, DSI | Ouvert |
+| R-40 | Scanner de secrets du projet généré en maintenance | Forte | Moyen | SECU, DSI | Ouvert |
 
 ## Détail
 
@@ -1051,3 +1052,23 @@ Mitigation :
 - relecture de la dérogation au plus tard le 2027-02-24, et à la fermeture de
   chacun des tickets Renovate 38656, 39064 et 38572 ; le risque se ferme avec
   le dernier registre levé.
+
+### R-40. Scanner de secrets du projet généré en maintenance
+
+Ouvert le 25/11/2026 par [OPS], en préparant le passage de gitleaks à Docker
+Hub (ADR-016, question 3). Depuis le 21/05/2026, le README de gitleaks
+annonce : « Gitleaks is feature complete… Future releases will be security
+patches only », et son auteur passe à Betterleaks. Le principe VI range
+« projet archivé ou en maintenance » parmi les critères éliminatoires.
+gitleaks n'a jamais été comparé : il est entré à la phase 0 pour la CI de
+CELIAN, puis a été recopié dans le golden repo (workflow `secrets.yml` et hook
+pre-commit). Chaque projet généré en hérite.
+
+Probabilité forte : le statut est annoncé par l'auteur. Impact moyen : les
+correctifs de sécurité continuent, mais les nouveaux formats de secrets ne
+seront plus détectés, et le principe IX repose sur ce scanner.
+
+Mitigation : gitleaks garde son rôle tant qu'un benchmark n'a pas tranché ;
+tiré de Docker Hub, il reçoit ses correctifs par Renovate avec le délai de
+7 jours ; un benchmark des scanners de secrets, à ouvrir sur décision de
+Lucas, avant la mise en template de la phase 3.
