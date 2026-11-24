@@ -1,0 +1,9 @@
+# Same rules as CELIAN, the generator of this project (spec 001, research
+# RS-18). This file lets the hooks run alike once the folder stands alone
+# (control X01); in CELIAN, it overrides the root file with the same rules.
+config:
+  default: true
+  # Prose is wrapped by hand; tables, URLs and code run longer.
+  MD013: false
+  # Templates (PR, issues) start with a level-2 heading on purpose.
+  MD041: false

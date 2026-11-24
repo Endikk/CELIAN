@@ -1,0 +1,77 @@
+# Local quality gates of the project. Install once per clone: pre-commit install
+# CI runs the same hooks (.github/workflows/ci.yml).
+# Hooks and frozen SHAs come from the configuration of CELIAN, the generator
+# of this project (spec 001, research RS-18). While this folder lives in
+# CELIAN, CELIAN's Renovate keeps them up to date (research RS-17).
+default_install_hook_types: [pre-commit, commit-msg]
+default_stages: [pre-commit]
+
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
+    hooks:
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+      - id: end-of-file-fixer
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      # Kubernetes manifests keep several documents per file (research RS-17).
+      - id: check-yaml
+        args: [--allow-multiple-documents]
+      - id: check-json
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: detect-private-key
+
+  # Secret detection on staged changes. CI also scans the full history.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e  # frozen: v8.30.1
+    hooks:
+      - id: gitleaks
+
+  - repo: https://github.com/DavidAnson/markdownlint-cli2
+    rev: c01a1853c19b175aee6a09f24e2ad9b748c485ad  # frozen: v0.24.1
+    hooks:
+      - id: markdownlint-cli2
+
+  - repo: https://github.com/rhysd/actionlint
+    rev: 914e7df21a07ef503a81201c76d2b11c789d3fca  # frozen: v1.7.12
+    hooks:
+      - id: actionlint
+
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: 745eface02aef23e168a8afb6b5737818efbea95  # frozen: v0.11.0.1
+    hooks:
+      - id: shellcheck
+
+  # Renovate configuration: renovate.json. Without --no-global, a file given
+  # by name is checked as the global configuration of a self-hosted Renovate
+  # (research RS-18).
+  - repo: https://github.com/renovatebot/pre-commit-hooks
+    rev: 7197a54c83a2e365f19561f0cb00dbd1e58018da  # frozen: 44.247.1
+    hooks:
+      - id: renovate-config-validator
+        args: [--strict, --no-global]
+
+  # Conventional Commits. Config: .commitlintrc.yaml
+  - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook
+    rev: 1f1ac45c93d1c2ce36b71330252c489a5f4f2724  # frozen: v9.27.0
+    hooks:
+      - id: commitlint
+        stages: [commit-msg]
+        # Upstream reads .git/COMMIT_EDITMSG only. Passing the file lets CI
+        # check a PR title with --commit-msg-filename.
+        pass_filenames: true
+        # Explicit language lets Renovate update additional_dependencies.
+        language: node
+        additional_dependencies: ["@commitlint/config-conventional@21.2.4"]
+
+  - repo: local
+    hooks:
+      - id: no-em-dash
+        name: forbid the em dash character (U+2014)
+        language: pygrep
+        entry: '\xe2\x80\x94'  # UTF-8 bytes of U+2014, keeps this file free of it
+        types: [text]
