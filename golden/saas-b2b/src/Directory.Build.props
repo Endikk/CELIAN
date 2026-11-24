@@ -1,0 +1,16 @@
+<!--
+  Settings shared by the API and its tests (spec 001, step 3). Versions and
+  dates of every package: research RS-18 of spec 001.
+-->
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- packages.lock.json holds the whole package graph; the image build
+         restores with locked mode, so a graph change fails until the lock
+         file is updated and committed (research RS-18). -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+</Project>
