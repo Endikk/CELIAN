@@ -192,6 +192,11 @@ amd64 ; le premier `task up` du profil standard, Mailpit non compté, passe à
 3,5 Gio de VM et 7,5 Gio de portable au repos. ENF-01 est à mettre à jour
 dans le PRD.
 
+BENCH-013 (2026-11-24, relecture [FINOPS]) : Mailpit ajoute 15,1 Mo en
+amd64 ; le premier `task up` du profil standard passe à 1 802,1 Mo, soit
+160,2 % du budget de 900 s à 10 Mbit/s et 16,0 Mbit/s au minimum. Le palier
+ne change pas : 3,5 Gio de VM et 7,5 Gio de portable au repos.
+
 Reste à mesurer : le temps à froid, la compilation de la vraie stack (front
 Vite compris) sur le golden repo, et la création du cluster sur un runner
 GitHub amd64.
@@ -962,6 +967,12 @@ Zitadel, dont 4 des 6 critiques, sans module Go. Un scanner qui associe les
 failles par paquet, comme Trivy pour les modules Go, ne les voit pas : le
 scan de FR-021 peut passer au vert sur une image qui porte une faille
 critique connue. Le même angle mort touchait déjà les moteurs GitOps (R-32).
+
+BENCH-013 (2026-11-24, relecture [SECU]) : l'angle mort touche aussi les
+avis publiés par un projet sans CVE ni entrée dans la base mondiale ; trois
+des 18 avis de Mailpit, dont le seul élevé du dépôt, n'y figurent pas, et
+Trivy ne les voit pas. La lecture mensuelle des avis du dépôt par [SECU]
+couvre Mailpit.
 
 Probabilité moyenne : le cas est fréquent dans les deux projets mesurés.
 Impact moyen : une faille connue partirait dans chaque projet généré.
