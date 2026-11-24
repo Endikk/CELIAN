@@ -1,0 +1,54 @@
+name: ci
+
+# Same hooks as on every machine, and the PR title checked by commitlint.
+# Principle X: no cloud credential, and no plan, apply or destroy; test S17
+# (tests/static/s17-workflows.sh) enforces both in every workflow.
+on:
+  pull_request:
+    # "edited" re-checks the title when it changes.
+    types: [opened, edited, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+env:
+  # renovate: datasource=pypi depName=pre-commit
+  PRE_COMMIT_VERSION: 4.7.0
+  # Same interpreter as the CI of CELIAN, the generator of this project, so
+  # the hooks build alike.
+  UV_PYTHON: "3.12"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pre-commit:
+    name: pre-commit
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
+      - name: Run every hook on every file
+        run: uvx "pre-commit@${PRE_COMMIT_VERSION}" run --all-files --show-diff-on-failure
+
+      # Squash merge turns the PR title into the commit on main.
+      - name: Check the PR title with commitlint
+        if: github.event_name == 'pull_request'
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          printf '%s\n' "$PR_TITLE" > "$RUNNER_TEMP/pr-title.txt"
+          uvx "pre-commit@${PRE_COMMIT_VERSION}" run commitlint --hook-stage commit-msg --commit-msg-filename "$RUNNER_TEMP/pr-title.txt"
