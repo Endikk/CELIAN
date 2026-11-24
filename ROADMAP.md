@@ -1,7 +1,7 @@
 # Feuille de route
 
-Mise à jour le 23/11/2026, à la fin de la session 4. Le DSI tient ce fichier
-à jour à la fin de chaque session.
+Mise à jour le 24/11/2026, pendant la session 5, reprise le même soir après
+la pause. Le DSI tient ce fichier à jour à la fin de chaque session.
 
 ## Phase en cours : 2, golden repo SaaS B2B
 
@@ -14,9 +14,9 @@ la main dans `golden/saas-b2b/`, spécifié par Spec Kit
 
 1. Spec Kit : spec 001 (PR #29, amendée par #39), plan (#37) et tâches (#40)
    fusionnés. Reste `/speckit-implement`, étape par étape.
-2. Prérequis : BENCH-010 et BENCH-011 rendus (ADR-011, ADR-012) ;
-   BENCH-012 (identité) mesuré, en relecture ; BENCH-013 (mail de test) en
-   mesure ; BENCH-014 (cache) ouvert, mesures à venir.
+2. Prérequis : BENCH-010 à BENCH-013 rendus, ADR-011 à ADR-014 acceptés.
+   BENCH-014 (cache) : lectures et test de fumée faits, série coupée par la
+   veille, à refaire sur secteur, puis ADR-015.
 3. Squelette : couches commune, `local` et `gcp`, Taskfile, kind, conventions
    Git.
 4. Application d'exemple : API .NET et front React.
@@ -82,6 +82,28 @@ standard, avec le temps et le volume mesurés (R-04).
   - moins de demandes de confirmation dans les réglages du projet (#33) ;
   - spec 001 alignée sur les ADR-011 et 012, SBOM et scan des images ajoutés
     (#39) ; plan (#37) et 160 tâches (#40).
+- Phase 2, fin de la session 4 (23 et 24/11/2026), PR #41 à #52 :
+  - feuille de route (#41) ;
+  - golden repo, étape 1 : squelette, CI `static` et `export` (#42) ; étape 2 :
+    conventions Git du projet généré (#46) ;
+  - BENCH-012 (#43) et ADR-013 (#44), accepté (#45) : Keycloak sur le PC,
+    Identity Platform sur GCP ; R-36 et R-37 ouverts ;
+  - BENCH-013 (#47) et ADR-014 (#49), accepté (#50) : Mailpit v1.34.0 sur le
+    PC, rien sur GCP ;
+  - redémarrage du nœud de BENCH-011 mesuré (#48), puis reporté dans
+    l'ADR-012 (#51) ;
+  - réglages du projet sans aucune règle `ask` (#52).
+- Pause du 24/11/2026 au soir, le temps de supprimer les dernières demandes
+  d'autorisation (#52). Reprise le même soir.
+- Phase 2, session 5 (24/11/2026), PR #51, #53 et #55 :
+  - ADR-016 et sa règle (#53) : les images de ghcr.io, quay.io et
+    mcr.microsoft.com, que Renovate ne sait pas dater, attendent l'approbation
+    de Lucas sur le tableau de bord ; dérogation datée au principe VI ;
+    `renovate.json` de CELIAN contrôlé en CI ; règles `deny` contre l'écriture
+    des agents dans le ticket du tableau de bord ; R-38 ouvert ;
+  - règles du golden repo appliquées par le Renovate de CELIAN, Task et
+    conftest suivis par Renovate, S23 durci après la relecture [SECU] (#55) ;
+  - étape 3 du golden repo, API .NET, en PR (#54) ; R-39 ouvert.
 
 ### Décisions de Lucas
 
@@ -129,6 +151,16 @@ standard, avec le temps et le volume mesurés (R-04).
 - 23/11/2026 : Trivy seul pour le SBOM et le scan (écart avec Syft, nommé par
   le PRD, à reporter dans le PRD) ; aucune image de cache provisoire, le
   profil lite attend l'ADR-015.
+- 24/11/2026 : Identity Platform sur `gcp`, élimination d'Authentik
+  maintenue, dérogation datée à ENF-03 pour Keycloak ; rien sur `gcp` pour le
+  mail de test, dérogation datée pour Mailpit ; ADR-013 et ADR-014 acceptés ;
+  plus aucune règle `ask` dans les réglages du projet (#52). Pour les images
+  sans date, approbation manuelle sur le tableau de bord de Renovate, cochée
+  par Lucas seul. Réponses aux questions de l'ADR-016 : dans le projet généré,
+  une personne qui maintient le projet coche, jamais un agent ; dérogation
+  relue au plus tard le 2027-02-24 ; tableau de bord lu chaque semaine et sur
+  alerte de [SECU] ; gitleaks tiré de Docker Hub, à essayer dans une PR à
+  part.
 
 ### Décisions du DSI pendant l'absence de Lucas, confirmées à la GATE 1
 
@@ -165,20 +197,37 @@ standard, avec le temps et le volume mesurés (R-04).
 - Pas de deuxième palier de volume pour BENCH-012 et BENCH-013, dont les
   seuils étaient déjà hachés ; il ira dans le gabarit pour les suivants.
 
+### Décisions du DSI, session 5
+
+- ADR-016 accepté dans sa propre PR, Lucas ayant tranché toutes ses
+  questions. S23 va plus loin que la proposition de [SECU] : l'entrée de
+  l'ADR est exigée, et l'approbation refusée hors de `packageRules`. Le
+  contrôle de CELIAN tourne dans le job `pre-commit`, déjà requis. Le job
+  `export` reste non requis jusqu'à l'étape 18.
+- RS-17, point 2 : les Dockerfile du golden repo restent suivis par le
+  Renovate de CELIAN.
+- Étape 3 : l'historique de `dotnet/versions` date un condensat passé de
+  mcr.microsoft.com ; codes 413 et 415 ajoutés au contrat de l'API ;
+  condensats .NET du 2026-11-18 gardés après la relecture [SECU]. NU1900
+  (données d'audit NuGet injoignables) reste un avertissement.
+- Étape 4 lancée sur la branche de l'étape 3 ; sa PR s'ouvre après la fusion
+  de #54.
+
 ### Prochain
 
-1. `/speckit-implement`, étape 1 du plan (squelette du golden repo et
-   vérifications de versions datées), sur feu vert de Lucas. Les étapes 2 à 5
-   suivent ; l'étape 13 (GCP sans Memorystore) peut démarrer à partir du
-   24/11/2026.
-2. BENCH-012 : relectures [SECU] et [FINOPS] en cours, puis arbitrage, ADR-013
-   et PR. Lucas tranche la voie GCP (Identity Platform ou Keycloak sur GKE)
-   et confirme ou non l'élimination d'Authentik.
-3. BENCH-013 : série en cours, puis relectures, arbitrage, ADR-014 et PR.
-4. BENCH-011 : mesure du redémarrage du nœud, après BENCH-013, puis une PR qui
-   complète le rapport.
-5. BENCH-014 : test de fumée et série sous le verrou, puis relectures,
-   arbitrage et ADR-015. Il débloque 57 tâches du golden repo.
+1. Étape 3, API .NET (#54) : fusion par Lucas à partir du 2026-11-25 à
+   17 h 45 UTC, quand les condensats .NET ont 7 jours.
+2. Étape 4, front React : en cours, PR après #54, puis relecture [SECU].
+   Ensuite l'étape 5 (contrôles préalables). L'étape 13 (GCP sans
+   Memorystore) est prête.
+3. BENCH-014 : série sur secteur, capot ouvert (script d'attente en place),
+   puis rapport, relectures [SECU] et [FINOPS], arbitrage et ADR-015. Il
+   débloque 57 tâches du golden repo.
+4. Suites de Renovate : gitleaks tiré de Docker Hub, dans une PR à part
+   vérifiée par [OPS] et [SECU] ; deux trous de S23 à fermer, une entrée `*`
+   avec `enabled: false` et kind séparé de son image de nœud par un glob.
+5. Image `aspnet` chiseled pour l'API, qui retirerait 97 paquets Ubuntu :
+   benchmark et ADR.
 6. Petite PR pour reporter dans le plan les écarts relevés par les tâches ;
    reporter dans le PRD le choix de Trivy pour le SBOM.
 
@@ -188,22 +237,25 @@ tant qu'il n'y a rien à publier.
 Points restés ouverts : ce que lit Flux sur le PC (ADR-010, question 1) ; la
 gouvernance de Task ; les identifiants de services tiers sur le PC ; la
 portée de la règle de fraîcheur du catalogue ; la fabrication du certificat
-HTTPS local ; le TLS vers la base et le cache.
+HTTPS local ; le TLS vers la base et le cache ; le propriétaire de la base
+`app` sur Cloud SQL et les privilèges de l'API (R-39, T107).
 
 Actions de Lucas, hors GATE :
 
 - lire les grilles tarifaires de GKE, Cloud SQL, Memorystore, du réseau et de
   Cloud Monitoring pour la région choisie, avant la GATE 2 (R-05) ;
-- terminer le changement de jeton `gh` et révoquer l'ancien jeton classique
-  (R-07) ;
-- installer l'app GitHub Renovate et Pixel Agents ;
+- révoquer l'ancien jeton classique et terminer le passage au jeton fin
+  (R-07), point de sécurité le plus urgent ; puis essayer le jeton des agents
+  sur un ticket de test, qui doit recevoir un 403 en REST et en GraphQL
+  (ADR-016, condition 3) ;
+- installer l'app GitHub Renovate, seulement après ces deux points ; Pixel
+  Agents ;
 - mettre Claude Code en 2.1.324 ou plus pour figer les marketplaces (R-02) ;
-- redémarrer la session Claude Code une fois les agents arrêtés, pour que le
-  retrait du blocage des lectures prenne effet (#33) ;
 - garder le Mac branché et le capot ouvert pendant les séries de mesure : la
-  veille capot fermé coupe les séries (BENCH-012) ;
-- lancer `scripts/github/apply-settings.sh` quand le scan des images entrera
-  dans les contrôles requis de `main` (étape 18 du plan).
+  veille capot fermé coupe les séries (BENCH-012, BENCH-014) ;
+- lancer `scripts/github/apply-settings.sh` après la fusion de #54, pour
+  rendre le job `unit` requis, puis quand le scan des images entrera dans les
+  contrôles requis de `main` (étape 18 du plan).
 
 ## Les six phases du MVP
 
