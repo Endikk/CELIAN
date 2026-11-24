@@ -12,7 +12,7 @@
 # replace the default list.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 problems=0
 
@@ -30,7 +30,7 @@ if [ "$#" -eq 0 ]; then
   if [ "$#" -eq 0 ]; then
     report "$root/.github/workflows" 0 "no workflow found: the generated project has no CI (FR-013)"
   fi
-  celian_root="$(cd "$root/../.." && pwd)"
+  celian_root="$(CDPATH='' cd -- "$root/../.." && pwd)"
   if [ "$celian_root/golden/saas-b2b" = "$root" ] && [ -d "$celian_root/.github/workflows" ]; then
     set -- "$@" "$celian_root/.github/workflows/golden-saas-b2b.yml"
   fi

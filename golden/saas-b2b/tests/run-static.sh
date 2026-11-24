@@ -36,7 +36,7 @@
 set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "$root"
+CDPATH='' cd -- "$root"
 
 control_dirs="tests/static local/tests/static gcp/tests/static local/tests/preflight"
 policy_dirs="policy local/policy gcp/policy"

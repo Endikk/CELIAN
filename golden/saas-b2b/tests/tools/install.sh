@@ -24,7 +24,7 @@ TASK_VERSION="3.54.0"
 # renovate: datasource=github-releases depName=open-policy-agent/conftest
 CONFTEST_VERSION="0.71.1"
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+here="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 sums_file="$here/SHA256SUMS"
 
 die() {
