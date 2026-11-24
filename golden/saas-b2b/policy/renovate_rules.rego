@@ -107,7 +107,7 @@ deny contains msg if {
 	msg := sprintf("%s: packageRules must be a list", [label])
 }
 
-# Delay of 7 days, and no way around it.
+# Delay of 7 days, written once, at the top.
 
 deny contains msg if {
 	is_object(config)
@@ -116,25 +116,37 @@ deny contains msg if {
 	msg := sprintf("%s: minimumReleaseAge must be \"7 days\", found %v", [label_delay, value])
 }
 
+# The keys that govern the delay are written out at the top and set nowhere
+# else, vulnerabilityAlerts aside. Renovate also reads them in packageRules,
+# in the config of a manager and in the object of an update type, such as
+# digest (research RS-18).
+delay_keys := {"minimumReleaseAge", "minimumReleaseAgeBehaviour", "internalChecksFilter"}
+
 deny contains msg if {
-	some i, rule in rules
-	is_object(rule)
-	value := rule.minimumReleaseAge
-	msg := sprintf("%s: packageRules[%v] sets its own minimumReleaseAge (%v); the 7-day delay holds for every update", [label_delay, i, value])
+	is_object(config)
+	walk(config, [path, _])
+	count(path) > 1
+	path[count(path) - 1] in delay_keys
+	path != ["vulnerabilityAlerts", "minimumReleaseAge"]
+	msg := sprintf("%s: %v sets the delay again; it is set once, at the top of renovate.json", [label_delay, path])
 }
 
 deny contains msg if {
 	is_object(config)
-	object.get(config, "minimumReleaseAgeBehaviour", "timestamp-required") != "timestamp-required"
-	msg := sprintf("%s: minimumReleaseAgeBehaviour must stay \"timestamp-required\", or a release without a date skips the delay", [label_delay])
+	object.get(config, "minimumReleaseAgeBehaviour", null) != "timestamp-required"
+	msg := sprintf("%s: minimumReleaseAgeBehaviour must be written out as \"timestamp-required\", or a release without a date skips the delay", [label_delay])
 }
 
 deny contains msg if {
-	some i, rule in rules
-	is_object(rule)
-	value := rule.minimumReleaseAgeBehaviour
-	value != "timestamp-required"
-	msg := sprintf("%s: packageRules[%v] sets minimumReleaseAgeBehaviour to %v, so a release without a date skips the delay", [label_delay, i, value])
+	is_object(config)
+	object.get(config, "internalChecksFilter", null) != "strict"
+	msg := sprintf("%s: internalChecksFilter must be written out as \"strict\"; none and flexible open a PR for a release still in the delay", [label_delay])
+}
+
+deny contains msg if {
+	is_object(config)
+	object.get(config, "extends", []) != ["config:recommended", "helpers:pinGitHubActionDigests", "customManagers:githubActionsVersions"]
+	msg := sprintf("%s: extends must hold exactly the three presets of CELIAN; another preset can change the delay", [label_delay])
 }
 
 # Security exception: written out, so that a change of default upstream

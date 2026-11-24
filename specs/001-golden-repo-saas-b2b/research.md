@@ -291,6 +291,7 @@ Fonctions relevées :
 - fichier de données : `--data` (`-d`), qui cherche récursivement les fichiers JSON et YAML des chemins donnés et les expose sous `data.` ;
 - tests Rego : `conftest verify --policy <dossier>` lance les règles `test_` ; `--namespace` ne garde que les résultats des paquets nommés, et le code de sortie est non nul si un test échoue ;
 - syntaxe : `--rego-version` vaut `v1` par défaut, pour `test` comme pour `verify` (règles en `deny contains msg if`). conftest v0.71.1 embarque OPA v1.21.1 (`go.mod`) ; `regex.match`, `is_string`, `object.get`, `sprintf` et `count` existent depuis OPA v0.23.0 au plus tard ;
+- parcours d'un document (lu le 2026-11-24 dans OPA v1.21.1) : `walk(x, [path, value])` rend chaque document imbriqué de `x`, avec `path`, la liste des clés et des indices qui y mènent, vide pour `x` lui-même. Une liste passée à `sprintf` par `%v` s'écrit `["packageRules", 4, "minimumReleaseAge"]`, chaînes entre guillemets. S23 s'en sert pour trouver une clé du délai à toute profondeur de `renovate.json` ;
 - `conftest test` lit le paquet `main` par défaut, `--namespace` en choisit un autre, et sort en 1 quand une politique échoue ;
 - piège : un nom de paquet qui n'existe pas ne lève aucune erreur, ni pour `test` ni pour `verify` (`runner/test.go` et `runner/verify.go` au tag), et le contrôle passe sans rien vérifier. Le lanceur des contrôles statiques (T004) refuse donc une politique dont le paquet ne porte pas le nom du fichier, ou qui n'a pas son fichier de tests dans le même paquet.
 
@@ -316,6 +317,10 @@ Effets : les politiques de `golden/saas-b2b/policy/` sont en Rego v1, un paquet 
 | <https://github.com/open-policy-agent/conftest/blob/v0.71.1/runner/test.go> | 2026-11-23 | Paquet nommé lu tel quel, sans contrôle d'existence |
 | <https://github.com/open-policy-agent/conftest/blob/v0.71.1/go.mod> | 2026-11-23 | OPA v1.21.1 |
 | <https://www.openpolicyagent.org/docs/policy-reference/builtins> | 2026-11-23 | Signatures et version d'apparition des fonctions citées |
+| <https://github.com/open-policy-agent/opa/blob/v1.21.1/v1/topdown/walk.go> | 2026-11-24 | Chemins rendus par `walk` : clés d'objet, indices de liste, chemin vide à la racine |
+| <https://github.com/open-policy-agent/opa/blob/v1.21.1/v1/ast/builtins.go> | 2026-11-24 | Déclaration de `walk`, relation qui rend `[path, value]` |
+| <https://github.com/open-policy-agent/opa/blob/v1.21.1/v1/topdown/strings.go> | 2026-11-24 | `sprintf` : une liste passée par `%v` s'écrit par sa forme texte |
+| <https://github.com/open-policy-agent/opa/blob/v1.21.1/v1/ast/term_appenders.go> | 2026-11-24 | Forme texte d'une liste : entre crochets, éléments séparés par une virgule et une espace, chaînes entre guillemets |
 
 ### Relevé du 2026-11-24 : validateur de Renovate et réglages repris de CELIAN (T093)
 
@@ -336,6 +341,7 @@ Où il tourne : dans `golden/saas-b2b/.pre-commit-config.yaml`, avec `--strict -
 Options de Renovate lues pour `renovate.json` (T098), dans `docs/usage/` et `lib/` au tag 44.247.1 :
 
 - `minimumReleaseAge` : l'attente se compte pour chaque version ; tant qu'elle court, la branche porte le contrôle en attente `renovate/stability-days`. Sans date de publication, `minimumReleaseAgeBehaviour`, à `timestamp-required` par défaut, retient la mise à jour ;
+- `internalChecksFilter`, à `strict` par défaut, saute la PR tant qu'aucune version n'a fini son délai. À `none`, Renovate prend la version la plus haute même en attente ; à `flexible`, il ouvre une PR sur la plus haute version en attente quand toutes le sont. `minimumReleaseAge`, `minimumReleaseAgeBehaviour` et `internalChecksFilter` se lisent en tête, dans une entrée de `packageRules`, dans la configuration d'un gestionnaire, dans `vulnerabilityAlerts` et dans l'objet d'un type de mise à jour comme `digest` (`lib/config/options/scopes.ts`). Depuis la relecture [SECU] de la PR #46, `renovate.json` écrit les deux défauts en tête, et S23 refuse ces trois clés partout ailleurs, sauf `vulnerabilityAlerts.minimumReleaseAge`. S23 exige aussi que `extends` porte exactement les trois presets de CELIAN ;
 - source `docker` : la date de publication n'existe que pour Docker Hub (champ `tag_last_pushed`), et un condensat reçoit la date de son tag. Une image de `ghcr.io` ou de `mcr.microsoft.com` n'a pas de date : avec le délai et ce réglage par défaut, Renovate ne la propose jamais, hors correctif de sécurité. Sont touchées l'image de gitleaks, celle de zot (ADR-011, condition 8) et les images .NET de l'étape 3. Les sources `github-tags`, `github-digest`, `pypi` et `npm` ont leur date ;
 - exception de sécurité : une mise à jour de sécurité attend le `minimumReleaseAge` de `vulnerabilityAlerts`, « null by default » (`key-concepts/minimum-release-age.md`), et le défaut de `vulnerabilityAlerts` le fixe à `null` (`lib/config/options/index.ts`). Les alertes de GitHub demandent le graphe de dépendances et les alertes Dependabot actifs dans les réglages du dépôt. `osvVulnerabilityAlerts` lit osv.dev pour les dépendances directes des sources `crate`, `go`, `hackage`, `hex`, `maven`, `npm`, `nuget`, `packagist`, `pypi` et `rubygems`, donc ni les images ni les actions ;
 - `packageRules.allowedVersions` borne les versions proposées ; une expression régulière s'écrit entre deux `/`, et l'option ne se combine pas avec `matchUpdateTypes` dans une même règle ;
@@ -380,10 +386,11 @@ Effets : `golden/saas-b2b/.pre-commit-config.yaml` (T097), `golden/saas-b2b/reno
 | <https://github.com/renovatebot/pre-commit-hooks/blob/7197a54c83a2e365f19561f0cb00dbd1e58018da/.pre-commit-hooks.yaml> | 2026-11-24 | Définition du hook ; tag 44.247.1 égal à ce SHA |
 | <https://github.com/renovatebot/pre-commit-hooks/blob/7197a54c83a2e365f19561f0cb00dbd1e58018da/README.md> | 2026-11-24 | Usage, mode `--strict` |
 | <https://docs.renovatebot.com/config-validation/> | 2026-11-24 | Commande, fichiers lus par défaut, `--strict`, `--no-global` |
-| <https://github.com/renovatebot/renovate/blob/44.247.1/docs/usage/configuration-options.md> | 2026-11-24 | `minimumReleaseAge`, `minimumReleaseAgeBehaviour`, `vulnerabilityAlerts`, `osvVulnerabilityAlerts`, `allowedVersions`, `matchPackageNames`, `groupName`, `groupSingleUpdates` |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/docs/usage/configuration-options.md> | 2026-11-24 | `minimumReleaseAge`, `minimumReleaseAgeBehaviour`, `internalChecksFilter`, `vulnerabilityAlerts`, `osvVulnerabilityAlerts`, `allowedVersions`, `matchPackageNames`, `groupName`, `groupSingleUpdates` |
 | <https://github.com/renovatebot/renovate/blob/44.247.1/docs/usage/key-concepts/minimum-release-age.md> | 2026-11-24 | Attente d'une mise à jour de sécurité ; date fournie par la source |
 | <https://github.com/renovatebot/renovate/blob/44.247.1/docs/usage/string-pattern-matching.md> | 2026-11-24 | Expressions régulières entre `/`, syntaxe re2, glob insensible à la casse |
-| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/options/index.ts> | 2026-11-24 | Défauts de `vulnerabilityAlerts`, `minimumReleaseAgeBehaviour` et `groupSingleUpdates` |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/options/index.ts> | 2026-11-24 | Défauts de `vulnerabilityAlerts`, `minimumReleaseAgeBehaviour`, `internalChecksFilter` et `groupSingleUpdates` ; portées des clés du délai |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/options/scopes.ts> | 2026-11-24 | Objets que couvre chaque portée : tête, `packageRules`, gestionnaires, `vulnerabilityAlerts`, types de mise à jour |
 | <https://github.com/renovatebot/renovate/blob/44.247.1/lib/modules/datasource/docker/index.ts> | 2026-11-24 | Date de publication sur Docker Hub seulement |
 | <https://github.com/renovatebot/renovate/tree/44.247.1/lib/modules/manager> | 2026-11-24 | Motifs par défaut de `kubernetes`, `pre-commit`, `github-actions`, `dockerfile` ; lecture des fichiers Kubernetes ; format `# frozen:` |
 | <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/presets/internal/custom-managers.preset.ts> | 2026-11-24 | Motif et expression du preset `githubActionsVersions` |
