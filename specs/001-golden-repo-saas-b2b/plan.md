@@ -1,8 +1,8 @@
 # Implementation Plan: golden repo SaaS B2B
 
-**Branch**: `docs/plan-golden-repo` (fonctionnalité `001-golden-repo-saas-b2b`) | **Date**: 2026-11-21, mis à jour le 2026-11-23 | **Spec**: [spec.md](spec.md)
+**Branch**: `docs/plan-golden-repo` (fonctionnalité `001-golden-repo-saas-b2b`) | **Date**: 2026-11-21, mis à jour le 2026-11-23 et le 2026-11-25 | **Spec**: [spec.md](spec.md)
 
-**Input**: spécification `specs/001-golden-repo-saas-b2b/spec.md`, amendée par la PR #39 (22 exigences, 10 critères de succès, 7 récits), et sa liste de contrôle [checklists/requirements.md](checklists/requirements.md). Mise à jour du 2026-11-23 : amendement de la spec et décisions du 2026-11-21 et du 2026-11-23, listées dans la section « Décisions prises depuis la première version ».
+**Input**: spécification `specs/001-golden-repo-saas-b2b/spec.md`, amendée par la PR #39 (22 exigences, 10 critères de succès, 7 récits), et sa liste de contrôle [checklists/requirements.md](checklists/requirements.md). Mise à jour du 2026-11-23 : amendement de la spec et décisions du 2026-11-21 et du 2026-11-23, listées dans la section « Décisions prises depuis la première version ». Mise à jour du 2026-11-25, par [ARCHI] : les écarts que les tâches ont relevés, chacun renvoyé à son numéro dans la section « Écarts relevés entre spec, plan et tâches » de [tasks.md](tasks.md).
 
 **Auteur** : [DEV], à la demande du DSI. Relecture du DSI puis de Lucas avant `/speckit-tasks`.
 
@@ -38,7 +38,7 @@ Aucune version n'est écrite de mémoire : chacune renvoie à un ADR, à un benc
 | `local` | Image de nœud | `kindest/node:v1.36.4` par condensat, mineure 1.36 | ADR-004, règle de version |
 | `local` | kubectl | 1.35 à 1.37 | ADR-006, condition 5 |
 | `local` | Task | à vérifier ; licence MIT, gouvernance non relevée | ADR-006, question 5 |
-| `local` | Moteur de conteneurs | Docker Engine 28.0.0 au moins sous Linux ; moteur libre cité d'abord (R-26) | ADR-011, condition 3 ; ADR-004, condition 8 |
+| `local` | Moteur de conteneurs | Docker Engine 28.0.0 au moins sous Linux ; moteur libre cité d'abord (R-26). Podman répond derrière `docker` avec sa propre version, que cette règle refuserait sous Linux ; rien n'est câblé pour lui (écart 16 de tasks.md) | ADR-011, condition 3 ; ADR-004, condition 8 ; research RS-08 |
 | `local` | CRD Gateway API | v1.7.0, `standard-install.yaml`, SHA-256 dans l'ADR-005 | ADR-005 |
 | `local` | Envoy Gateway | 1.10.0, charts et images par SHA-256 et condensat | ADR-005, tableau « Versions et condensats » |
 | `local` | Miroir | zot 2.1.23 par condensat | ADR-011, condition 8 |
@@ -56,7 +56,7 @@ Aucune version n'est écrite de mémoire : chacune renvoie à un ADR, à un benc
 
 **Storage** : PostgreSQL 18, base `app` (StatefulSet d'une réplique sur `local`, Cloud SQL sur `gcp`) ; cache sans persistance sur `local` ; volume nommé du moteur pour le miroir, hors de l'arborescence du projet.
 
-**Testing** : tests unitaires .NET et du front (frameworks à vérifier, research RS-18) ; scripts bash sur kind, passés à shellcheck ; politiques Rego exécutées par conftest (version à vérifier), dont la décision du scan, testée sur des rapports d'exemple ; validation de schéma par kubeconform, nommé par US-007, outil à confirmer avec [QA] ; `tofu validate` ; Trivy sur le HCL, pour le SBOM des images construites et pour le scan de l'inventaire des images (research RS-22 à RS-24).
+**Testing** : tests unitaires .NET et du front (frameworks à vérifier, research RS-18), lancés dans l'image de construction, puisque le poste n'a ni SDK .NET ni Node.js (research RS-06 ; écart 11 de tasks.md, confirmé par le DSI en session 4 et appliqué aux étapes 3 et 4) ; scripts bash sur kind, passés à shellcheck ; politiques Rego exécutées par conftest (version à vérifier), dont la décision du scan, testée sur des rapports d'exemple ; validation de schéma par kubeconform, nommé par US-007, outil à confirmer avec [QA] ; `tofu validate` ; Trivy sur le HCL, pour le SBOM des images construites et pour le scan de l'inventaire des images (research RS-22 à RS-24).
 
 **Target Platform** : postes macOS et Linux (Q5), arm64 et amd64 ; CI sur runner GitHub `ubuntu-latest` amd64, dans le dépôt de CELIAN ; GKE Autopilot pour le code GCP, validé et jamais déployé en phase 2.
 
@@ -111,7 +111,7 @@ specs/001-golden-repo-saas-b2b/
 │   ├── task-cli.md      # commandes du Taskfile
 │   ├── secrets.md       # noms et clés des Secrets, par cible
 │   └── layers.md        # couches, composition, parité, routage
-└── tasks.md             # phase 2 : /speckit-tasks, pas encore écrit
+└── tasks.md             # phase 2 : /speckit-tasks, 160 tâches (PR #40)
 ```
 
 ### Source Code (repository root)
@@ -144,7 +144,7 @@ golden/saas-b2b/
 ├── security/                     commune : seuil du scan, exceptions des images construites (noms provisoires)
 ├── tests/                        commune : tests statiques sans cluster, parité des rendus, rapports d'exemple du scan
 ├── local/                        couche local
-│   ├── tasks/                    Taskfiles inclus : up, down, app, reload, mirror, secrets, check
+│   ├── tasks/                    local.yml, seul Taskfile de la couche depuis T009 : up, down, app, reload, mirror, secrets, check (écart 13 de tasks.md)
 │   ├── scripts/                  scripts bash appelés par les tâches
 │   ├── kind/cluster.yaml         configuration du cluster
 │   ├── mirror/                   liste des registres, configuration zot, certs.d dérivés
@@ -176,7 +176,7 @@ Côté CELIAN, hors du golden repo : un workflow racine `.github/workflows/golde
 
 Ordre de l'ADR-006, complété par l'ADR-011 et l'ADR-012. Le contrat complet, entrées, sorties et cas d'échec, est dans [contracts/task-cli.md](contracts/task-cli.md).
 
-1. Contrôles préalables, avant toute création : version exacte de kind, mineure de kubectl, Docker Engine sous Linux, moteur joignable, mémoire déclarée par le moteur qui fixe le profil, ports de l'hôte libres.
+1. Contrôles préalables, avant toute création, dans l'ordre du contrat task-cli : moteur joignable, version exacte de kind, mineure de kubectl, Docker Engine sous Linux, mémoire déclarée par le moteur qui fixe le profil, ports de l'hôte libres (écart 1 de tasks.md). Le moteur n'est accepté que derrière un socket unix local, chaque appel à `docker` est borné à 10 s, et seul « Connection refused » vaut port libre (écart 18 de tasks.md, research RS-08).
 2. Cluster kind créé depuis `local/kind/cluster.yaml`, ou réutilisé s'il existe. Kubeconfig du projet écrit hors du dépôt ; chaque commande vise ce fichier et le contexte du cluster local (FR-019).
 3. Miroir zot : retrait contrôlé d'un ancien conteneur du projet, puis lancement sur le réseau `kind`, sans port publié, configuration montée en lecture seule, volume du projet ; attente de sa réponse.
 4. Plate-forme de base : SHA-256 de chaque fichier de `local/vendor/` vérifié, puis CRD Gateway API, Envoy Gateway, EnvoyProxy et GatewayClass. En profil standard, Flux, liaison suspendue (research RS-14).
@@ -198,7 +198,7 @@ Une ressource « note » : `POST /api/notes` écrit en base, `GET /api/notes/{id
 
 ### Profils
 
-`task up` lit la mémoire que déclare le moteur (ADR-004, condition 6). Au-dessus du seuil du standard, il prend le standard ; entre les deux seuils, le lite, et il le dit ; sous le seuil du lite, il refuse en donnant la mémoire qui manque. La variable `PROFILE` force un profil, sous les mêmes contrôles. Seuils de départ : VM de 2,0 Gio pour le lite et 2,5 Gio pour le standard hors Keycloak et Mailpit (ADR-011, ADR-012), recalculés sur la première mesure du golden repo, à l'entrée du cache et à celle de chaque couche du standard. Jusqu'à l'étape 12, le standard est reconnu et refusé par un message clair.
+`task up` lit la mémoire que déclare le moteur (ADR-004, condition 6). Au-dessus du seuil du standard, il prend le standard ; entre les deux seuils, le lite, et il le dit ; sous le seuil du lite, il refuse en donnant la mémoire qui manque. La variable `PROFILE` force un profil, sous les mêmes contrôles. Seuils de départ : VM de 2,0 Gio pour le lite et 2,5 Gio pour le standard hors Keycloak et Mailpit (ADR-011, ADR-012), recalculés sur la première mesure du golden repo, à l'entrée du cache et à celle de chaque couche du standard. Jusqu'à l'étape 12, le standard est reconnu et refusé par un message clair. Un moteur qui déclare au moins 2560 Mio, poste de mesure et runners de CI compris, arrête donc `task up` lancé sans `PROFILE` : les étapes 6 à 9 et le job `e2e-lite` passent `PROFILE=lite` (écart 14 de tasks.md). Les contrôles comparent la mémoire déclarée à 2048 et 2560 Mio, et ce que déclare une VM réglée à 2,0 Gio n'est pas mesuré : T081 recale les seuils, ceux du README compris (écart 15 de tasks.md).
 
 ### Secrets
 
@@ -239,15 +239,15 @@ Une étape tient en une PR, deux au plus. Chaque PR commence par ses tests en ro
 | 3 | API d'exemple | `feat(golden): add the example .NET API` | Santé, notes, accès Npgsql, accès au cache derrière une interface (client concret à l'étape 19), Dockerfile par condensat | U01, S20 (API), S01 (Dockerfile) | 1 |
 | 4 | Front d'exemple | `feat(golden): add the example React front` | Page des notes, appels relatifs à `/api`, tests, Dockerfile | U02, S20 (front), S01 (Dockerfile) | 1 |
 | 5 | Contrôles préalables | `feat(golden): add the task up preflight checks` | Versions, moteur, mémoire et profil, ports, kubeconfig leurre ; tests par binaires simulés | P01 à P05 | 1 |
-| 6 | Cluster et miroir | `feat(golden): create the kind cluster and the zot mirror` | Configuration kind, kubeconfig du projet, contexte explicite, miroir, `task down`, `task mirror:purge` ; premier job sur kind | S05, S13, S19, P06, E19, E22, E24 | 5 |
-| 7 | Plate-forme de base | `feat(golden): install Gateway API and Envoy Gateway` | Fichiers vendorés et SHA256SUMS, charts rendus, EnvoyProxy, GatewayClass, ports, Gateway et HTTPRoute communes | S02, S06, S22, E03 | 6 |
+| 6 | Cluster et miroir | `feat(golden): create the kind cluster and the zot mirror` | Configuration kind, kubeconfig du projet, contexte explicite, miroir, `task down`, `task mirror:purge` ; premier job sur kind ; commentaire `# renovate:` sur `KIND_VERSION` de `local/scripts/lib/preflight-checks.sh`, dans le groupe de kind et de son image de nœud (écart 17 de tasks.md) | S05, S13, S19, P06, E19, E22, E24 | 5 |
+| 7 | Plate-forme de base | `feat(golden): install Gateway API and Envoy Gateway` | Fichiers vendorés et SHA256SUMS, charts rendus, EnvoyProxy, GatewayClass, ports, Gateway et HTTPRoute communes ; écouteur HTTPS et `gateway-tls` en seconde PR (écart 3 de tasks.md) | S02, S06, S22, E03 ; E03, E04 et E05 étendus à l'écouteur HTTPS (seconde PR) | 6 pour la première PR ; 8 et research RS-10 pour la seconde |
 | 8 | Secrets et données | `feat(golden): add local secrets and Postgres` | Création des Secrets `db-auth` et `db-superuser`, StatefulSet Postgres et script d'init ; la partie cache passe à l'étape 19 | S03, S04, S12, E04, E05, E06, E12, E21 | 7 |
 | 9 | Profil lite de bout en bout | `feat(golden): start the lite profile end to end` | Construction et chargement, application, attente de « prêt », adresses, durées, `task reload`, `task app:down` | E01, E02, E07, E08, E09, E11, E17, E18, S01 (rendus), S07 (partie locale) | 3, 4, 8, 19 |
-| 10 | Hors réseau du profil lite | `test(golden): restart the lite profile without registries` | T2 en `pull` seul, purge et remplissage, essai sous UID non root | E10 (lite), E20, E23 | 9 |
+| 10 | Hors réseau du profil lite | `test(golden): restart the lite profile without registries` | T2 en `pull` seul, purge et remplissage, essai sous UID non root, premier démarrage sans registre | E10 (lite), E20, E23, E28 | 9 |
 | 11 | README | `docs(golden): write the golden repo README` | Prérequis datés, moteur libre d'abord, écarts PC et cloud, secrets en clair, mémoire par profil | S18 | 9 |
-| 12 | Profil standard : Flux | `feat(golden): add Flux to the standard profile` | `install.yaml` vendoré, quatre contrôleurs, options de verrouillage, liaison suspendue ; ghcr.io par le miroir ; images de Flux dans l'inventaire du scan | S09, S10, S28, E14, E15, E10 (standard), E25 à E27 (standard) | 10, 18 |
+| 12 | Profil standard : Flux | `feat(golden): add Flux to the standard profile` | `install.yaml` vendoré, quatre contrôleurs, options de verrouillage, liaison suspendue ; ghcr.io par le miroir ; images de Flux dans l'inventaire du scan | S09, S10 (partie Flux), S28, E14, E15, E10 (standard), E25 à E27 (standard) | 10, 18 |
 | 13 | Couche GCP : OpenTofu | `feat(golden): write the GCP layer in OpenTofu` | Racine sans Memorystore (étape 20), verrou multi-plateformes, politiques conftest, Trivy | S14, S15, S17 | 1 ; provider à partir du 2026-11-24 |
-| 14 | Couche GCP : manifests | `feat(golden): add the GCP Kubernetes layer` | SecretSync de `db-auth`, RootSync, classe de Gateway, `requests`, règle d'admission ; parité complète ; Config Sync libre sur kind | S07, S08, S16, E16 | 9, 13 |
+| 14 | Couche GCP : manifests | `feat(golden): add the GCP Kubernetes layer` | SecretSync de `db-auth`, RootSync, classe de Gateway, `requests`, règle d'admission ; parité complète ; Config Sync libre sur kind | S07, S08, S16, E16 ; partie `RootSync` de S10 (écart 5 de tasks.md) | 9, 13 |
 | 15 | Keycloak | `feat(golden): add Keycloak to the standard profile` | Couche, Secrets, registre au miroir, images à l'inventaire, T2 standard, seuil mémoire | E10 (standard), E14, E25 à E27 (standard), contrôles fixés par l'ADR-013 | 12, ADR-013 |
 | 16 | Mailpit | `feat(golden): add Mailpit to the standard profile` | Idem | E10 (standard), E14, E25 à E27 (standard), contrôles fixés par l'ADR-014 | 12, ADR-014 |
 | 17 | Mesures et démo | `docs(golden): measure the first standard start` | Protocole et rapport de démo, temps et volume, mémoire du lite | D01 à D05 | 11, 14, 15, 16, 18, 19, 20 |
@@ -271,7 +271,7 @@ Préfixes : S statique, sans cluster, en pre-commit ou en CI ; P contrôle préa
 | S02 | Chaque fichier de `local/vendor/` a son SHA-256 dans `SHA256SUMS`, vérifié avant application ; aucune application depuis une URL |
 | S03 | Aucun objet `Secret` ni champ `secretGenerator` versionné |
 | S04 | Taskfile : tâches qui manipulent un secret en `silent: true`, sans heredoc, sans `kubectl apply` de Secret, sans valeur dans une variable ; inventaire des commandes qui créent ou retirent un conteneur, un réseau ou un volume ; construction, chargement et application définis une seule fois |
-| S05 | Configuration kind : `apiServerAddress` et chaque `listenAddress` à 127.0.0.1, image de nœud par condensat, mineure égale à `platform.yaml` |
+| S05 | Configuration kind : `apiServerAddress` et chaque `listenAddress` à 127.0.0.1, image de nœud par condensat, mineure égale à `platform.yaml` ; ports de l'hôte identiques dans `local/kind/cluster.yaml` et dans les tâches (écart 10 de tasks.md) |
 | S06 | Couche commune rendue : aucun groupe `gateway.envoyproxy.io`, `configsync.gke.io`, `*.toolkit.fluxcd.io`, `argoproj.io`, aucune annotation ni étiquette de moteur, aucune chaîne `${`, aucun objet propre à un fournisseur |
 | S07 | Parité : la couche commune rendue seule se retrouve à l'identique dans le rendu `local` et dans le rendu `gcp`, aux seuls champs permis près (`gatewayClassName`) ; une seule Gateway ; mêmes références aux Secrets et à `app-config` |
 | S08 | Couche commune valide contre le schéma de la version de Gateway API que sert GKE ; manifests valides contre leurs schémas |
@@ -296,9 +296,9 @@ Préfixes : S statique, sans cluster, en pre-commit ou en CI ; P contrôle préa
 | S27 | Fichiers d'exceptions : chaque entrée nomme la vulnérabilité et l'image, porte sa justification, sa date d'écriture et sa date d'échéance ; les entrées échues ou incomplètes sont listées en sortie |
 | S28 | Flux en profil standard : `spec.suspend: true` sur chaque `Kustomization` de `local/gitops/`, et aucun objet source livré, tant que la question 1 de l'ADR-010 reste ouverte (research RS-14) |
 | P01 | kind d'une autre version, kubectl hors de la plage, Docker Engine sous 28.0.0 sur Linux : refus avec la version attendue |
-| P02 | Moteur absent ou arrêté : message clair, rien de créé |
+| P02 | Moteur absent ou arrêté : message clair, rien de créé ; contexte Docker hors d'un socket unix local, et moteur muet au-delà de 10 s, refusés (écart 18 de tasks.md) |
 | P03 | Mémoire déclarée : profil choisi et annoncé ; sous le lite, refus avec la mémoire qui manque |
-| P04 | Port de l'hôte déjà pris : arrêt avant toute création, port nommé |
+| P04 | Port de l'hôte déjà pris : arrêt avant toute création, port nommé ; sonde indécidable refusée ; vraie sonde jouée sur le port 1, fermé (écart 18 de tasks.md) |
 | P05 | Kubeconfig de l'utilisateur pointé sur un autre contexte : ignoré |
 | P06 | Le miroir ne démarre pas sans la configuration du projet |
 | U01 | API : santé, prêt, validation des notes, lecture par le cache et provenance, réponses d'erreur |
@@ -331,6 +331,7 @@ Préfixes : S statique, sans cluster, en pre-commit ou en CI ; P contrôle préa
 | E25 | Après `task up` dans chaque profil livré : l'image résolue de chaque conteneur en marche, dans le cluster (conteneurs d'initialisation compris) et sur le moteur, figure dans l'inventaire scanné ; échec qui nomme toute image absente |
 | E26 | Un SBOM CycloneDX JSON par image construite, non vide, gardé en artefact de l'exécution ; échec qui nomme l'image sans SBOM |
 | E27 | Scan de l'inventaire du profil, base téléchargée dans l'exécution : échec qui nomme l'image et la vulnérabilité au seuil sans exception valide ; avec une source de base qui ne résout pas, échec qui le dit, jamais de passage au vert |
+| E28 | Premier démarrage sans registre joignable, miroir vide : `task up` échoue dans un délai borné, nomme le registre et dit que le premier démarrage demande le réseau ; registre lent ou qui limite : échec borné qui le nomme (cas limite de la spec, contrat task-cli ; écart 4 de tasks.md, T126 et T127) |
 | X01 | Copie du golden repo dans un dépôt Git neuf : ses hooks passent, son commitlint refuse un message non conforme, actionlint passe sur ses workflows, ses actions sont figées par SHA, gitleaks passe sur son historique |
 | D01 | Poste propre, personne qui ne connaît pas le dépôt : API et front qui répondent après une commande, à chaque essai |
 | D02 | Premier démarrage du profil standard : durée et volume mesurés, rapportés aux 900 s et au débit nécessaire |
@@ -342,7 +343,7 @@ Préfixes : S statique, sans cluster, en pre-commit ou en CI ; P contrôle préa
 
 | Exigence | Contrôles |
 | --- | --- |
-| FR-001 Démarrage en une commande | E01, P02, P04 |
+| FR-001 Démarrage en une commande | E01, P02, P04, E28 |
 | FR-002 Adresses par la gateway, en boucle locale | E01, E03 |
 | FR-003 Écoute en boucle locale, testée à chaque démarrage | E03 |
 | FR-004 Secrets aléatoires, jamais écrits, gardés | E04, E05, E06, S03, S04 |
@@ -357,7 +358,7 @@ Préfixes : S statique, sans cluster, en pre-commit ou en CI ; P contrôle préa
 | FR-013 Conventions Git | X01, S17, S23 ; titre de PR et gitleaks déjà en CI de CELIAN |
 | FR-014 Tests unitaires et bout en bout en CI amd64 | U01, U02, E01 |
 | FR-015 Durées affichées, volume relevé | E17, D02 |
-| FR-016 Démarrage sans registre | E10 |
+| FR-016 Démarrage sans registre | E10, E28 |
 | FR-017 Base selon BENCH-011 | E12, S12, conditions de l'ADR-012 ci-dessous |
 | FR-018 README | S18 |
 | FR-019 Cluster local ciblé explicitement | S19, P05, E24 |
@@ -462,7 +463,7 @@ Les questions ci-dessous sortent du tableau des points ouverts. Chacune garde sa
 | Flux livré dans le profil standard avec sa liaison suspendue, `task reload` seul maître des objets de l'application, jusqu'à ce que Lucas tranche ce que lit Flux | Lucas | 2026-11-21 | Research RS-14 ; S28 ; E15 vérifie les droits sans réconciliation. La question 1 de l'ADR-010 reste ouverte et ne bloque aucune étape |
 | Aucune authentification de l'exemple en local ; elle arrive avec l'ADR-013. Aucun déploiement réel sur GCP sans authentification | DSI | 2026-11-21 | Research RS-25 ; contrat de l'API ; l'ADR-013 demandera un amendement de FR-009 |
 | CI du golden repo dans CELIAN seulement ; un dépôt miroir viendra avec le générateur, hors de ce plan | DSI | 2026-11-21 | Research RS-17 ; jobs bloquants ajoutés aux contrôles requis de `main` |
-| Trivy seul pour le SBOM et le scan ; l'écart avec le PRD et le brief, qui nomment Syft, est confirmé et s'écrira dans le PRD | Lucas | 2026-11-23 | Research RS-22 ; étape 18 |
+| Trivy seul pour le SBOM et le scan ; l'écart avec le PRD et le brief, qui nomment Syft, est confirmé ; reporté dans le PRD (US-009) le 2026-11-25 | Lucas | 2026-11-23 | Research RS-22 ; étape 18 |
 | Si BENCH-014 tarde, le profil lite attend l'ADR-015 : aucune image de cache provisoire | Lucas | 2026-11-23 | Research RS-11 ; les étapes 1 à 8 et la première PR de l'étape 18 avancent, les étapes 9 à 11 attendent l'étape 19 |
 
 ## Ce qui n'est pas décidé ou pas mesuré
