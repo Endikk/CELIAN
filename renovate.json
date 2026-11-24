@@ -16,9 +16,10 @@
   "customManagers": [
     {
       "customType": "regex",
-      "description": "Container images pinned by tag and digest in workflow env vars ending in _IMAGE",
+      "description": "Container images pinned by tag and digest in workflow env vars ending in _IMAGE, in the workflows of CELIAN and of the golden repo (spec 001, research RS-17)",
       "managerFilePatterns": [
-        "/^\\.github/workflows/.+\\.ya?ml$/"
+        "/^\\.github/workflows/.+\\.ya?ml$/",
+        "/^golden/saas-b2b/\\.github/workflows/.+\\.ya?ml$/"
       ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_IMAGE\\s*:\\s*\\S+?:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)"
