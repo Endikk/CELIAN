@@ -6,10 +6,19 @@
 version: '3'
 
 tasks:
+  # Preflight checks first, before anything is created (contracts/task-cli.md).
+  # PROFILE forces the profile, given either way: PROFILE=lite task up, or
+  # task up PROFILE=lite. Task does not export a command-line variable to the
+  # commands, hence env; a PROFILE already in the environment wins over it
+  # (research RS-08). The host ports join the call with step 7 (T059). The
+  # rest of task up arrives with steps 6 to 9.
   up:
     silent: true
+    env:
+      PROFILE: '{{.PROFILE}}'
     cmds:
-      - echo 'task up is not delivered yet. It arrives with steps 5 to 9 of spec 001.' >&2
+      - bash local/scripts/preflight.sh
+      - echo 'The preflight checks passed, but task up stops here. The cluster, the mirror and the application arrive with steps 6 to 9 of spec 001.' >&2
       - exit 1
 
   down:

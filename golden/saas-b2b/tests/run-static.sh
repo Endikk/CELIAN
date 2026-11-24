@@ -1,16 +1,22 @@
 #!/usr/bin/env bash
-# Runs the static checks of the golden repo, without a cluster: every control
+# Runs the checks of the golden repo that need no cluster: every control
 # script of tests/static/, local/tests/static/ and gcp/tests/static/, and
-# through them the Rego policies. Called by `task check`. Exits non-zero when
-# a control fails, and prefixes each failure with the identifier of the
-# control and the requirement or condition it carries (spec 001, FR-012).
+# through them the Rego policies, then the preflight checks of task up in
+# local/tests/preflight/, run against simulated binaries, without any
+# container engine (contracts/task-cli.md, `task check`). Called by
+# `task check`. Exits non-zero when a control fails, and prefixes each
+# failure with the identifier of the control and the requirement or
+# condition it carries (spec 001, FR-012).
 #
 # Naming convention of the tests (spec 001, T004):
 # - one file per control, named after its identifier in lower case and a
 #   short slug: s05-kind-config.sh, p01-versions.sh, e04-secrets-fresh.sh;
 # - static controls live in tests/static/ (common layer), local/tests/static/
-#   and gcp/tests/static/ (target layers); the other kinds of tests live in
-#   the folders that tasks.md names, outside this runner;
+#   and gcp/tests/static/ (target layers); the preflight checks live in
+#   local/tests/preflight/, their simulated binaries in its fakes/ and their
+#   shared helpers in its lib/, which this runner does not run; the other
+#   kinds of tests live in the folders that tasks.md names, outside this
+#   runner;
 # - each control script starts with two header lines, read here:
 #     # control: S21
 #     # carries: FR-010, FR-017; ADR-012, condition 5
@@ -21,10 +27,10 @@
 #   because conftest passes without a word on a package that does not exist.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
-control_dirs="tests/static local/tests/static gcp/tests/static"
+control_dirs="tests/static local/tests/static gcp/tests/static local/tests/preflight"
 policy_dirs="policy local/policy gcp/policy"
 ran=0
 failed=0
@@ -131,4 +137,4 @@ if [ "$failed" -gt 0 ]; then
   printf '%s failure(s); %s control(s) run.\n' "$failed" "$ran" >&2
   exit 1
 fi
-printf 'All %s static control(s) passed.\n' "$ran"
+printf 'All %s control(s) passed.\n' "$ran"
