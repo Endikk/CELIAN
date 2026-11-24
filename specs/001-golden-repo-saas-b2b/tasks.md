@@ -589,6 +589,12 @@ Aucun ne demande de modifier spec.md ni plan.md avant de commencer. Chacun est r
 10. Le test qui garde d'accord les ports de `local/kind/cluster.yaml` et ceux des tâches (plan, « Routage et adresses ») n'a pas d'identifiant ; T056 le range dans S05.
 11. Le plan ne dit pas où tournent les tests unitaires alors que le poste n'a ni SDK .NET ni Node.js (RS-06) : les tâches les lancent dans l'image de construction (T025, T031). À confirmer par le DSI.
 12. E08 ne vérifie ni le message de `task mirror:purge` avant d'agir (récit 6, scénario 3) ni le retrait du conteneur du miroir par `task app:down` (data-model) ; T045 et T084 les ajoutent.
+13. Relevé à l'étape 5 : T038 nomme `up.yml`, mais la couche `local` n'a qu'un Taskfile depuis T009, `local/tasks/local.yml` ; les contrôles préalables y sont branchés.
+14. Relevé à l'étape 5 : le profil standard est reconnu puis refusé jusqu'à l'étape 12. Sur un moteur qui déclare au moins 2560 Mio, ce Mac et les runners de CI compris, `task up` sans `PROFILE` s'arrête : les étapes 6 à 9 et le job `e2e-lite` passent `PROFILE=lite`.
+15. Relevé à l'étape 5 : les seuils comparent la mémoire déclarée par le moteur à 2048 et 2560 Mio, alors que RS-08 parle d'une VM de 2,0 et 2,5 Gio. Ce que déclare une VM réglée à 2,0 Gio n'a pas été mesuré. T081 tranche, et change aussi les seuils écrits dans le README.
+16. Relevé à l'étape 5 : Podman, que [OPS] n'a pas encore retenu (R-26), répond derrière `docker` avec sa propre version ; sous Linux, la règle des 28.0.0 de Docker Engine le refuserait. Rien n'est câblé pour lui.
+17. Relevé à l'étape 5 : Renovate ne voit pas `KIND_VERSION` de `local/scripts/preflight.sh`. L'étape 6 lui donne un commentaire `# renovate:` et le range dans le groupe de kind et de son image de nœud.
+18. Relevé à l'étape 5 : `docker info` n'a pas de délai d'attente, un moteur bloqué fait attendre `task up` sans fin ; un bash compilé sans `/dev/tcp` verrait tous les ports libres. P04 remplace la sonde réseau par un faux ; la vraie sonde n'est vérifiée qu'à la main, puis par E03 sur kind.
 
 ## Notes
 
