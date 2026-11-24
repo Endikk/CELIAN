@@ -48,12 +48,16 @@ repos:
 
   # Renovate configuration: renovate.json. Without --no-global, a file given
   # by name is checked as the global configuration of a self-hosted Renovate
-  # (research RS-18).
+  # (research RS-18). Manual stage: the hook installs renovate from npm, its
+  # transitive dependencies unpinned, so it runs in CI only and never on a
+  # developer machine (security review of PR #46). No Git hook calls this
+  # stage; `pre-commit install-hooks` would still install it.
   - repo: https://github.com/renovatebot/pre-commit-hooks
     rev: 7197a54c83a2e365f19561f0cb00dbd1e58018da  # frozen: 44.247.1
     hooks:
       - id: renovate-config-validator
         args: [--strict, --no-global]
+        stages: [manual]
 
   # Conventional Commits. Config: .commitlintrc.yaml
   - repo: https://github.com/alessandrojcm/commitlint-pre-commit-hook

@@ -257,7 +257,7 @@ Ce que l'étape 2 (T093 à T101) en tire, d'après le relevé de RS-18 du 2026-1
 
 1. Les motifs par défaut des gestionnaires `github-actions` et `pre-commit`, comme celui du preset `customManagers:githubActionsVersions`, commencent par `(^|/)` : ils trouvent déjà `golden/saas-b2b/.github/workflows/` et `golden/saas-b2b/.pre-commit-config.yaml`. Le gestionnaire maison des variables `_IMAGE` de CELIAN s'arrêtait à `^\.github/workflows/`. Il reçoit un second motif pour les workflows du golden repo, sans quoi l'image de gitleaks de leur `secrets.yml` échapperait à la décision.
 2. Les règles propres au projet généré (majeure de `postgres`, paires kind et Envoy Gateway) vivent dans `golden/saas-b2b/renovate.json`. Elles ne s'appliquent donc pas au golden repo dans CELIAN. C'est sans effet aujourd'hui : le golden repo ne nomme encore aucune de ces images, et le gestionnaire `kubernetes`, sans motif par défaut, reste coupé dans CELIAN. À trancher par le DSI avant l'étape 3 : les Dockerfile du golden repo entreront dans le gestionnaire `dockerfile` de CELIAN, dont les motifs par défaut commencent aussi par `(^|/)`, sous les règles de CELIAN.
-3. S23 lit les règles du fichier. Le validateur de Renovate le lit en plus dans X01, par les hooks de la copie autonome. Les deux contrôles sont statiques : aucun Renovate ne tourne sur ce fichier avant le dépôt miroir.
+3. S23 lit les règles du fichier. Le validateur de Renovate le lit en plus dans X01, par un hook de la copie autonome au stade `manual`. Les deux contrôles sont statiques : aucun Renovate ne tourne sur ce fichier avant le dépôt miroir.
 
 ## RS-18. Outils de test
 
@@ -331,7 +331,7 @@ Comportement lu dans `lib/config-validator.ts` et `lib/config/validation.ts` au 
 - une erreur ou un avertissement fait sortir en 1 ; `--strict` fait échouer en plus une configuration qui demande une migration ;
 - hors ligne : le validateur ne télécharge pas les presets du `extends` de premier niveau, il en vérifie la syntaxe (`parsePreset`). Il résout en revanche un `extends` placé dans une entrée de `packageRules` (`resolveConfigPresets`) ; la configuration du golden repo n'en a aucun. Une fois installé, il valide donc sans réseau. Son installation demande le réseau : pre-commit télécharge Node.js LTS et le paquet `renovate` depuis npm.
 
-Où il tourne : dans `golden/saas-b2b/.pre-commit-config.yaml`, avec `--strict --no-global`, donc dans X01, sur la copie autonome, et dans la CI du projet généré. Il reste hors de `task check`, qui ne demande ni Node.js ni Python sur le poste (RS-06), et hors des hooks de CELIAN, qui ne lit pas ce fichier (RS-17). Les règles propres au projet généré relèvent de S23, une politique Rego lancée par conftest dans `task check`.
+Où il tourne : dans `golden/saas-b2b/.pre-commit-config.yaml`, avec `--strict --no-global`, au stade `manual` depuis la relecture [SECU] de la PR #46. pre-commit installe un hook Node par `npm install -g`, sans `--ignore-scripts` (`pre_commit/languages/node.py`, v4.7.0), et le hook ne fige que `renovate@44.247.1`. Au tag, le dépôt de Renovate n'a pas de `npm-shrinkwrap.json` et son `package.json` ne publie que `dist` et `renovate-schema.json` : les dépendances transitives se résolvent par plages, sans verrou ni délai de 7 jours. Le contenu du paquet publié n'a pas été lu. Le hook ne tourne donc pas sur un poste de développement : pre-commit n'installe que les environnements des hooks du stade lancé (`pre_commit/commands/run.py`), et aucun hook Git n'appelle le stade `manual` (`pre_commit/clientlib.py`). Reste une porte : `pre-commit install-hooks`, ou `pre-commit install --install-hooks`, installe tous les hooks, celui-ci compris (`pre_commit/commands/install_uninstall.py`). Il tourne par `pre-commit run --hook-stage manual renovate-config-validator --all-files`, dans X01 sur la copie autonome, et dans le workflow `ci.yml` du projet généré. Il reste hors de `task check`, qui ne demande ni Node.js ni Python sur le poste (RS-06), et hors des hooks de CELIAN, qui ne lit pas ce fichier (RS-17). Les règles propres au projet généré relèvent de S23, une politique Rego lancée par conftest dans `task check`.
 
 Options de Renovate lues pour `renovate.json` (T098), dans `docs/usage/` et `lib/` au tag 44.247.1 :
 
@@ -371,7 +371,8 @@ Effets : `golden/saas-b2b/.pre-commit-config.yaml` (T097), `golden/saas-b2b/reno
 | Source | Lue le | Ce qu'on y prend |
 | --- | --- | --- |
 | <https://api.github.com/repos/renovatebot/renovate/releases> | 2026-11-24 | 44.247.1 publiée le 2026-11-16 à 20 h 46 UTC, immuable ; versions suivantes de moins de 7 jours |
-| <https://github.com/renovatebot/renovate/blob/44.247.1/package.json> | 2026-11-24 | `AGPL-3.0-only`, `engines`, programme `renovate-config-validator` |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/package.json> | 2026-11-24 | `AGPL-3.0-only`, `engines`, programme `renovate-config-validator` ; `files` limité à `dist` et `renovate-schema.json` |
+| <https://github.com/renovatebot/renovate/tree/44.247.1> | 2026-11-24 | Aucun `npm-shrinkwrap.json` à la racine du dépôt au tag |
 | <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config-validator.ts> | 2026-11-24 | `--no-global`, `--strict`, code de sortie |
 | <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/validation.ts> | 2026-11-24 | `extends` de premier niveau vérifié par `parsePreset`, presets des `packageRules` résolus |
 | <https://registry.npmjs.org/renovate/44.247.1> | 2026-11-24 | Licence, `engines`, intégrité du paquet |
@@ -391,6 +392,10 @@ Effets : `golden/saas-b2b/.pre-commit-config.yaml` (T097), `golden/saas-b2b/reno
 | <https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners> | 2026-11-24 | CODEOWNERS lu dans `.github/`, à la racine ou dans `docs/`, le premier trouvé |
 | <https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-a-pull-request-template-for-your-repository> | 2026-11-24 | Modèle de PR lu à la racine, dans `docs/` ou dans `.github/` |
 | <https://pre-commit.com/> | 2026-11-24 | `default_install_hook_types` lu par `pre-commit install` ; options `--hook-stage`, `--all-files`, `--files` ; Node.js téléchargé s'il manque |
+| <https://github.com/pre-commit/pre-commit/blob/v4.7.0/pre_commit/commands/run.py> | 2026-11-24 | Environnements installés pour les seuls hooks du stade lancé |
+| <https://github.com/pre-commit/pre-commit/blob/v4.7.0/pre_commit/clientlib.py> | 2026-11-24 | Stade `manual`, appelé par aucun hook Git |
+| <https://github.com/pre-commit/pre-commit/blob/v4.7.0/pre_commit/commands/install_uninstall.py> | 2026-11-24 | `install-hooks` et `install --install-hooks` installent tous les hooks |
+| <https://github.com/pre-commit/pre-commit/blob/v4.7.0/pre_commit/languages/node.py> | 2026-11-24 | Hook Node installé par `npm install -g`, sans `--ignore-scripts` |
 | <https://docs.astral.sh/uv/concepts/tools/> | 2026-11-24 | `uv tool install ruff==0.5.0` ; dossier des exécutables à mettre dans le `PATH` |
 | <https://docs.astral.sh/uv/reference/environment/> | 2026-11-24 | `UV_TOOL_BIN_DIR`, depuis uv 0.3.0 |
 | <https://github.com/astral-sh/setup-uv/blob/68559e99cc807c1eb7e9238fd43a15bba460eec2/docs/environment-and-tools.md> | 2026-11-24 | Dossier des outils ajouté au `PATH` sous Windows seulement ; tag v10.3.3 égal à ce SHA |

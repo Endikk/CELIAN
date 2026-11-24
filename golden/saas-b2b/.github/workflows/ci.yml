@@ -44,6 +44,10 @@ jobs:
       - name: Run every hook on every file
         run: uvx "pre-commit@${PRE_COMMIT_VERSION}" run --all-files --show-diff-on-failure
 
+      # Manual stage, kept off developer machines (.pre-commit-config.yaml).
+      - name: Validate the Renovate configuration
+        run: uvx "pre-commit@${PRE_COMMIT_VERSION}" run --hook-stage manual renovate-config-validator --all-files
+
       # Squash merge turns the PR title into the commit on main.
       - name: Check the PR title with commitlint
         if: github.event_name == 'pull_request'

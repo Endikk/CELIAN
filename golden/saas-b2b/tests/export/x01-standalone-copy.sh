@@ -4,8 +4,9 @@
 #
 # The golden repo works as a project of its own. Copies it into a new Git
 # repository, outside CELIAN, and checks there that its hooks pass on every
-# file, that its commitlint refuses a message outside Conventional Commits
-# and accepts one that follows them, that actionlint passes on its
+# file, that the validator of Renovate, kept to the manual stage, passes on
+# renovate.json, that its commitlint refuses a message outside Conventional
+# Commits and accepts one that follows them, that actionlint passes on its
 # workflows, that its actions are pinned by SHA (S17 on the copy), and that
 # gitleaks passes on its history. GitHub runs no workflow from a subfolder
 # (research RS-17): this copy is where they get exercised.
@@ -68,6 +69,10 @@ pre-commit install
 step "run every hook on every file"
 git add -A
 pre-commit run --all-files --show-diff-on-failure || fail "the hooks of the copy fail on its own files (FR-013)."
+
+step "the validator of Renovate passes on renovate.json (manual stage)"
+pre-commit run --hook-stage manual renovate-config-validator --all-files ||
+  fail "the validator of Renovate refuses renovate.json (FR-013)."
 
 step "commitlint refuses a message outside Conventional Commits, and accepts one that follows them"
 bad_message="Update stuff"
