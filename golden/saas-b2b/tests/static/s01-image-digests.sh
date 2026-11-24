@@ -25,7 +25,7 @@ done < <(find . \( -name .git -o -name node_modules -o -name bin -o -name obj \)
   -type f \( -name Dockerfile -o -name 'Dockerfile.*' -o -name '*.Dockerfile' \) -print | LC_ALL=C sort)
 
 if [ -z "$dockerfiles" ]; then
-  echo "no Dockerfile found: the API image is built from src/Api/Dockerfile (spec 001, T025)." >&2
+  echo "no Dockerfile found: the API and front images are built from src/Api/Dockerfile and src/front/Dockerfile (spec 001, T025 and T031)." >&2
   exit 1
 fi
 

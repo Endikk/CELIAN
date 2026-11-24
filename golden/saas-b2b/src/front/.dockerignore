@@ -1,0 +1,3 @@
+# Build context of the front image (src/front/Dockerfile): the sources only.
+node_modules/
+dist/
