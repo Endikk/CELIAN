@@ -4,9 +4,11 @@ Projet de référence du blueprint SaaS B2B de CELIAN, construit à la main avan
 
 ## État
 
-En construction. Le dépôt ne démarre pas encore : `task up`, `task down`, `task reload` et `task test` répondent qu'ils ne sont pas livrés, et disent à quelle étape ils arrivent. Seul `task check` tourne, avec les contrôles statiques de l'étape 1.
+En construction. Le dépôt ne démarre pas encore : `task up`, `task down`, `task reload` et `task test` répondent qu'ils ne sont pas livrés, et disent à quelle étape ils arrivent. Seul `task check` tourne, avec les contrôles statiques des étapes 1 et 2.
 
 Pour lancer `task check` sur son poste, il faut Task et conftest. `tests/tools/install.sh <dossier>` les installe dans le dossier donné, après avoir vérifié le SHA-256 de chaque archive, puis ce dossier se met dans le `PATH`.
+
+Le dépôt porte ses propres conventions Git : hooks pre-commit, commitlint, Renovate, release-please et workflows dans `.github/`. Elles prennent effet dans une copie autonome du dossier, où `pre-commit install` pose les hooks ; dans CELIAN, ce sont celles de CELIAN qui s'appliquent, et le contrôle X01 exerce celles-ci dans une copie.
 
 La spécification, le plan et les tâches sont dans [`specs/001-golden-repo-saas-b2b/`](../../specs/001-golden-repo-saas-b2b/spec.md) de CELIAN. Le README complet, avec les prérequis datés, arrive à l'étape 11.
 

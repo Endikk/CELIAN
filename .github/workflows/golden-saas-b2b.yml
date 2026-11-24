@@ -1,7 +1,7 @@
 name: golden-saas-b2b
 
 # CI of the SaaS B2B golden repo (spec 001, research RS-17). Each job calls
-# a task of golden/saas-b2b/, so that the logic exists once, in the tasks.
+# a task or a test script of golden/saas-b2b/, so that the logic exists once.
 # No path filter: a required check whose workflow a filter skips stays
 # "Pending" and blocks the merge (research RS-17), and the static job is fast.
 # Principle X: no cloud credential, and no plan, apply or destroy; test S17
@@ -41,3 +41,40 @@ jobs:
 
       - name: Run the static checks
         run: task check
+
+  # X01: the golden repo as a project of its own, copied into a new Git
+  # repository where its hooks, commitlint, actionlint and gitleaks run
+  # (research RS-17). Outside the required checks until the DSI decides.
+  export:
+    name: export
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # renovate: datasource=pypi depName=pre-commit
+      PRE_COMMIT_VERSION: 4.7.0
+      # Same interpreter as ci.yml, so the hooks build alike.
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2 # v10.3.3
+
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-golden-${{ runner.os }}-${{ hashFiles('golden/saas-b2b/.pre-commit-config.yaml') }}
+
+      # X01 installs the hooks into the copy with `pre-commit install`, so
+      # pre-commit has to stay on PATH; setup-uv adds the tool directory to
+      # PATH on Windows only (research RS-18).
+      - name: Install pre-commit
+        env:
+          UV_TOOL_BIN_DIR: ${{ runner.temp }}/uv-tool-bin
+        run: |
+          uv tool install "pre-commit==${PRE_COMMIT_VERSION}"
+          echo "$UV_TOOL_BIN_DIR" >> "$GITHUB_PATH"
+
+      - name: Check a standalone copy of the golden repo (X01)
+        run: bash golden/saas-b2b/tests/export/x01-standalone-copy.sh

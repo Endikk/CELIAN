@@ -4,16 +4,15 @@
 #
 # CI workflows run no OpenTofu plan, apply or destroy, hold no cloud
 # credential, publish no plan, and pin every action by a full commit SHA.
-# Without argument, checks the CELIAN workflow that runs the golden repo
-# (research RS-17). T094 adds the workflows of the golden repo, T105 the
-# Taskfiles of gcp/. Arguments, if given, replace the default list.
+# Without argument, checks the workflows of the golden repo, the CI of the
+# generated project (T094), and there must be at least one. When the golden
+# repo sits in CELIAN, at golden/saas-b2b/, it also checks the CELIAN
+# workflow that runs it (research RS-17); a standalone copy (X01) has no
+# such workflow. T105 adds the Taskfiles of gcp/. Arguments, if given,
+# replace the default list.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-if [ "$#" -eq 0 ]; then
-  celian_root="$(cd "$root/../.." 2>/dev/null && pwd || printf '%s' "$root/../..")"
-  set -- "$celian_root/.github/workflows/golden-saas-b2b.yml"
-fi
 
 problems=0
 
@@ -21,6 +20,21 @@ report() {
   problems=$((problems + 1))
   printf '%s:%s: %s\n' "$1" "$2" "$3"
 }
+
+if [ "$#" -eq 0 ]; then
+  for file in "$root"/.github/workflows/*.yml "$root"/.github/workflows/*.yaml; do
+    if [ -f "$file" ]; then
+      set -- "$@" "$file"
+    fi
+  done
+  if [ "$#" -eq 0 ]; then
+    report "$root/.github/workflows" 0 "no workflow found: the generated project has no CI (FR-013)"
+  fi
+  celian_root="$(cd "$root/../.." && pwd)"
+  if [ "$celian_root/golden/saas-b2b" = "$root" ] && [ -d "$celian_root/.github/workflows" ]; then
+    set -- "$@" "$celian_root/.github/workflows/golden-saas-b2b.yml"
+  fi
+fi
 
 # Prints "<line number>:<text>" for each line of $1, YAML comments removed:
 # a comment may name a forbidden command to explain why it is absent.
@@ -63,6 +77,7 @@ check_pins() {
 
 word_start='(^|[^[:alnum:]_-])'
 word_end='([^[:alnum:]_-]|$)'
+separator='[^[:alnum:]_-]'
 
 for file in "$@"; do
   if [ ! -f "$file" ]; then
@@ -70,8 +85,10 @@ for file in "$@"; do
     continue
   fi
   # Principle X: no plan, apply or destroy, by OpenTofu or Terraform, nor by
-  # a task of the gcp layer (decision of Lucas, 2026-11-20).
-  forbid "$file" "${word_start}(tofu|terraform)${word_end}.*${word_start}(plan|apply|destroy)${word_end}" \
+  # a task of the gcp layer (decision of Lucas, 2026-11-20). One separator
+  # after the tool name is enough: ERE has no lookahead, so the separator
+  # that ends the tool name cannot also start the subcommand.
+  forbid "$file" "${word_start}(tofu|terraform)${separator}(.*${separator})?(plan|apply|destroy)${word_end}" \
     "OpenTofu plan, apply or destroy"
   forbid "$file" "${word_start}gcp:(plan|apply|destroy)${word_end}" "task gcp:plan, gcp:apply or gcp:destroy"
   # No cloud credential: no secret but the workflow token, no OIDC token for

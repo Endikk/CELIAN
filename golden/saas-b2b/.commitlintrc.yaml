@@ -1,0 +1,5 @@
+# Conventional Commits: https://www.conventionalcommits.org/en/v1.0.0/
+# Checked by the commit-msg hook locally, and on PR titles in CI
+# (squash merge turns the PR title into the commit on main).
+extends:
+  - "@commitlint/config-conventional"
