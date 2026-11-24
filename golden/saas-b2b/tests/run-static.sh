@@ -25,6 +25,14 @@
 #   named test_<control>_<case>. A control script runs it with conftest and
 #   names the package; this runner refuses a policy that breaks the rule,
 #   because conftest passes without a word on a package that does not exist.
+#
+# Rule of every shell script of the golden repo (a *.sh file, or a file that
+# starts with a shell shebang), checked here: each cd is written
+# CDPATH='' cd -- <dir>. With a CDPATH exported, cd prints the directory it
+# finds, and "$(cd <dir> && pwd)" returns two lines. The rule holds for every
+# cd, not only those in a command substitution: a line does not show whether
+# its output is captured (a function called in "$(...)", a subshell in a
+# pipe, a substitution over several lines).
 set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -110,6 +118,41 @@ check_policy() {
   fi
 }
 
+# Shell scripts of the golden repo, one per line: the *.sh files and the
+# files whose first line is a shebang that names a shell. Skips .git and
+# node_modules.
+shell_scripts() {
+  local file first
+  find . \( -name .git -o -name node_modules \) -prune -o -type f -print |
+    LC_ALL=C sort |
+    while IFS= read -r file; do
+      case "$file" in
+        *.sh)
+          printf '%s\n' "$file"
+          continue
+          ;;
+      esac
+      first=""
+      IFS= read -r first <"$file" || true
+      case "$first" in
+        '#!'*sh | '#!'*sh' '*) printf '%s\n' "$file" ;;
+      esac
+    done
+}
+
+# One line per cd of shell script $1 that lacks CDPATH='', comments left
+# out. The pattern spells c[d] so that this function does not match itself.
+unguarded_cd() {
+  local script="$1" line
+  sed -E -e 's/(^|[[:space:]])#.*$//' \
+    -e "s/CDPATH=''[[:space:]]+cd([[:space:]]|\$)/CDPATH_GUARDED\\1/g" "$script" |
+    { grep -nE '(^|[[:space:];&|(){}!`])c[d]([[:space:];&|)]|$)' || true; } |
+    while IFS=: read -r line _; do
+      printf "%s:%s: 'cd' without CDPATH=''. Write CDPATH='' cd -- <dir>: with a CDPATH exported, the directory found is also printed.\n" \
+        "$script" "$line"
+    done
+}
+
 for dir in $control_dirs; do
   [ -d "$dir" ] || continue
   for script in "$dir"/*.sh; do
@@ -128,6 +171,11 @@ for dir in $policy_dirs; do
     check_policy "$policy"
   done
 done
+
+cd_problems="$(shell_scripts | while IFS= read -r script; do unguarded_cd "$script"; done)"
+if [ -n "$cd_problems" ]; then
+  fail_runner "$cd_problems"
+fi
 
 if [ "$ran" -eq 0 ]; then
   fail_runner "no control script found in: $control_dirs."
