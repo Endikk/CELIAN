@@ -1,22 +1,10 @@
-<!--
-Gabarit des rapports de benchmark (brief, section 8).
-Dupliquer ce fichier en docs/benchmarks/BENCH-XXX-sujet.md, sujet court en
-minuscules et mots séparés par des tirets (ex. BENCH-003-cluster-local.md).
-Remplir dans l'ordre des sections, le verdict en dernier.
-Chaque paragraphe s'ouvre par le tag de son auteur : [BENCH] pour le corps,
-[SECU] ou [FINOPS] dans les relectures.
-Aucun fait de mémoire (principe VIII) : chaque version, licence, date ou
-chiffre renvoie à une source [Sn] ou à une mesure [Mn].
-Retirer tous les commentaires avant de passer le statut à « relu ».
--->
-
 # BENCH-013. Serveur de mails de test du profil standard
 
 | Champ | Valeur |
 | --- | --- |
 | Identifiant | BENCH-013 |
 | Sujet | Serveur de mails de test du profil standard sur le PC, et ce qui le remplace sur GCP |
-| Statut | brouillon |
+| Statut | relu |
 | Ouvert le | 2026-11-20 |
 | Mis à jour le | 2026-11-24 |
 | Auteur | [BENCH] |
@@ -24,15 +12,7 @@ Retirer tous les commentaires avant de passer le statut à « relu ».
 | Périmètre | Projet généré sur PC (cluster local), et projet généré sur GCP pour la parité |
 | Choix du PRD | Aucune ligne du tableau des choix ouverts : composition du profil standard, décision de Lucas du 2026-11-20 (US-005) |
 | ADR lié | ADR-014, à écrire par [ARCHI] |
-| Verdict proposé | Mailpit v1.34.0, 85/100, devant maildev 3.0.0 (71) et smtp4dev 3.16.1 (65). Écart de 14 points, au moins cinq crans (section 7) |
-
-<!--
-Statut : « brouillon » pendant la rédaction. « relu » quand [SECU] et [FINOPS]
-ont rendu leur avis et que leurs remarques sont traitées. « clos » quand l'ADR
-lié a tranché : le rapport ne bouge plus, un fait nouveau ouvre un nouveau
-benchmark.
-Périmètre : garder seulement ce que le choix touche.
--->
+| Verdict proposé | Mailpit v1.34.0, 81/100, devant maildev 3.0.0 (70) et smtp4dev 3.16.1 (64). Écart de 11 points, au moins quatre crans (section 7). Retenu le 2026-11-24 ; rien sur `gcp` ; dérogation datée à ENF-03 (section 7) |
 
 ## 1. Contexte
 
@@ -93,12 +73,6 @@ l'écart au principe V se justifie dans l'ADR-014 (section 7).
 
 ## 2. Options étudiées
 
-<!--
-Deux ou trois options : celles de la section 8 du brief, sauf raison écrite
-sous le tableau. Version examinée : la dernière release stable à la date de
-lecture de sa source.
--->
-
 | Option | En une phrase | Version examinée | Publiée le | Sources |
 | --- | --- | --- | --- | --- |
 | Mailpit | Serveur SMTP de test en Go, binaire unique, avec interface web, API REST et POP3 ; option pressentie | v1.34.0, image `axllent/mailpit` (linux/amd64, linux/arm64, linux/386) | 2026-11-17 | [S1], [S2], [S8], [S16] |
@@ -125,13 +99,16 @@ ci-dessous) avant les critères éliminatoires.
 [BENCH] Versions. Mailpit v1.34.0 a trois jours à la date de lecture, et le
 principe VI fait attendre 7 jours aux mises à jour : le blueprint pourrait la
 figer à partir du 2026-11-24. Elle corrige toutefois l'avis
-GHSA-v887-64wg-qqc9, moyen, CVSS 6.5 : un message SMTP forgé, envoyé sans
-authentification, fait tomber le serveur SMTP de Mailpit. L'avis est publié
-le 2026-11-17 avec la version qui le corrige [S4], [S21]. Le DSI a donc
-décidé le 2026-11-20 de mesurer la v1.34.0 sous l'exception de sécurité du
-principe VI (constitution 1.2.0) ; dans le blueprint, la même exception vaut
-dès que sa PR passe la matrice. maildev 3.0.0
-est une « Complete project re-build » [S23] ; la ligne précédente, 2.2.1 du
+GHSA-v887-64wg-qqc9, moyen : un message SMTP forgé, envoyé sans
+authentification, fait tomber tout le processus : SMTP, interface et API
+(CVSS 3.1 de 6,5, vecteur réseau adjacent, versions 1.33.1 à 1.34.0
+exclue). L'avis est publié le 2026-11-17 avec la version qui le corrige ; il
+n'a pas de CVE et ne figure ni dans la base mondiale de GitHub ni dans OSV le
+2026-11-24 [S4], [S21], [S66], [S67]. Le DSI a donc décidé le 2026-11-20 de
+mesurer la v1.34.0 sous l'exception de sécurité du principe VI (constitution
+1.2.0) ; dans le blueprint, la même exception vaut dès que sa PR passe la
+matrice ; la matrice n'existant pas encore, le golden repo la fige après le
+délai, écoulé le 2026-11-24 à 06:57 UTC. maildev 3.0.0 est une « Complete project re-build » [S23] ; la ligne précédente, 2.2.1 du
 2024-12-12, a plus de douze mois. smtp4dev publie des préversions
 d'intégration continue presque chaque jour : la version examinée est la
 dernière qui n'en est pas une [S34].
@@ -203,24 +180,6 @@ que soit la voie. Trois voies restent ouvertes, à [ARCHI] de choisir :
 
 ## 3. Critères éliminatoires
 
-<!--
-Les trois critères du brief, vérifiés avant toute notation.
-Licence : open source pour tout ce qui tourne sur le PC ou en on-prem, soit
-une licence approuvée par l'OSI, vérifiée sur la liste de l'OSI à la date du
-rapport [Sn]. Sans objet pour un service managé de la cible cloud
-(principe III).
-Statut : ni archivé, ni annoncé en maintenance par le dépôt, le site ou la
-fondation.
-Release : la dernière date de moins de 12 mois au jour de la vérification.
-Pour une norme stable (JSON Schema, OpenAPI, OCI), le critère porte sur
-l'outil maintenu qui la met en œuvre, pas sur le texte de la norme. Il ne
-s'applique pas aux dépendances transitives, qui se signalent dans les limites.
-Une exigence fonctionnelle du PRD peut éliminer une option ; elle s'écrit dans
-le contexte avec sa référence (US-xxx), et le DSI l'accepte par écrit.
-Une option éliminée n'est pas notée. S'il reste moins de deux options, le
-signaler au DSI avant de continuer.
--->
-
 [BENCH] Seuil de release : 2025-11-20, douze mois avant la vérification.
 
 | Option | Licence open source | Ni archivé ni en maintenance | Release de moins de 12 mois | Vérifié le | Résultat |
@@ -238,12 +197,6 @@ réserve se note en maturité (5.3) et en activité (5.4).
 repérés, l'auraient été sur le critère de release (section 2).
 
 ## 4. Mesures
-
-<!--
-Une mesure réelle pour chaque critère où elle a un sens, en général
-l'empreinte sur PC (ENF-02). Si aucune n'en a, le dire en une phrase et
-retirer les sous-sections.
--->
 
 ### 4.1 Ce qui est mesuré
 
@@ -308,12 +261,6 @@ changé.
 
 ### 4.3 Protocole
 
-<!--
-Assez précis pour qu'un tiers refasse la mesure. Au moins trois exécutions
-par option et par mesure. Dire si les images sont déjà en cache : le temps de
-démarrage en dépend.
--->
-
 [BENCH] Protocole écrit le 2026-11-20 pendant la phase de lecture, puis
 précisé le 2026-11-21 avec le script, avant toute mesure et avant tout test
 de fumée. Le script `tests/bench/bench-013-test-mail.sh` et ses manifests,
@@ -322,8 +269,11 @@ outil de boucle (ADR-006), Secret créé par tube avant l'application des
 manifests (ADR-007), images et manifests figés par condensat (conditions 3 et
 4 de l'ADR-004). Le script s'ouvre sur l'inventaire des commandes qui créent,
 modifient ou suppriment un conteneur ou un réseau (règle [SECU] du
-2026-11-20) : `kind create cluster` et `kind delete cluster`, rien d'autre
-sur le moteur. Il n'emploie ni `docker run`, `start`, `restart`, `exec` ou
+2026-11-20) : `kind create cluster`, qui lance lui-même le nœud par
+`docker run --privileged` (BENCH-011, S60), et `kind delete cluster`, rien
+d'autre sur le moteur. Les autres commandes Docker ne font que lire :
+`version`, `info`, `ps -q`, `stats --no-stream`, `network inspect`,
+`manifest inspect`. Il n'emploie ni `docker run`, `start`, `restart`, `exec` ou
 `cp`, ni `kubectl exec`, ni curl, wget, python, node ou perl.
 
 1. Contrôles, une fois par série. Le script vérifie le SHA-256 de chacun des
@@ -418,9 +368,11 @@ sur le moteur. Il n'emploie ni `docker run`, `start`, `restart`, `exec` ou
     mêmes étapes, namespace, Secret et Job de sonde compris, sans serveur de
     mails ; la sonde s'arrête aussitôt. Trois exécutions.
 
-[BENCH] Le script ne lance aucune commande docker, kind ou kubectl avant
-d'avoir pris le verrou de mesure partagé (`BENCH_LOCK`), qu'il crée par
-`mkdir` et dont il ne retire que son propre fichier `owner`. Il refuse de
+[BENCH] Quand `BENCH_LOCK` est défini, le script ne lance aucune commande
+docker, kind ou kubectl avant d'avoir pris le verrou de mesure partagé, qu'il
+crée par `mkdir` et dont il ne retire que son propre fichier `owner`. Il ne
+sort du poste que par `docker manifest inspect` et les tirages du nœud, vers
+Docker Hub. Il refuse de
 démarrer si le verrou est pris (code 75) ou si le cluster existe déjà. Il
 passe shellcheck, tourne sous le bash 3.2 de macOS, en `umask 077`, avec
 `KUBECONFIG` dans le dossier d'essai : `~/.kube` n'est ni lu ni écrit. L'heure
@@ -436,12 +388,6 @@ OPTIONS=none BENCH_LOCK=/chemin/vers/un/verrou tests/bench/bench-013-test-mail.s
 ```
 
 ### 4.4 Résultats
-
-<!--
-Une ligne par mesure et par option. La médiane sert à la notation, l'écart
-(maximum moins minimum) montre la dispersion. Ajouter une colonne par
-exécution au-delà de trois.
--->
 
 [BENCH] Premier test de fumée, lancé le 2026-11-21 à 23:27 UTC sous le
 verrou, après la série de BENCH-012. Le script n'a rien écrit pendant onze
@@ -508,13 +454,22 @@ n'est écartée à ce titre. Le poste tournait sur batterie (section 4.2).
 [BENCH] Lecture de M2. La mémoire d'une couche se lit au nœud moins le nœud
 de base, en médianes (troisième règle de la GATE 1) : -12,5 Mio pour
 Mailpit (604,7 moins 617,2), 2,9 pour maildev et 74,0 pour smtp4dev. Le
-nœud de base varie de 88,7 Mio d'une exécution à l'autre, plus que deux des
-trois couches : pour Mailpit et maildev, la méthode ne distingue pas la
-couche du bruit, et le chiffre négatif de Mailpit ne veut rien dire d'autre.
+nœud de base varie de 88,7 Mio d'une exécution à l'autre, plus que chacune
+des trois couches. Pour Mailpit et maildev, dont les exécutions recouvrent
+celles du nœud de base, la méthode ne distingue pas la couche du bruit, et
+le chiffre négatif de Mailpit ne veut rien dire d'autre. Les trois
+exécutions de smtp4dev (679,4 à 702,2 Mio) restent au-dessus de la plus
+haute du nœud de base (629,6) : sa couche tient entre 49,8 et 161,3 Mio. Lue
+au plus défavorable, nœud de l'option le plus haut moins nœud de base le
+plus bas, la couche vaut au plus 90,2 Mio pour Mailpit, 112,9 pour maildev
+et 161,3 pour smtp4dev : la note ne dépend pas du bruit (relecture
+[FINOPS]). La dispersion vient de la première exécution du nœud de base
+(540,9 Mio, cluster créé en 35,2 s) ; sans elle, l'écart tombe à 12,4 Mio.
 La mémoire de travail du pod, lue par l'API Summary, donne l'ordre de
 grandeur : 15,3 Mio pour Mailpit, 59,2 pour maildev, 118,9 pour smtp4dev.
 Sous l'une ou l'autre lecture, aucune option n'approche le seuil de
-512 Mio : smtp4dev en est à 23 % au plus haut de ses pods (129,1 Mio).
+512 Mio : smtp4dev en est à 25 % au plus haut de ses pods (129,1 Mio), et à
+23 % en médiane (118,9).
 
 [BENCH] Lecture de M5. La sonde garde la connexion ouverte 5 s pour que
 smtp4dev réponde, et nc n'a rendu la main qu'à la fin de ce délai, même
@@ -592,12 +547,6 @@ fusions et les auteurs de type Bot (Renovate, Dependabot, agent Copilot).
 
 ### 5.1 Licence et liberté d'usage, poids 15
 
-<!--
-Licence exacte, ce qu'elle impose au générateur (Apache-2.0) et aux projets
-générés, changement de licence passé. Preuves : fichier de licence du dépôt,
-annonce officielle.
--->
-
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
 | Mailpit | 5/5 | 15 | MIT, approuvée OSI, dans le fichier `LICENSE` depuis le premier commit du 2022-07-29, sans accord de contribution. Le projet généré tire l'image et n'en redistribue rien | [S1], [S46] |
@@ -605,12 +554,6 @@ annonce officielle.
 | smtp4dev | 4/5 | 12 | BSD-3-Clause, approuvée OSI. Réserve : l'accord de contribution donne au projet le droit de « sublicense, and/or sell » les contributions, ce qui permettrait de publier les versions futures sous d'autres termes ; les versions publiées restent sous BSD-3-Clause | [S33], [S43], [S47] |
 
 ### 5.2 Gouvernance (fondation, multi-vendeurs), poids 15
-
-<!--
-Fondation porteuse, éditeur unique ou communauté, nombre d'entreprises parmi
-les mainteneurs (principe V). Preuves : page du projet chez la fondation,
-fichier des mainteneurs, statistiques de contribution datées.
--->
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
@@ -628,30 +571,20 @@ n'a pas d'interface de lecture (section 2).
 
 ### 5.3 Maturité et adoption, poids 15
 
-<!--
-Ancienneté, niveau de maturité dans la fondation, adoption en production
-déclarée (principe VI : pas de projet qui vient de sortir). Preuves : page de
-la fondation, liste d'adoptants en précisant qui la tient.
--->
-
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Mailpit | 5/5 | 15 | Dépôt créé le 2022-07-29, version 1.0.0 le 2022-09-03, 248 160 030 tirages de l'image sur Docker Hub. Adoption attestée par la documentation des adoptants eux-mêmes : Mailpit est le service de mails du fichier Compose par défaut de Laravel Sail, et le capteur de mails de DDEV. Le projet ne tient pas de liste d'adoptants | [S1], [S16], [S17], [S18] |
+| Mailpit | 4/5 | 12 | Dépôt créé le 2022-07-29, version 1.0.0 le 2022-09-03, 248 160 030 tirages de l'image sur Docker Hub. Adoption attestée par la documentation des adoptants eux-mêmes : Mailpit est le service de mails du fichier Compose par défaut de Laravel Sail, et le capteur de mails de DDEV. Réserve : aucune fondation ni liste d'adoptants tenue par le projet ; adoption lue chez Laravel et DDEV | [S1], [S16], [S17], [S18] |
 | maildev | 3/5 | 9 | Projet de 2013, 60 228 176 tirages de l'image. Réserve qui demande une action : la version examinée, 3.0.0, est une reconstruction complète publiée le 2026-09-23, soit 58 jours de recul, après 19 mois sans release (section 3). Le README conseille lui-même de revenir à la v2 « if you run into any issues ». Ce code n'a pas l'ancienneté du projet (principe VI) | [S22], [S23], [S29], [S31] |
 | smtp4dev | 4/5 | 12 | Dépôt créé le 2012-01-13, version majeure 3, 19 396 844 tirages de l'image, binaires et outil .NET publiés à chaque release. Réserve : aucune liste d'adoptants ni adoption tierce trouvée dans les pages lues | [S33], [S34], [S44] |
 
 [BENCH] Les tirages de Docker Hub comptent aussi les exécutions de CI, et ne
 mesurent pas le nombre d'équipes : ils servent d'ordre de grandeur, jamais de
-preuve seule. La note de Mailpit tient sur la documentation de Laravel et de
-DDEV, sources officielles de ces deux projets mais tierces pour Mailpit.
-Sans elles, Mailpit tomberait à 4/5, comme smtp4dev.
+preuve seule. Relecture [SECU] : 4/5, comme k3d (BENCH-003), Traefik
+(BENCH-004) et Config Sync (BENCH-009), sans liste tenue par le projet ;
+Keycloak, Incubating à la CNCF avec 59 adoptants, a 4/5 dans BENCH-012.
+Compter Laravel et DDEV en preuve directe donnerait 5/5.
 
 ### 5.4 Activité et maintenance, poids 10
-
-<!--
-Rythme des releases sur 12 mois, contributeurs actifs, délai de réponse aux
-tickets. Preuves : page des releases, statistiques du dépôt, datées.
--->
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
@@ -661,77 +594,42 @@ tickets. Preuves : page des releases, statistiques du dépôt, datées.
 
 ### 5.5 Sécurité (CVE, réactivité), poids 10
 
-<!--
-Politique de signalement, avis de sécurité publiés, délai entre signalement
-et correctif, CVE encore ouvertes. Relu par [SECU]. Preuves : politique de
-sécurité du projet, base de CVE, avis du projet.
--->
-
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Mailpit | 3/5 | 6 | 18 avis publiés par le dépôt du 2026-01-06 au 2026-11-17, aucun critique, 1 élevé selon le dépôt ; 15 sont dans la base mondiale, qui en classe 3 en élevé. Chacun sort avec sa version corrigée : SSRF des fonctions de vérification de liens et de HTML, dénis de service par SMTP ou par l'API, détournement de WebSocket. Signalement privé ouvert, accusé de réception visé sous 24 h. La réserve demande une action : 13 versions correctives à suivre en dix mois et demi, image sans utilisateur déclaré, donc en root sans `securityContext`, appel à GitHub par défaut à couper | [S4], [S5], [S6], [S7], [S11] |
-| maildev | 2/5 | 4 | Aucun avis en 12 mois. Le seul avis connu, CVE-2024-27448 (critique, exécution de code à distance par un en-tête Content-ID, versions 2.0.0-beta1 à 2.1.0), a été signalé publiquement le 2023-08-25 et corrigé en 2.2.1 le 2024-12-12, quinze mois et demi plus tard. Politique de sécurité écrite, signalement privé ouvert, image en utilisateur `node`. La version 3.0.0, reconstruite, n'a pas encore d'historique | [S25], [S26], [S27], [S28], [S32] |
-| smtp4dev | 2/5 | 4 | Aucun avis, ni au dépôt ni dans la base mondiale ; aucune politique de sécurité, seul le signalement privé de GitHub est ouvert, et les notes de release ne disent pas ce qu'une version corrige. Image en root, ports 80 et 25 privilégiés par défaut, `curl` installé. `LockSettings` vaut `false` par défaut : les réglages se modifient depuis l'interface web, et le même fichier porte des expressions JavaScript de validation. Il faut contourner : surveiller les images par scan faute d'avis | [S34], [S36], [S37], [S38] |
+| Mailpit | 3/5 | 6 | 18 avis publiés par le dépôt du 2026-01-06 au 2026-11-17, aucun critique, 1 élevé selon le dépôt ; 15 sont dans la base mondiale, qui en classe 3 en élevé. Les trois plus récents, sans CVE, dont le seul élevé du dépôt (GHSA-379p-g4f4-hq5h) et celui que corrige la v1.34.0, n'y sont pas : Trivy, qui lit cette base pour les modules Go, ne les voit pas. Chacun sort avec sa version corrigée : SSRF des fonctions de vérification de liens et de HTML, dénis de service par SMTP ou par l'API, détournement de WebSocket. Signalement privé ouvert, accusé de réception visé sous 24 h. La réserve demande une action : 13 versions correctives à suivre en dix mois et demi, image sans signature ni attestation, bâtie sur `alpine:latest` sans condensat, sans utilisateur déclaré, donc en root sans `securityContext`, appel à GitHub par défaut à couper | [S4], [S5], [S6], [S7], [S11], [S15], [S66], [S67], [S68], [S69] |
+| maildev | 2/5 | 4 | Aucun avis en 12 mois. Le seul avis connu, CVE-2024-27448 (critique, exécution de code à distance par un en-tête Content-ID, versions 2.0.0-beta1 à 2.1.0), a été signalé publiquement le 2023-08-25 et corrigé en 2.2.1 le 2024-12-12, quinze mois et demi plus tard. Politique de sécurité écrite, signalement privé ouvert, image en utilisateur `node`. Dans le code de la 3.0.0, socket.io, attaché au serveur HTTP, échappe au crochet d'authentification et diffuse à tout client le résumé de chaque mail (sujet, adresses, 140 premiers caractères) ; le CORS de l'API renvoie toute origine avec `credentials` (lecture du code, non essayé). La version 3.0.0, reconstruite, n'a pas encore d'historique | [S25], [S26], [S27], [S28], [S32], [S70] |
+| smtp4dev | 2/5 | 4 | Aucun avis, ni au dépôt ni dans la base mondiale ; aucune politique de sécurité, seul le signalement privé de GitHub est ouvert, et les notes de release ne disent pas ce qu'une version corrige. Image en root, ports 80 et 25 privilégiés par défaut, `curl` installé. `AuthenticationRequired` à `false` : IMAP n'exige aucun identifiant, et IMAP et POP3 restent à l'écoute dans la configuration mesurée (lecture des réglages, non essayé). `LockSettings` vaut `false` par défaut : les réglages se modifient depuis l'interface web, et le même fichier porte des expressions JavaScript de validation. Il faut contourner : surveiller les images par scan faute d'avis | [S34], [S36], [S37], [S38], [S71] |
 
 [BENCH] Aucune des trois n'a de signature d'image ni d'attestation de
 provenance dans ses workflows publics (GitHub Actions pour Mailpit et
 maildev, Azure Pipelines pour smtp4dev) ; Mailpit fige ses actions par SHA
 [S45], [S62], [S63]. Le critère ne départage donc pas sur ce point, et
-aucune note n'en tient compte.
+aucune note n'en tient compte. Relecture [SECU] pour Mailpit : ni cosign ni
+`actions/attest` dans le flux de la v1.34.0, aucune attestation à l'API de
+GitHub, aucun tag `sha256-*` sur Docker Hub [S68], [S69]. Les trois images
+sont sur docker.io hors de `library/` : l'ADR-014 porte sa propre dérogation
+à ENF-03.
 
 [BENCH] Sensibilité. Compter le nombre d'avis contre Mailpit, au lieu de la
 réactivité qu'ils montrent, le ferait tomber à 2/5 ; à l'inverse, lire la
 politique de sécurité de maildev 3.x comme une rupture avec la réaction
-lente de 2024 le ferait monter à 3/5. [SECU] tranche ces deux lectures.
+lente de 2024 le ferait monter à 3/5. [SECU] garde les deux notes : la
+réactivité compte plus que le nombre d'avis, comme pour Keycloak dans
+BENCH-012, et le code de maildev 3.0.0 laisse socket.io hors de
+l'authentification, ce qui ne montre aucune rupture.
 
 [BENCH] Essai (M8, section 4.4). Les trois options refusent l'API sans
 identifiant (401), l'acceptent avec celui du Secret (200), le reçoivent par
 `secretKeyRef` sans argument de commande, et démarrent sous le profil
-« Restricted » imposé au namespace, en utilisateur 65534. Le critère ne
-départage pas sur ces points, et les notes restent celles de la lecture.
+« Restricted » imposé au namespace, en utilisateur 65534. M8 ne mesure que
+l'API REST : maildev diffuse les nouveaux mails par socket.io hors de
+l'authentification, et smtp4dev laisse IMAP et POP3 sans identifiant
+(relecture [SECU], lecture du code et des réglages, non essayé). Les notes
+restent celles de la lecture.
 Mailpit et smtp4dev, sans utilisateur déclaré dans leur image, tourneraient
 en root dans un manifest qui n'impose rien : le blueprint impose le profil.
 
 ### 5.6 Empreinte sur PC (RAM, CPU, démarrage), poids 10
-
-<!--
-RAM au repos, CPU, temps de démarrage sur le PC (ENF-02). Preuve : la médiane
-des mesures de la section 4.
-
-Règle de notation, validée par Lucas le 2026-11-19 (BENCH-003) : des seuils
-absolus, jamais un écart à la meilleure option. Chaque seuil est une valeur
-ronde tirée du PRD (budget de 900 s d'ENF-01, portable de 8 Gio) ou d'un débit
-bas pris comme hypothèse (10 Mbit/s). Les seuils s'écrivent dans la section
-4.1 avant la première mesure, avec leur origine. Chaque option part de 5 et
-perd un cran par seuil dépassé. Une option à moins de 10 % d'un seuil voit
-ses deux notes possibles écrites dans la sensibilité de la section 7.
-
-Seuils de BENCH-003, à reprendre ou à adapter au sujet, en disant pourquoi :
-volume compressé à télécharger au premier lancement au-delà de 500 Mo (400 s
-à 10 Mbit/s) ; au moins une image retéléchargée à chaque lancement, cache
-plein ; démarrage à chaud au-delà de 90 s (10 % du budget) ; mémoire au repos
-au-delà de 1 Gio (un huitième d'un portable de 8 Gio).
-
-Trois règles validées par Lucas à la GATE 1, le 2026-11-20, après leur usage
-dans BENCH-004, 005, 007 et 009 :
-
-1. Le volume se note sur linux_amd64, pire cas des systèmes visés par Q5.
-   Les autres architectures mesurées vont dans la sensibilité.
-2. La plate-forme de base (cluster kind, CRD Gateway API, gateway) se compte
-   contre les 500 Mo ci-dessus. Chaque couche suivante (stack, secrets,
-   GitOps...) se note contre ses propres seuils, écrits dans sa section 4.1 ;
-   son cumul avec la plate-forme va dans la sensibilité. Sans ce périmètre,
-   l'ordre des benchmarks déciderait des notes.
-3. La mémoire d'une couche se lit au nœud, moins la mémoire du nœud de base
-   (kind seul, même configuration), en médianes : les CRD et les contrôleurs
-   chargent aussi le serveur d'API, que la somme des pods ne voit pas. La
-   somme des pods va dans la sensibilité.
-
-Les seuils écrits avant la première mesure portent leur heure UTC, et le
-rapport dit si des tests de fumée ont tourné avant. Les seuils de couche
-additionnés dépassaient déjà le budget de 900 s à la GATE 1 : un budget par
-étape d'ENF-01 reste à fixer (R-04).
--->
 
 [BENCH] Règle de `TEMPLATE.md` (section 5.6), seuils écrits et hachés en
 4.1 avant toute mesure : chaque option part de 5 et perd un cran par seuil
@@ -740,7 +638,7 @@ dépassé. Volume lu sur l'amd64, mémoire au nœud moins le nœud de base.
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
 | Mailpit | 4/5 | 8 | Un seuil dépassé : image retéléchargée à chaque création (seuil 2). 15,1 Mo en amd64, prête en 3,4 s, couche au nœud dans le bruit de la mesure (pod de 15,3 Mio), sous leurs seuils | [M1], [M2], [M4], [M7] |
-| maildev | 4/5 | 8 | Un seuil dépassé : image retéléchargée à chaque création (seuil 2). 74,9 Mo en amd64, prête en 6,5 s, 2,9 Mio de couche au nœud (pod de 59,2 Mio), sous leurs seuils | [M1], [M2], [M4], [M7] |
+| maildev | 4/5 | 8 | Un seuil dépassé : image retéléchargée à chaque création (seuil 2). 74,9 Mo en amd64, prête en 6,5 s, couche au nœud dans le bruit de la mesure, 2,9 Mio (pod de 59,2 Mio), sous leurs seuils | [M1], [M2], [M4], [M7] |
 | smtp4dev | 3/5 | 6 | Deux seuils dépassés : 176,9 Mo en amd64 (seuil 1, 112,5 Mo), retéléchargés à chaque création (seuil 2). Prête en 8,6 s et 74,0 Mio de couche au nœud (pod de 118,9 Mio), sous leurs seuils | [M1], [M2], [M4], [M7] |
 
 [BENCH] Aucune option n'est à moins de 10 % d'un seuil : maildev pèse 66,6 %
@@ -754,20 +652,17 @@ des seuils, le nœud retire l'image du miroir local à chaque création, et
 plus d'Internet. Si le DSI lit le seuil 2 comme un retéléchargement depuis
 Internet, les trois options regagnent un cran (Mailpit et maildev 5/5,
 smtp4dev 4/5) : le classement ne change pas. La somme des pods à la place du
-nœud ne fait franchir le seuil 4 à aucune option. Cumul avec la plate-forme
-et le reste du profil standard : l'ADR-012 compte 1 521,9 Mo pour le premier
-`task up` du profil standard avec zot, hors Keycloak et Mailpit. Mailpit y
-ajoute 15,1 Mo, soit 1 537,0 Mo et 1 229,6 s à 10 Mbit/s, 136,6 % du budget
-de 900 s, avant Keycloak (BENCH-012). Avec maildev, ce serait 1 596,8 Mo ;
-avec smtp4dev, 1 698,8 Mo.
+nœud ne fait franchir le seuil 4 à aucune option. Cumul avec le reste du
+profil standard, en sensibilité (deuxième règle de la GATE 1, relecture
+[FINOPS]). Le premier `task up` télécharge 1 787,0 Mo en amd64 avant ce
+benchmark, miroir zot de l'ADR-011, Postgres de l'ADR-012 et Keycloak de
+l'ADR-013 compris (R-04). Avec Mailpit : 1 802,1 Mo, soit 1 441,7 s à
+10 Mbit/s, 160,2 % du budget de 900 s, et 16,0 Mbit/s au minimum. Avec
+maildev, 1 861,9 Mo (165,5 %) ; avec smtp4dev, 1 963,9 Mo (174,6 %). En
+mémoire, Mailpit laisse le profil standard à 3,5 Gio de VM et 7,5 Gio de
+portable ; smtp4dev le ferait passer à 4,0 Gio de VM, maildev non.
 
 ### 5.7 Portabilité multi-cloud, poids 10
-
-<!--
-Fonctionne sur les deux cibles du MVP sans code propre à l'une (principe II),
-et resterait utilisable sur un autre cloud ou en on-prem. Preuves :
-documentation officielle d'installation par plateforme.
--->
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
@@ -781,12 +676,6 @@ sur GKE que les autres. Le principe III et le schéma du catalogue relèvent de
 l'ADR-014 (section 2, « Parité sur GCP »), pas de cette note.
 
 ### 5.8 Expérience dev et documentation, poids 10
-
-<!--
-Qualité et fraîcheur de la documentation officielle, clarté des erreurs,
-temps pour faire tourner un exemple minimal. Note de jugement : décrire
-l'essai qui la fonde. Preuves : documentation officielle, essai consigné.
--->
 
 [BENCH] Note de jugement. L'essai qui la fonde : installation par les
 manifests du script sous le profil « Restricted », envoi et lecture d'un
@@ -802,23 +691,21 @@ intervention de [BENCH] est écrit ci-dessous.
 
 ### 5.9 Coût (managé ou opérationnel), poids 5
 
-<!--
-Coût du service managé sur GCP, ou coût d'exploitation sur le PC et en
-on-prem (temps, licence, support). Relu par [FINOPS]. Preuves : page de tarifs
-officielle datée, estimation de [FINOPS].
--->
-
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| Mailpit | 5/5 | 5 | Gratuit sous MIT, sans licence ni support payant requis. Mailtrap propose une offre hébergée pour les équipes, dont le projet généré n'a pas besoin | [S1], [S20] |
-| maildev | 5/5 | 5 | Gratuit sous MIT, sans licence ni support payant requis | [S22] |
-| smtp4dev | 5/5 | 5 | Gratuit sous BSD-3-Clause, sans licence ni support payant requis ; dons facultatifs | [S33] |
+| Mailpit | 4/5 | 4 | Gratuit sous MIT, sans licence ni support payant requis ; mémoire et volume comptés en 5.6. Sur GCP, le coût dépend de la voie de l'ADR-014 : 0 USD si rien ne tourne sur `gcp` ; sur GKE Autopilot, de 1,8 USD par mois (50m et 52 MiB, avec la rafale) à 23,4 USD (demandes par défaut), aux prix d'exemple de us-central1, hors stockage éphémère ; relais réel non chiffré, facture hors de GCP. Réserve : coût sur GCP à trancher | [S1], [S20], [S73], [S74], [S75] |
+| maildev | 4/5 | 4 | Gratuit sous MIT, même règle. Même réserve, mêmes minimums d'Autopilot | [S22], [S73], [S74] |
+| smtp4dev | 4/5 | 4 | Gratuit sous BSD-3-Clause, dons facultatifs, même règle. Même réserve | [S33], [S73], [S74] |
 
-[BENCH] Le critère ne départage pas. Sur le PC, le coût d'exploitation se
-réduit à la mémoire et au volume, notés en 5.6. Sur GCP, aucune des trois ne
-tourne dans les voies lues en section 2, sauf si l'ADR-014 retient un serveur
-de test dans un environnement GKE : [FINOPS] chiffrerait alors son pod sur
-Autopilot, comme pour Flux et ESO dans BENCH-009 et BENCH-007.
+[BENCH] Le coût ne départage pas. Sur le PC, il se réduit à la mémoire et au
+volume, notés en 5.6. Sur GCP, il dépend de la voie de l'ADR-014
+(section 2) : si rien ne tourne sur `gcp`, 0 USD ; pour un serveur de test
+sur GKE Autopilot, environ 1,8 USD par mois avec la rafale au minimum de
+demande, 9,9 USD sans rafale et 23,4 USD sans demande, aux prix d'exemple de
+us-central1 et non à la grille, illisible le 2026-11-24 ; pour un relais
+réel, prix non lus, facture hors de Cloud Billing, et une sortie vers
+Internet depuis des nœuds privés qui demande Cloud NAT. La région n'est pas
+choisie (R-05) (relecture [FINOPS]).
 
 ## 6. Grille pondérée
 
@@ -827,23 +714,24 @@ Autopilot, comme pour Flux et ESO dans BENCH-009 et BENCH-007.
 | Critères éliminatoires (section 3) | éliminatoire | passe | passe | passe |
 | Licence et liberté d'usage | 15 | 5/5, 15 pts | 5/5, 15 pts | 4/5, 12 pts |
 | Gouvernance (fondation, multi-vendeurs) | 15 | 2/5, 6 pts | 2/5, 6 pts | 2/5, 6 pts |
-| Maturité et adoption | 15 | 5/5, 15 pts | 3/5, 9 pts | 4/5, 12 pts |
+| Maturité et adoption | 15 | 4/5, 12 pts | 3/5, 9 pts | 4/5, 12 pts |
 | Activité et maintenance | 10 | 5/5, 10 pts | 3/5, 6 pts | 3/5, 6 pts |
 | Sécurité (CVE, réactivité) | 10 | 3/5, 6 pts | 2/5, 4 pts | 2/5, 4 pts |
 | Empreinte sur PC (RAM, CPU, démarrage) | 10 | 4/5, 8 pts | 4/5, 8 pts | 3/5, 6 pts |
 | Portabilité multi-cloud | 10 | 5/5, 10 pts | 5/5, 10 pts | 4/5, 8 pts |
 | Expérience dev et documentation | 10 | 5/5, 10 pts | 4/5, 8 pts | 3/5, 6 pts |
-| Coût (managé ou opérationnel) | 5 | 5/5, 5 pts | 5/5, 5 pts | 5/5, 5 pts |
-| Total | 100 | 85 / 100 | 71 / 100 | 65 / 100 |
+| Coût (managé ou opérationnel) | 5 | 4/5, 4 pts | 4/5, 4 pts | 4/5, 4 pts |
+| Total | 100 | 81 / 100 | 70 / 100 | 64 / 100 |
 
 ## 7. Verdict proposé
 
-[BENCH] Option proposée : Mailpit v1.34.0, 85/100, 14 points devant
-maildev 3.0.0 (71) et 20 devant smtp4dev 3.16.1 (65). L'ADR-014, écrit par
-[ARCHI], tranche, et Lucas valide.
+[BENCH] Option proposée : Mailpit v1.34.0, 81/100, 11 points devant
+maildev 3.0.0 (70) et 17 devant smtp4dev 3.16.1 (64), dans la grille
+réconciliée par le DSI le 2026-11-24 après les relectures de [SECU] et de
+[FINOPS]. L'ADR-014, écrit par [ARCHI], tranche, et Lucas valide.
 
-[BENCH] Pourquoi. Quatre critères font les 14 points d'écart avec maildev. La maturité
-(15 contre 9) : Mailpit est en version 1 depuis le 2022-09-03 et sert de
+[BENCH] Pourquoi. Quatre critères font les 11 points d'écart avec maildev. La maturité
+(12 contre 9) : Mailpit est en version 1 depuis le 2022-09-03 et sert de
 capteur de mails par défaut à Laravel Sail et à DDEV [S2], [S17], [S18],
 quand maildev 3.0.0 est une réécriture de 58 jours dont le README conseille
 de revenir à la v2 en cas de problème [S23], [S29]. L'activité (10 contre
@@ -856,16 +744,20 @@ empreinte, les deux options ont la même note, mais l'image de Mailpit fait 15,1
 contre 74,9 et son pod pèse 15,3 Mio contre 59,2 [M2], [M4]. smtp4dev perd
 en plus un cran de volume (176,9 Mo, au-delà de 112,5) et un de licence.
 
-[BENCH] Sensibilité. L'écart de 14 points ne tient pas dans un cran : un
-cran vaut 3 points au plus, sur un critère de poids 15, et il en faudrait au
-moins cinq contre Mailpit pour que maildev passe devant. Aucune des lectures
-discutées plus haut n'y suffit : sans l'adoption lue chez
-Laravel et DDEV, Mailpit tomberait à 82 (maturité 4/5) ; en comptant ses
-avis au lieu de sa réactivité, à 80 (sécurité 2/5) ; maildev monterait à 73
-si [SECU] lit sa politique 3.x comme une rupture. Le cas le plus défavorable,
-80 contre 73, garde Mailpit devant. Avec le miroir de l'ADR-011, les trois
-options regagnent le même cran d'empreinte (section 5.6). Aucune option
-n'est à moins de 10 % d'un seuil.
+[BENCH] Sensibilité, recalculée sur la grille réconciliée (81, 70, 64).
+L'écart de 11 points ne tient pas dans un cran : un cran vaut 3 points au
+plus, sur un critère de poids 15, et il en faudrait au moins quatre contre
+Mailpit pour que maildev passe devant. Aucune des lectures discutées plus
+haut n'y suffit. Avec l'adoption lue chez Laravel et DDEV comptée en preuve
+directe, Mailpit monterait à 84 (maturité 5/5). En comptant ses avis au lieu
+de sa réactivité, il tomberait à 79 (sécurité 2/5) : ce 79 cumule les deux
+lectures défavorables, maturité à 4/5 et sécurité à 2/5. maildev monterait à
+72 si sa politique 3.x se lisait comme une rupture, lecture que [SECU]
+écarte. Le cas le plus défavorable, 79 contre 72, garde Mailpit devant. Avec
+le miroir de l'ADR-011, les trois options regagnent le même cran d'empreinte
+(section 5.6), soit 83, 72 et 66 : le classement ne change pas. Le coût à
+5/5 de la lecture d'origine rendrait un point à chacune, sans toucher aux
+écarts. Aucune option n'est à moins de 10 % d'un seuil.
 
 [BENCH] Gouvernance. Mailpit dépend d'une personne : 93,6 % des commits
 humains de l'année, dépôt d'un compte personnel, soutien affiché de
@@ -888,7 +780,7 @@ du schéma du catalogue sont en section 2 (« Parité sur GCP »), pour
 
 1. Version. v1.34.0 entre sous l'exception de sécurité du principe VI, au
    titre de GHSA-v887-64wg-qqc9 (section 2). Le délai de 7 jours prend fin
-   de toute façon le 2026-11-24.
+   de toute façon le 2026-11-24 à 06:57 UTC, avant toute PR du golden repo.
 2. Rythme des correctifs. 13 versions correctives en dix mois et demi
    [S4] : l'exception de sécurité servira souvent, et chaque PR de Renovate
    doit passer la matrice.
@@ -907,6 +799,19 @@ du schéma du catalogue sont en section 2 (« Parité sur GCP »), pour
    aucun port n'y était publié.
 6. Gouvernance. Surveiller le soutien de Mailtrap, qui publie depuis le
    2026-05-05 son propre outil local [S53].
+7. Signature : dérogation à ENF-03 pour `docker.io/axllent/mailpit` dans
+   l'ADR-014.
+8. Aucun envoi hors du poste : aucune variable de relais, de transfert ni de
+   webhook dans la couche, et une NetworkPolicy qui ferme la sortie du pod,
+   que kind applique depuis la v0.24.0 [S72].
+9. Angle mort des scanners : trois des 18 avis manquent à la base que lit
+   Trivy (R-36) [S67].
+10. Ressources, de [FINOPS]. Demande et limite mémoire de Mailpit explicites
+    dans la couche `local`, et sur GKE si l'ADR-014 l'y place (condition 9
+    de l'ADR-008) : la mesure n'en posait aucune. Avec Mailpit, la limite du
+    conteneur de Keycloak doit rester sous 1 240 Mi environ pour que le
+    profil standard tienne sur 8 Gio à cette limite (condition 11 de
+    l'ADR-013).
 
 [BENCH] Prochaine vérification proposée : 2027-05-24, six mois après la
 mesure, comme le veut la règle de date de l'ADR-009.
@@ -926,7 +831,10 @@ mesure, comme le veut la règle de date de l'ADR-009.
   un éditeur qui publie un outil concurrent ; avis de sécurité fréquents du
   serveur de mails de test (18 en dix mois et demi) ;
 - le volume de R-04 : 15,1 Mo de plus au premier `task up` du profil
-  standard, soit 1 537,0 Mo avant Keycloak (section 5.6).
+  standard, soit 1 802,1 Mo avec Keycloak, 160,2 % du budget de 900 s à
+  10 Mbit/s et 16,0 Mbit/s au minimum (section 5.6) ; dans le tableau des
+  registres de l'ADR-011, la ligne « à relever » devient docker.io pour
+  Mailpit, registre déjà dans la liste unique.
 
 [BENCH] Questions ouvertes pour [ARCHI] et Lucas : confirmer ou renverser
 les deux décisions du DSI qui ont pesé sur la liste (interface requise,
@@ -935,18 +843,38 @@ schéma qu'elle demande ; dire si, depuis l'acceptation de l'ADR-011, le
 seuil 2 se lit comme un retéléchargement depuis Internet, pour ce rapport
 et les suivants.
 
+[DSI] Arbitrage du 2026-11-24, après les relectures de [SECU] et de
+[FINOPS]. Mailpit v1.34.0 est retenu comme serveur de mails de test du
+profil standard sur la cible `local`, à 81 sur 100 dans la grille
+réconciliée, devant maildev (70) et smtp4dev (64). La maturité de Mailpit
+passe à 4, faute de fondation et de liste d'adoptants tenue par le projet,
+et le coût passe à 4/5 pour les trois options, par cohérence avec BENCH-012.
+La lecture du code par [SECU] sépare les contrôles d'accès que M8 faisait
+paraître égaux : maildev diffuse les nouveaux mails par socket.io hors de
+l'authentification, smtp4dev laisse IMAP sans identifiant, Mailpit protège
+l'interface, l'API et le WebSocket. Le seuil 2 garde sa lettre, comme dans
+BENCH-011 : la mesure sans miroir compte comme un retéléchargement depuis
+Internet ; la lecture avec le miroir reste en sensibilité. Lucas a tranché
+le même jour deux points. Sur la cible `gcp`, rien ne tourne : l'exemple
+n'envoie pas de mail dans le MVP, les mails des parcours de connexion
+partent d'Identity Platform (ADR-013), l'hôte SMTP reste un réglage, et
+l'écart est listé au README. Mailpit reçoit sa propre dérogation datée à
+ENF-03, sur le modèle de l'ADR-013 : `docker.io/axllent/mailpit` est admise
+par sa référence exacte, condensat compris, dans une liste fermée que [SECU]
+relit à chaque montée ; elle tombe quand Mailpit signe ses images de façon
+vérifiable par Kyverno. L'ADR-014, à écrire par [ARCHI], reprend les
+conditions 1 à 8 de [SECU] et les trois conditions de [FINOPS] : R-04 et
+ENF-01 à 1 802,1 Mo ; demandes et limites de Mailpit explicites ; limite de
+Keycloak sous 1 240 Mi environ, mesurée sur le golden repo, pic de démarrage
+compris. Il justifie l'écart au principe V : les trois options reposent
+chacune sur une seule personne. Les avis de dépôt absents de la base
+mondiale (trois des 18 avis de Mailpit) étendent le risque R-36.
+
 ## 8. Limites et biais
 
-<!--
-Ce qui peut fausser le verdict, dit une fois et précisément, avec ce qui
-lèverait la limite. Pistes : une seule machine de mesure, machine différente
-du PC de référence de la phase 6 (pas encore défini, ENF-02), images en
-cache, source tenue par l'éditeur lui-même, note de jugement, option
-pressentie par le PRD.
--->
-
 [BENCH] Limites connues à la fin de la phase de lecture, le 2026-11-20, puis
-celles de la série du 2026-11-23 (sept dernières lignes).
+celles de la série du 2026-11-23 (sept lignes suivantes), puis celles des
+relectures du 2026-11-24 (cinq dernières lignes).
 
 | Limite | Effet possible sur le verdict | Ce qui la lèverait |
 | --- | --- | --- |
@@ -954,26 +882,24 @@ celles de la série du 2026-11-23 (sept dernières lignes).
 | Option pressentie par le PRD et par le brief | Mailpit part avec l'attention du brief | Même règle de sélection écrite avant les notes, mêmes sources, même script pour les trois |
 | Sélection des options par le nombre d'étoiles GitHub | Inbucket ou MailCrab pourraient valoir mieux qu'une des options retenues | Les ajouter à la série de mesure si le DSI le demande |
 | Interface web requise, par décision du DSI du 2026-11-20 (section 1) | Écarte le seul candidat porté par une fondation | Lucas confirme ou renverse la décision |
-| Notes de sécurité et d'expérience dev posées avant l'essai | Un cran par option, dans un sens ou dans l'autre | Essai de la section 4 et relecture [SECU] |
+| Notes de sécurité et d'expérience dev posées avant l'essai | Un cran par option, dans un sens ou dans l'autre | Essai, puis relecture [SECU] du 2026-11-24 : notes de sécurité maintenues |
 | Absence d'avis prise comme un fait pour maildev 3.x et smtp4dev | Une faille non publiée ne se voit pas | Scanner les images figées (Trivy, ENF-03) au premier essai |
 | Adoption de Mailpit lue chez des tiers (Laravel, DDEV) et par les tirages de Docker Hub | Maturité surévaluée si ces projets changent d'outil ; les tirages comptent aussi la CI | Revoir à la prochaine vérification |
 | Pages de Google Cloud lues sans date de mise à jour visible | Un service d'envoi managé apparu depuis échapperait à la section 2 | Relire les pages avant l'ADR-014 |
-| Mémoire de la couche plus petite que le bruit du nœud de base (88,7 Mio d'écart entre exécutions) | Couche de Mailpit et de maildev illisible au nœud, -12,5 et 2,9 Mio ; aucun effet sur les notes, toutes loin du seuil | Plus d'exécutions du nœud de base, ou une couche mesurée dans le même cluster avant et après installation |
+| Mémoire de la couche plus petite que le bruit du nœud de base (88,7 Mio d'écart entre exécutions) | Couche de Mailpit et de maildev illisible au nœud, -12,5 et 2,9 Mio ; aucun effet sur les notes : au plus défavorable, 90,2, 112,9 et 161,3 Mio, tous sous 512 | Plus d'exécutions du nœud de base, entrelacées avec les options, ou une couche mesurée dans le même cluster avant et après installation |
 | Poste sur batterie pendant la série, et non sur secteur | Temps et CPU possiblement plus lents ; aucune mise en veille relevée | Relancer la série sur secteur |
 | Un seul poste, en arm64 : le volume amd64 vient du registre, pas d'un tirage mesuré | Démarrage sur amd64 non essayé ; volume noté exact, puisque lu dans les manifests | Relancer le script sur un poste ou un runner linux amd64 |
 | M5 mesuré avec un maintien de 5 s de la connexion, retiré après coup | Précision de M5 limitée, sans effet sur les notes : M5 n'alimente aucun seuil | Un client HTTP qui rend la main à la fermeture par le serveur, sans curl ni wget |
 | Mesure sans le miroir de l'ADR-011, accepté après l'écriture des seuils | Seuil 2 dépassé par les trois options au titre des tirages depuis Internet | Décision du DSI sur la lecture du seuil 2 (section 7) |
 | Configuration de smtp4dev corrigée par [BENCH] pendant les tests de fumée | Une équipe qui suit la documentation retomberait sur les mêmes pièges ; la note d'expérience dev en tient compte | Aucune : ces pièges sont des faits de l'essai |
 | Base mesurée 15 minutes après la série, et non entrelacée avec elle | Une dérive de l'hôte entre les deux séries fausserait M2 | Entrelacer le nœud de base avec les options |
+| M8 limité à l'API REST | socket.io de maildev, IMAP et POP3 de smtp4dev hors de la mesure | Un contrôle par port et par canal dans la matrice, et une NetworkPolicy |
+| Trois avis récents de Mailpit hors de la base mondiale ; version du binaire peut-être illisible par Trivy | Un scan de l'image figée ne verrait pas ces failles | Lire les avis du dépôt chaque mois ; au premier scan, vérifier que Trivy relève `github.com/axllent/mailpit` en v1.34.0 |
+| `docker ps` lancé à la main hors du verrou le 2026-11-21, écart déclaré par [BENCH] | Aucun : lecture seule, et aucune mesure retenue ne date de ce jour | Aucune |
+| Mémoire de Mailpit mesurée au repos avec un seul mail reçu, sans demande ni limite | Plancher du profil standard sous-estimé si Mailpit garde beaucoup de mails | Mesurer sur le golden repo, avec la demande et la limite retenues |
+| Prix de GKE : valeurs d'exemple de us-central1 [S73] ; grilles de GKE et du réseau illisibles le 2026-11-24 (<https://cloud.google.com/kubernetes-engine/pricing>, <https://cloud.google.com/vpc/network-pricing>) ; région non choisie | Montants de la voie GKE en ordre de grandeur, pas un budget ; Cloud NAT et sortie de la voie du relais non chiffrés | Grilles de la région retenue lues avant la GATE 2 (R-05) |
 
 ## 9. Sources
-
-<!--
-Une ligne par source, citée [Sn] dans le rapport. Source officielle d'abord
-(principe VIII) : dépôt, documentation, site du projet ou de la fondation.
-Une source tierce se signale dans la dernière colonne et ne justifie pas seule
-une note. URL entre chevrons, par exemple <https://example.org/page>.
--->
 
 [BENCH] Les métadonnées des dépôts GitHub (licence, archivage, releases,
 commits, avis, membres) sont lues par `gh api` en lecture le 2026-11-20 ;
@@ -992,11 +918,11 @@ pages web sont lues par WebFetch le même jour.
 | S8 | <https://mailpit.axllent.org/docs/> | 2026-11-20 | Fonctions : capture SMTP, interface web, API REST, POP3, vérification de HTML et de liens, relais ; images Docker multi-architectures | Oui |
 | S9 | <https://mailpit.axllent.org/docs/install/> | 2026-11-20 | Images pour 386, amd64 et arm64, binaire statique ; aucune mention de Kubernetes ni de Helm ; badge « Supported by Mailtrap » | Oui |
 | S10 | <https://mailpit.axllent.org/docs/install/docker/> | 2026-11-20 | Image `axllent/mailpit` sur Docker Hub, miroir sur ghcr.io ; interface sur 8025 et SMTP sur 1025 par défaut | Oui |
-| S11 | <https://mailpit.axllent.org/docs/configuration/runtime-options/> | 2026-11-20 | `MP_UI_AUTH_FILE`, `MP_SMTP_AUTH_FILE`, écoute par défaut sur 0.0.0.0 ; `MP_DISABLE_VERSION_CHECK` à `false` par défaut, Mailpit interroge alors GitHub ; `MP_ALLOW_INTERNAL_HTTP_REQUESTS` à `false` | Oui |
-| S12 | <https://mailpit.axllent.org/docs/configuration/http/> | 2026-11-20 | `MP_UI_AUTH` en variable d'environnement, « not available as a CLI flag » pour raison de sécurité ; l'authentification couvre l'interface et l'API | Oui |
+| S11 | <https://mailpit.axllent.org/docs/configuration/runtime-options/> | 2026-11-20, 2026-11-24 | `MP_UI_AUTH_FILE`, `MP_SMTP_AUTH_FILE`, écoute par défaut sur 0.0.0.0 ; `MP_DISABLE_VERSION_CHECK` à `false` par défaut, Mailpit interroge alors GitHub ; `MP_ALLOW_INTERNAL_HTTP_REQUESTS` à `false` ; relais `MP_SMTP_RELAY_CONFIG`, `MP_SMTP_RELAY_ALL` à `false`, `MP_SMTP_FORWARD_CONFIG`, `MP_WEBHOOK_URL`, POP3 seulement avec identifiants, base temporaire par défaut, relus le 2026-11-24 | Oui |
+| S12 | <https://mailpit.axllent.org/docs/configuration/http/> | 2026-11-20, 2026-11-24 | `MP_UI_AUTH` en variable d'environnement, « not available as a CLI flag » pour raison de sécurité ; l'authentification couvre l'interface et l'API ; exemple `user1:password1 user2:password2` ; l'API d'envoi retombe sur ces identifiants | Oui |
 | S13 | <https://mailpit.axllent.org/docs/configuration/passwords/> | 2026-11-20 | Fichiers de mots de passe en clair ou hachés (SSHA, MD5Crypt, APR1Crypt, SHA, bcrypt, crypt SHA-256 et SHA-512) | Oui |
 | S14 | <https://mailpit.axllent.org/docs/api-v1/> | 2026-11-20 | API REST sous `/api/v1/`, fichier Swagger 2.0 publié ; route `/api/v1/messages` dans `server/ui/api/v1/swagger.json` du dépôt | Oui |
-| S15 | <https://github.com/axllent/mailpit/blob/develop/server/server.go> | 2026-11-20 | Routes `livez` et `readyz` enregistrées sans le middleware d'authentification, à côté des routes protégées | Oui |
+| S15 | <https://github.com/axllent/mailpit/blob/develop/server/server.go> | 2026-11-20, 2026-11-24 | Routes `livez` et `readyz` enregistrées sans le middleware d'authentification, à côté des routes protégées ; relu à v1.34.0 le 2026-11-24 : `send`, `proxy`, `release` derrière l'authentification | Oui |
 | S16 | <https://hub.docker.com/r/axllent/mailpit> | 2026-11-20 | 248 160 030 tirages, dépôt enregistré le 2022-08-04 ; tag v1.34.0 pour linux/amd64, linux/arm64 et linux/386 | Oui |
 | S17 | <https://laravel.com/docs/sail> | 2026-11-20 | Documentation de Laravel 13.x : le fichier Compose par défaut de Sail contient Mailpit ; Mailtrap Local proposé en option | Tierce pour Mailpit, officielle pour Laravel |
 | S18 | <https://docs.ddev.com/en/stable/users/usage/developer-tools/> | 2026-11-20 | DDEV décrit Mailpit comme son capteur de mails de développement | Tierce pour Mailpit, officielle pour DDEV |
@@ -1047,20 +973,508 @@ pages web sont lues par WebFetch le même jour.
 | S63 | <https://github.com/maildev/maildev/tree/main/.github/workflows> | 2026-11-20 | Deux workflows (`ci.yml`, `draft-release.yml`) ; aucune signature ni attestation trouvée | Oui |
 | S64 | <https://kubernetes.io/docs/concepts/security/pod-security-admission/> | 2026-11-21 | Étiquettes de namespace `pod-security.kubernetes.io/<MODE>: <LEVEL>` et `<MODE>-version: <VERSION>`, modes `enforce`, `audit`, `warn` | Oui |
 | S65 | <https://docs.docker.com/docker-hub/usage/> et <https://docs.docker.com/docker-hub/usage/pulls/> | 2026-11-21, 2026-11-23 | 100 tirages par tranche de 6 heures pour une adresse IPv4 anonyme ; une requête GET de manifest compte, pas une requête HEAD ; un tirage d'image multi-architecture compte un tirage par architecture | Oui |
+| S66 | <https://github.com/axllent/mailpit/security/advisories/GHSA-v887-64wg-qqc9> | 2026-11-24 | Publié le 2026-11-17 à 06:58 UTC, moyen, CVSS 3.1 6,5 (AV:A/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H), CWE-248, sans CVE ; versions >= 1.33.1 et < 1.34.0, corrigé en 1.34.0 ; « One anonymous SMTP message kills the whole process: SMTP, web UI and REST API together » | Oui |
+| S67 | <https://api.github.com/advisories?affects=github.com/axllent/mailpit&ecosystem=go>, <https://api.osv.dev/v1/vulns/GHSA-v887-64wg-qqc9>, <https://trivy.dev/latest/docs/coverage/language/golang/> | 2026-11-24 | 15 avis dans la base mondiale ; GHSA-2vgv-6hcp-mf43, GHSA-379p-g4f4-hq5h et GHSA-v887-64wg-qqc9 absents ; OSV répond 404 ; Trivy lit la base de GitHub pour les modules Go hors bibliothèque standard, et lit la version d'un binaire dans ses informations de build, sinon « (devel) » puis les `-ldflags` | Oui |
+| S68 | <https://github.com/axllent/mailpit/blob/v1.34.0/.github/workflows/build-docker.yml>, <https://github.com/axllent/mailpit/blob/v1.34.0/Dockerfile>, <https://github.com/axllent/mailpit/releases/tag/v1.34.0> | 2026-11-24 | Construction déclenchée par `release: created`, `docker/build-push-action` v7.4.0 figée par SHA, poussée vers docker.io et ghcr.io, sans cosign ni attestation ; `FROM golang:alpine` et `alpine:latest`, aucun `USER`, `go build -ldflags` ; release publiée le 2026-11-17 à 06:57:50 UTC, qui refuse au démarrage des identifiants vides | Oui |
+| S69 | <https://api.github.com/repos/axllent/mailpit/attestations/sha256:23a2ef85bc50853ab3093645d1d64679afd8887e89da5e48a88940c172591a4e>, <https://hub.docker.com/v2/repositories/axllent/mailpit/tags/v1.34.0>, <https://hub.docker.com/v2/repositories/axllent/mailpit/tags?name=sha256>, <https://hub.docker.com/v2/repositories/maildev/maildev/tags/3.0.0>, <https://hub.docker.com/v2/repositories/rnwood/smtp4dev/tags/3.16.1> | 2026-11-24 | Aucune attestation (404) ; aucun tag `sha256-*` ; Mailpit v1.34.0 poussé une fois le 2026-11-17 à 07:07:21 UTC, maildev 3.0.0 le 2026-09-23 à 16:22:28 UTC, smtp4dev 3.16.1 le 2026-11-06 à 08:22:29 UTC ; condensats d'index égaux à ceux du script | Oui |
+| S70 | <https://github.com/maildev/maildev/blob/maildev@3.0.0/packages/api/src/server.ts>, `packages/core/src/utils/summary.ts`, `packages/cli/src/server/orchestrator.ts` du même tag, <https://github.com/socketio/socket.io/blob/socket.io@4.8.3/packages/engine.io/lib/server.ts> | 2026-11-24 | Basic par crochet `onRequest` de Fastify, `/api/healthz` exclu ; CORS de l'API `origin: true`, `credentials: true`, non réglé par la CLI ; socket.io sur `/socket.io`, CORS `*`, émet `newMail` avec sujet, adresses et 140 caractères de texte ; `attach()` d'engine.io intercepte ce chemin avant les autres écouteurs (l. 917-944) | Oui |
+| S71 | <https://github.com/rnwood/smtp4dev/blob/3.16.1/Rnwood.Smtp4dev/appsettings.json> | 2026-11-24 | `AuthenticationRequired` à `false`, « True if SMTP and IMAP will require authentication » ; `ImapPort` 143, `Pop3Port` 110, « Set to null to disable » ; `RelayOptions.SmtpServer` vide ; exemples `password` et `pass` | Oui |
+| S72 | <https://github.com/kubernetes-sigs/kind/releases/tag/v0.24.0> | 2026-11-24 | Publiée le 2024-08-15 : « Out-of-the-box support for network policy via sigs.k8s.io/kube-network-policies » | Oui |
+| S73 | <https://docs.cloud.google.com/kubernetes-engine/cud> | 2026-11-24 | Exemple de calcul pour us-central1 : 0,0445 USD par vCPU et 0,0049225 USD par « GB », par heure, pour les pods Autopilot ; tarifs avant la remise de 28 % de l'engagement flexible d'un an, pas la grille (relevé de [FINOPS]) | Oui |
+| S74 | <https://docs.cloud.google.com/kubernetes-engine/docs/concepts/autopilot-resource-requests> | 2026-11-24 | Classe généraliste : minimums de 50m et 52 MiB avec rafale, 250m et 512 MiB sans ; sans demande, 0,5 vCPU et 2 GiB ; stockage éphémère de 1 GiB par défaut ; arrondi à 0,25 vCPU sans rafale ; rapport vCPU:Gio de 1:1 à 1:6,5 (relevé de [FINOPS]) | Oui |
+| S75 | <https://docs.cloud.google.com/kubernetes-engine/docs/how-to/pod-bursting-gke> | 2026-11-24 | Rafale à partir de GKE 1.30.2-gke.1394000, cgroupv2 requis (défaut des clusters créés en 1.26 ou plus), après un redémarrage du plan de contrôle (relevé de [FINOPS]) | Oui |
+| S76 | <https://firebase.google.com/docs/auth/limits> | 2026-11-24 | Quotas quotidiens d'envoi de mails : Spark 150, 1 000, 1 000 et 5 ; Blaze 10 000, 100 000, 10 000 et 25 000 (réinitialisation, vérification d'adresse, changement d'adresse, lien de connexion) ; « Limitations apply per customer and can change without notice » ; aucun quota propre à Identity Platform, rien sur la facturation de ces envois (relevé de [FINOPS]) | Oui |
 
 ## 10. Relectures
 
-<!--
-[SECU] relit licences, critères éliminatoires et sécurité. [FINOPS] relit le
-coût. Le statut passe à « relu » quand les deux avis sont rendus et leurs
-remarques traitées.
--->
-
 | Relecteur | Porte sur | Date | Avis |
 | --- | --- | --- | --- |
-| [SECU] | Licences, critères éliminatoires, sécurité | AAAA-MM-JJ | Favorable, réservé ou défavorable |
-| [FINOPS] | Coût | AAAA-MM-JJ | Favorable, réservé ou défavorable |
+| [SECU] | Licences, critères éliminatoires, sécurité | 2026-11-24 | Réservé, favorable à Mailpit v1.34.0 sous conditions. Licences, gouvernance et critères éliminatoires sont confirmés sur les sources. La maturité de Mailpit passe à 4 : il n'a ni fondation ni liste d'adoptants tenue par le projet. GHSA-v887-64wg-qqc9 existe, de gravité moyenne (CVSS 6,5), et l'exception du principe VI couvre la v1.34.0 ; le délai de 7 jours s'achève de toute façon le 2026-11-24. Les notes de sécurité tiennent, mais M8 ne voyait que l'API REST : maildev et smtp4dev laissent chacun lire les mails hors de l'authentification. Aucune image n'est signée, et une image de docker.io hors de `library/` demande sa propre dérogation dans l'ADR-014. Aucun secret dans les données ni dans les commits. Conditions 1 à 8. |
+| [FINOPS] | Coût | 2026-11-24 | Favorable, avec corrections. Les chiffres de 4.4, 5.6 et 5.9 se retrouvent dans les données brutes de `series-1` et `base-1`, sauf deux phrases de la lecture de M2. Les seuils de 4.1 ont été appliqués tels qu'écrits : 4/5, 4/5 et 3/5 tiennent, et la note ne dépend pas du bruit du nœud de base. Avec Mailpit, le premier `task up` du profil standard passe de 1 787,0 à 1 802,1 Mo : 160,2 % du budget de 900 s à 10 Mbit/s, et 16,0 Mbit/s au minimum. Le profil standard reste à 3,5 Gio de VM et 7,5 Gio de portable. Il tient sur 8 Gio au repos avec Keycloak et Mailpit, avec 420,4 Mio de marge ; pour tenir aussi à la limite de Keycloak, cette limite doit rester sous 1 240 Mi environ. Sur GCP, ne rien déployer coûte 0 USD. Mailpit sur GKE Autopilot coûterait de 1,8 à 23,4 USD par mois selon ses demandes de ressources, aux prix d'exemple de us-central1. Le relais réel n'a aucun prix lu. Je propose 4/5 en coût pour les trois options, comme dans BENCH-012 : les écarts ne changent pas. |
 
-[SECU] Remarques et suite donnée.
+[SECU] Licences (5.1). Je confirme 5, 5 et 4. D'après l'API des dépôts relue
+le 2026-11-24, Mailpit et maildev sont sous MIT, smtp4dev sous BSD-3-Clause
+[S1], [S22], [S33]. L'accord de contribution de smtp4dev donne au projet le
+droit de « sublicense, and/or sell » les contributions [S43] : c'est la
+réserve mineure de sa note. Aucune option n'est sous AGPL. L'image de Mailpit
+embarque des paquets d'Alpine sous leurs propres licences. CELIAN ne
+redistribue aucune image, puisque le miroir zot ne transmet de copie à
+personne (ADR-011, condition 9).
 
-[FINOPS] Remarques et suite donnée.
+[SECU] Gouvernance (5.2). Je confirme 2 pour les trois. Les statistiques de
+contribution de GitHub, depuis la semaine du 2025-11-16, donnent au mainteneur
+de Mailpit 443 commits sur 485, dont 12 de Dependabot. Celui de maildev en a
+89 sur 106. Pour smtp4dev, l'API des commits compte 5 commits du mainteneur
+entre le 2025-11-20 et le 2026-11-20, comme le rapport. Chacun des trois
+projets repose sur une seule personne.
+
+[SECU] Maturité (5.3). Je ramène Mailpit à 4. Les rapports précédents
+réservent 5 aux projets gradués à la CNCF qui ont une liste d'adoptants
+déclarée (Cilium, Argo CD, Flux), et à minikube, sous-projet de Kubernetes. Un
+projet sans fondation, qui ne tient pas lui-même de liste d'adoptants, a reçu
+4 : k3d dans BENCH-003, Traefik dans BENCH-004, Config Sync dans BENCH-009.
+Keycloak a 4 dans BENCH-012, alors qu'il est Incubating à la CNCF et liste 59
+adoptants. Mailpit est tenu par une personne et son adoption se lit chez
+Laravel et DDEV : il ne peut pas passer devant. Le rapport le reconnaît
+lui-même, puisque sans ces deux sources la note serait 4. maildev reste à 3 et
+smtp4dev à 4.
+
+[SECU] Avis corrigé par la v1.34.0, et principe VI. GHSA-v887-64wg-qqc9
+existe. Le dépôt l'a publié le 2026-11-17 à 06:58:14 UTC, 24 secondes après la
+release v1.34.0. Il est classé moyen, CVSS 3.1 de 6,5
+(AV:A/AC:L/PR:N/UI:N/S:U/C:N/I:N/A:H), CWE-248, et touche les versions de
+1.33.1 incluse à 1.34.0 exclue [S66]. Un seul message SMTP anonyme fait
+paniquer le processus entier : SMTP, interface et API. La section 2 ne parle
+que du serveur SMTP. L'avis n'a pas de CVE, n'est pas dans la base mondiale de
+GitHub, et OSV répond 404 [S67]. Gravité réelle sur le PC : faible, puisqu'il
+faut un pod du cluster pour arrêter un outil de développement, sans aucune
+fuite. L'exception du principe VI (constitution 1.2.0) vise « une version qui
+corrige un avis de sécurité publié (CVE ou avis du projet) », et la v1.34.0 en
+relève. Sa condition, une PR qui passe toute la matrice, ne peut pas encore
+être tenue, faute de matrice. Elle n'a pas à l'être : le délai de 7 jours
+s'achève le 2026-11-24 à 06:57 UTC, avant toute PR du golden repo. Appliquer
+l'exception à la mesure reste une lecture du DSI, et je la partage : on mesure
+la version que le blueprint figera. Les notes de la v1.34.0 ajoutent un point
+utile : Mailpit refuse désormais de démarrer avec des identifiants vides
+[S68], ce qui sert la condition 1 de l'ADR-007.
+
+[SECU] Sécurité de Mailpit (5.5). Je maintiens 3 et je complète la
+justification. Avis : les comptes sont exacts, 18 avis du 2026-01-06 au
+2026-11-17, 1 élevé et 17 moyens selon le dépôt ; la base mondiale en contient
+15, dont 3 qu'elle classe élevés [S4], [S67]. Les trois absents sont les plus
+récents, tous sans CVE : GHSA-2vgv-6hcp-mf43 (2026-09-19), GHSA-379p-g4f4-hq5h
+(2026-10-22, le seul élevé du dépôt, à 7,5) et GHSA-v887-64wg-qqc9. Angle mort
+des scanners : Trivy lit la base de GitHub pour les modules Go hors
+bibliothèque standard [S67], donc un scan de l'image ne voit pas ces trois
+avis, comme les CVE sans paquet de R-36. Le binaire est construit par `go
+build`, avec la version passée en `-ldflags` [S68] ; je n'ai pas vérifié que
+Trivy sait lire cette version ; s'il ne la lit pas, aucun des 18 avis ne
+sortirait. Signature : le flux de publication de la v1.34.0 n'a ni cosign ni
+`actions/attest` ; l'API d'attestations de GitHub répond 404 pour le condensat
+mesuré, et Docker Hub n'a aucun tag `sha256-*` [S68], [S69]. Image : le tag
+v1.34.0 n'a été poussé qu'une fois, le 2026-11-17 à 07:07 UTC, au condensat
+que fige le script [S69] ; le Dockerfile part pourtant de `golang:alpine` et
+d'`alpine:latest`, sans condensat, et ne déclare aucun utilisateur. Accès : la
+v1.34.0 tient bien ce point ; l'interface, l'API, le WebSocket, le proxy et
+`release` passent par la même authentification, l'API d'envoi y retombe quand
+elle n'a pas d'identifiants propres, et seules `livez` et `readyz` restent
+ouvertes [S15]. La réserve demande d'agir : suivre les versions correctives,
+lire les avis du dépôt hors des scanners, imposer le profil `restricted`.
+
+[SECU] Sécurité de maildev (5.5). Je maintiens 2. J'écarte la lecture de la
+politique 3.x comme une rupture. Le calendrier de CVE-2024-27448 est exact :
+ticket public le 2023-08-25, avis mondial le 2024-04-05, correctif fusionné le
+2024-12-10, publié en 2.2.1 le 2024-12-12 [S26], [S27]. Le dépôt n'a jamais
+publié d'avis. Le code de la 3.0.0 montre deux faits que M8 ne pouvait pas
+voir. socket.io échappe à l'authentification : l'authentification Basic est un
+crochet `onRequest` de Fastify, socket.io est attaché au même serveur HTTP,
+sur `/socket.io`, et engine.io intercepte ce chemin avant de passer la main
+aux autres écouteurs, donc le crochet ne s'exécute pas ; chaque nouveau mail
+part alors en résumé vers tout client connecté : sujet, adresses et 140
+premiers caractères du texte, et un code de confirmation placé en début de
+texte y passerait [S70]. Le CORS est ouvert : celui de l'API renvoie toute
+origine avec `credentials: true`, et la CLI ne le règle pas [S70]. Ces deux
+faits viennent de la lecture du code, je ne les ai pas essayés.
+
+[SECU] Sécurité de smtp4dev (5.5). Je maintiens 2. Le projet n'a ni avis ni
+politique de sécurité [S36]. Le fichier de réglages de la 3.16.1 ajoute un
+point : `AuthenticationRequired` vaut `false`, et son commentaire dit « True
+if SMTP and IMAP will require authentication » [S71]. Le manifest a déplacé
+IMAP et POP3 sur 1143 et 1110 au lieu de les couper, alors que `null` les
+désactive. Le journal du deuxième test de fumée les montre à l'écoute. Hors du
+Service, ils restent joignables par l'adresse du pod depuis n'importe quel pod
+du cluster. M8 a mesuré le 401 de l'API, pas la lecture des mails par IMAP.
+C'est une lecture des réglages, non essayée.
+
+[SECU] Secrets (R-20, ADR-007). Les couches versionnées ne contiennent aucun
+objet Secret ni aucune valeur ; les trois manifests lisent l'identifiant par
+`secretKeyRef`, sans `command` ni `args`. Aucune des trois images ne livre de
+mot de passe par défaut : par défaut, elles n'ont pas d'authentification du
+tout, et les manifests en ajoutent une ; le risque pour le golden repo est
+donc l'oubli de `MP_UI_AUTH` : l'interface resterait ouverte, sans aucune
+erreur. Le script tire 32 caractères de `/dev/urandom` et les passe à `awk`
+par l'entrée standard, puis à `kubectl create -f -` : la valeur ne passe par
+aucune variable, aucun fichier, aucun argument, c'est la condition 1 de
+l'ADR-007, avec `awk` à la place de `printf`. La sonde construit l'en-tête
+`Basic` dans le pod et ne le passe qu'à des fonctions du shell et à `printf`,
+vers une FIFO, jamais à `nc` ; elle n'écrit que des paires clé et valeur. Dans
+`series-1`, `base-1`, `smoke-1` à `smoke4-1`, les fichiers `.out` et
+`wait-*.log` : ni valeur de Secret, ni en-tête, ni clé ; les journaux ne
+gardent que « secret/mail-ui-auth created » ; les `kubeconfig` font 28 octets,
+et 0 pour `smoke-1` ; gitleaks n'y trouve rien. Les journaux de kind gardent
+le chemin absolu du dossier de travail, nom du compte compris : ils ne doivent
+pas entrer dans le dépôt.
+
+[SECU] Valeurs connues à ajouter à la condition 1 de l'ADR-007. Pour Mailpit :
+`password1` et `password2`, l'exemple de la page de configuration HTTP
+(`MP_UI_AUTH="user1:password1 user2:password2"`), repris pour l'API d'envoi
+[S12]. Si smtp4dev revenait : `pass`, l'exemple de
+`CredentialsValidationExpression` [S71] ; son autre exemple, `password`, est
+déjà dans la liste. Le README de maildev 3.0.0 n'a que `<pass>`, un gabarit.
+Toutes ces valeurs font moins de 32 caractères et tombent déjà sous la règle
+de longueur. Deux précisions comptent davantage. La clé `mp-ui-auth` contient
+`utilisateur:mot de passe` : appliquée à la clé entière, la règle de longueur
+laisserait passer un mot de passe faible derrière un nom d'utilisateur long,
+donc le test vise la partie qui suit le premier `:`. Le tirage exclut l'espace
+et le `:`, qui séparent les entrées dans le format de `MP_UI_AUTH` [S12]. Le
+nom d'utilisateur est fixe : il sort du test de répétition, comme `username`
+dans la condition 10 de l'ADR-012.
+
+[SECU] Signature, registres et profil (ENF-03, ADR-011, ADR-012). Aucune image
+mesurée n'est signée. J'ai vérifié Mailpit moi-même (5.5) ; pour maildev et
+smtp4dev, je garde la lecture du rapport [S45], [S63] ; leurs tags n'ont été
+poussés qu'une fois, au condensat du script [S69]. Les trois images sont sur
+docker.io, hors de `library/` : la dérogation de l'ADR-012 ne les couvre pas,
+et celle de l'ADR-013 ne vise que `quay.io/keycloak/keycloak` ; l'ADR-014
+porte donc la sienne pour `docker.io/axllent/mailpit`. zot sert déjà docker.io
+: aucun registre n'entre dans la liste de la condition 10 de l'ADR-011 ; le
+miroir sur ghcr.io que publie Mailpit n'apporterait rien ; un tirage anonyme
+suffit (condition 13). Profil `restricted` : l'image de Mailpit tourne en root
+faute de `USER`, et il suffit de lui donner un utilisateur numérique ; maildev
+demande le même ajout ; smtp4dev demande cinq réglages, dont une variable où
+la casse décide du résultat : c'est la configuration la plus fragile.
+`readOnlyRootFilesystem` n'a été essayé pour aucune option, et aucune limite
+de ressources n'est posée ; par défaut, Mailpit écrit sa base dans un fichier
+temporaire [S11].
+
+[SECU] Ce que le serveur expose. SMTP : sans authentification et ouvert à tout
+pod du cluster, ce qui est voulu ; dans l'essai, les Services sont en
+`ClusterIP` et aucun port n'est publié vers l'hôte. Relais : aucun n'est
+actif. Chez Mailpit, le relais demande `MP_SMTP_RELAY_CONFIG` ou ses
+variables, le transfert `MP_SMTP_FORWARD_CONFIG`, le webhook `MP_WEBHOOK_URL`,
+et l'API `release` dépend du relais ; POP3 reste coupé sans identifiants
+[S11], [S15]. maildev ne relaie qu'avec `--outgoing-host` [S29]. smtp4dev ne
+relaie qu'avec `RelayOptions.SmtpServer`, réglable depuis l'interface tant que
+`LockSettings` vaut `false` [S71]. Sorties HTTP de Mailpit : la vérification
+de version, que le manifest coupe, et, quand un utilisateur de l'interface le
+demande, la vérification des liens, celle du HTML et le proxy des captures ;
+les adresses internes y sont refusées par défaut [S11]. Sortie du poste : sur
+le PC, rien ne bloque le port 587, contrairement à GCP ; la promesse « aucun
+mail ne quitte le poste » ne tient donc que par la configuration, et la série
+n'a pas essayé de sortie. kind applique les NetworkPolicy depuis la v0.24.0,
+grâce à kube-network-policies [S72] : une politique qui ferme la sortie du pod
+rend la promesse vérifiable. L'interface passe par la gateway en boucle locale
+(R-20, ADR-005), ce que l'essai n'a pas couvert.
+
+[SECU] Inventaire du script, et `docker ps`. L'inventaire nomme bien les
+commandes qui écrivent : `kind create cluster`, `kind delete cluster`, et
+`kubectl apply` et `create` contre le cluster de l'essai ; `kubectl delete`
+est déclaré mais ne sert pas. Il manque deux mentions, que la version intégrée
+de BENCH-012 contient : `kind create cluster` lance le nœud par `docker run
+--privileged`, et `docker ps -q` (ligne 408) n'est pas dans la liste des
+commandes qui lisent. Le script ne sort du poste que par `docker manifest
+inspect` et par les tirages du nœud, tous vers Docker Hub. Il ne prend le
+verrou que si `BENCH_LOCK` est défini, ce que la section 4.3 ne dit pas. Le
+`docker ps` lancé hors du verrou le 2026-11-21 est sans conséquence : la
+commande ne fait que lire et ne touche ni conteneur ni réseau, et aucune
+mesure retenue ne date de ce jour ; BENCH-012 garde `series-4` du 2026-11-23,
+BENCH-013 le 2026-11-23 entre 22:42 et 23:41 UTC. L'écart s'écrit en section
+8, et la règle reste telle quelle.
+
+[SECU] Dépôt public. Le gitleaks du hook pre-commit, figé en v8.30.1, a scanné
+`55b53af..9329120` : sept commits, aucune fuite. Les lignes ajoutées ne
+contiennent ni `/Users/`, ni `/private/tmp`, ni `scratchpad`, ni tiret
+cadratin. Auteur et committer utilisent l'adresse noreply.
+
+[SECU] Parité sur GCP, pour [ARCHI]. La première voie est la moins exposée :
+rien sur `gcp`, et l'hôte SMTP dans la configuration. La deuxième ferait
+tourner, sur un cluster joignable, un outil qui garde des liens de
+confirmation et de réinitialisation : il faudrait alors une interface jamais
+publique, une sortie fermée, une dérogation à ENF-03 et un budget de [FINOPS].
+La troisième ferait entrer un vrai identifiant d'envoi : c'est le cas de la
+question 2 de l'ADR-007, hors du MVP.
+
+[SECU] Conditions proposées pour l'ADR-014 (Mailpit) :
+
+1. Image et dérogation à ENF-03. `docker.io/axllent/mailpit` est désignée par
+   condensat et tirée par zot ; docker.io est déjà dans la liste de la
+   condition 10 de l'ADR-011. La dérogation est datée, sur le modèle de
+   l'ADR-013 : référence exacte, condensat compris, dans une liste fermée, et
+   [SECU] relit chaque condensat neuf. Elle tombe quand Mailpit signe ses
+   images de façon vérifiable par Kyverno. Contrôles : S01, E11, et le
+   contrôle de la condition 7 de l'ADR-012 étendu à
+   `docker.io/axllent/mailpit`.
+2. Suivi et scanners. Renovate suit les versions correctives. Une version qui
+   corrige un avis du dépôt passe par l'exception du principe VI, matrice
+   comprise. [SECU] lit chaque mois les avis du dépôt (R-36 étendu à Mailpit).
+   Au premier scan de l'image figée, [SECU] vérifie que Trivy relève
+   `github.com/axllent/mailpit` et sa version ; sinon, R-36 dit que le scan ne
+   couvre pas Mailpit.
+3. Durcissement. Le namespace applique le profil `restricted`. Le pod a
+   `runAsNonRoot`, un `runAsUser` numérique, `allowPrivilegeEscalation:
+   false`, les capacités `ALL` retirées, `seccompProfile: RuntimeDefault` et
+   `automountServiceAccountToken: false`. `readOnlyRootFilesystem` s'essaie
+   avec un `emptyDir` borné par `sizeLimit`, qui reçoit la base temporaire. Le
+   pod a une limite mémoire. `MP_MAX_MESSAGES` et `MP_MAX_MESSAGE_SIZE` sont
+   fixés par [DEV] avec [FINOPS]. Contrôle : la matrice échoue sur un pod
+   refusé par le profil.
+4. Aucun envoi hors du poste. La couche ne porte aucune variable
+   `MP_SMTP_RELAY_*`, `MP_SMTP_FORWARD_*`, `MP_WEBHOOK_URL` ou
+   `MP_SEND_API_AUTH_ACCEPT_ANY`, ni `MP_ALLOW_INTERNAL_HTTP_REQUESTS` à
+   `true`. `MP_DISABLE_VERSION_CHECK` vaut `true`. Une NetworkPolicy refuse
+   toute sortie au pod ; en entrée, elle n'admet que le SMTP depuis
+   l'application et le HTTP depuis la gateway. [OPS] vérifie qu'elle
+   s'applique sous kind 0.33.0 [S72], comme pour la condition 4 de l'ADR-013.
+   Contrôles : un contrôle statique refuse ces variables dans le rendu ; un
+   pod non admis n'atteint ni 1025 ni 8025.
+5. Exposition. Le SMTP ne sort pas du cluster : Service en `ClusterIP`, sans
+   `NodePort`, ni `LoadBalancer`, ni route TCP. L'interface passe par une
+   HTTPRoute de la gateway en boucle locale. POP3 reste coupé. Contrôle : par
+   la gateway, `/api/v1/messages` répond 401 sans identifiant.
+6. Identifiants (R-20). Le Secret est créé par `task up` selon la condition 1
+   de l'ADR-007, avec `password1` et `password2` ajoutés à la liste. Le test
+   vise la partie mot de passe de `mp-ui-auth`, et le tirage exclut l'espace
+   et le `:`. `MP_UI_AUTH` vient d'un `secretKeyRef`. Le contrôle du type de
+   M8 (401 puis 200) entre dans la matrice, sans identifiant en argument. Le
+   README dit comment lire le mot de passe sans l'écrire dans un fichier.
+   Contrôles : E04 et E05 étendus à la couche ; un contrôle statique sur la
+   source de `MP_UI_AUTH`.
+7. Version. La v1.34.0 est figée par condensat après le 2026-11-24 à 06:57
+   UTC. L'exception du principe VI n'est pas requise pour le golden repo.
+8. GKE. Aucun déploiement en phase 2. Si [ARCHI] retient un serveur de test
+   sur GKE, les conditions 1 à 6 s'appliquent, l'interface n'est jamais
+   publique, et il faut l'accord de Lucas et un budget de [FINOPS]
+   (principe X).
+
+[SECU] D'accord, avec réserves : Mailpit reste devant. L'écart tient sur la
+maturité, l'activité, la sécurité et l'expérience dev. M8 faisait paraître
+égaux les contrôles d'accès des trois options ; la lecture du code les sépare.
+maildev diffuse les nouveaux mails hors de l'authentification, et smtp4dev
+laisse IMAP sans identifiant. Mailpit protège l'interface, l'API et le
+WebSocket. Ses faiblesses viennent d'ailleurs : des avis fréquents, dont les
+derniers échappent aux scanners, et une image qui tourne en root sans
+signature. Les conditions 1 à 4 les couvrent.
+
+[SECU] Non vérifié : que Trivy lise la version du binaire de Mailpit ; que les
+NetworkPolicy s'appliquent sous kind 0.33.0 ; le contournement par socket.io
+chez maildev et l'accès IMAP sans identifiant chez smtp4dev, lus dans le code
+et les réglages sans être essayés ; que `printf` soit intégré au shell de
+busybox ; les workflows de maildev et smtp4dev.
+
+[FINOPS] Recalcul depuis la série du 2026-11-23. J'ai relu `runs.tsv`,
+`idle.tsv`, `summary.tsv`, `images.tsv`, `node-images.tsv`, `load.tsv` et
+`versions.tsv` de `series-1`, puis les mêmes fichiers de `base-1`. Le script
+prend la médiane des trois échantillons de chaque exécution, puis la médiane
+des trois exécutions. La couche est la médiane du nœud de l'option moins celle
+du nœud de base. M1, le nœud au repos, M7, la mémoire du pod, M3, le CPU du
+nœud et M5 se retrouvent au dixième près, écarts compris, échantillon par
+échantillon. M4 se retrouve aux octets en amd64 : 15 109 173 pour Mailpit, 74
+861 847 pour maildev, 176 881 932 pour smtp4dev, soit 12,1, 59,9 et 141,5 s à
+10 Mbit/s. Le seuil 2 se lit dans `node-images.tsv` : un événement `Pulled`
+pour l'image de l'option dans chacune des neuf exécutions. Le tirage prend de
+2,5 à 2,7 s pour Mailpit, de 4,6 à 4,9 s pour maildev et de 5,8 à 6,3 s pour
+smtp4dev. busybox est tirée aussi dans les trois exécutions de base et reste
+hors couche. Deux écarts, tous deux en 4.4 et sans effet sur les notes.
+D'abord, le nœud de base varie de 88,7 Mio, plus que chacune des trois
+couches, smtp4dev compris (74,0), alors que le rapport écrit « plus que deux
+des trois ». Ensuite, 129,1 Mio font 25,2 % du seuil de 512 Mio, et non 23 % ;
+les 23 % correspondent à la médiane de 118,9 Mio.
+
+[FINOPS] Lire une couche plus petite que le bruit. La troisième règle de la
+GATE 1 fixe la méthode, mais ne dit pas quoi faire d'un résultat négatif. Je
+propose deux lectures, que le DSI doit faire valider. Pour la note, on compare
+toujours au seuil la valeur que donne la règle. Quand elle est plus petite que
+l'écart du nœud de base, on écrit « dans le bruit » et on contrôle le seuil
+sur un majorant : le nœud de l'option le plus haut moins le nœud de base le
+plus bas, en médianes d'exécution. Si le majorant reste sous le seuil, la note
+ne dépend pas du bruit ; s'il le franchit, on refait la mesure en entrelaçant
+la base avec les options. Pour dimensionner, on compte la plus grande des deux
+valeurs, couche au nœud ou mémoire de travail du pod, puisque le nœud doit au
+moins loger le pod. Une valeur négative ne se retranche jamais d'un plancher.
+Ici, les majorants valent 90,2 Mio pour Mailpit (631,1 moins 540,9), 112,9
+pour maildev et 161,3 pour smtp4dev : 17,6 %, 22,1 % et 31,5 % du seuil de 512
+Mio. Échantillon par échantillon, ils montent à 93,5, 199,2 et 207,2 Mio,
+toujours sous le seuil, donc la note d'empreinte n'en dépend pas. La couche de
+smtp4dev se distingue quand même du bruit : ses trois exécutions (679,4 à
+702,2 Mio) dépassent la plus haute du nœud de base (629,6), si bien que sa
+couche tient entre 49,8 et 161,3 Mio. La dispersion de la base vient de sa
+première exécution : un échantillon à 623,2 Mio puis deux à 540,9 et 538,7, et
+un cluster créé en 35,2 s contre 27,2 et 26,6 pour les deux autres. Sans cette
+exécution, l'écart de la base tombe à 12,4 Mio. La cause n'est pas établie.
+
+[FINOPS] Seuils de 4.1. J'ai comparé une à une les lignes 248 à 291 du rapport
+à `section-4.1-2026-11-20T20:14:05Z.md` : les 44 lignes sont identiques. Le
+condensat de référence,
+`2d22574e54d5f817d73e5efdb069b794d66c935bc29f59d8b2cc68538f540346`, est daté
+du 2026-11-20 à 20:14:05 UTC (`section-4.1.sha256`). Toutes les traces de
+mesure sont postérieures. Les contrôles du premier test de fumée tournent à
+10:23:07 (`smoke-1.out`, sans date, le 2026-11-22 d'après le rapport), sans
+aucune exécution dans `smoke-1/load.tsv`. Le deuxième test de fumée démarre le
+2026-11-23 à 21:32:32 UTC, la série à 22:43:28 UTC. Seuil 1 : franchi par
+smtp4dev seul (176,9 Mo pour 112,5 ; Mailpit 15,1, maildev 74,9). Seuil 2 :
+franchi par les trois options, avec un `Pulled` à chaque exécution. Seuil 3 :
+non franchi (3,4, 6,5 et 8,6 s pour 90). Seuil 4 : non franchi, ni par la
+valeur de la règle, ni par le majorant. Mailpit et maildev perdent donc un
+cran et smtp4dev deux : 4/5, 4/5 et 3/5. Aucune médiane n'est à moins de 10 %
+d'un seuil. Comme dans BENCH-012, l'heure d'écriture des seuils et l'absence
+de lecture préalable des registres reposent sur la déclaration de [BENCH],
+faute de commit.
+
+[FINOPS] Lecture du seuil 2. Je suis d'accord avec la lecture à la lettre. La
+série a tourné sans miroir, et chaque création a retéléchargé l'image depuis
+Internet, ce que décrit le seuil. Avec le miroir de l'ADR-011, le nœud tire
+toujours l'image à chaque création, mais depuis zot, sans réseau après le
+premier remplissage. En sensibilité, les trois options regagnent un cran et le
+classement ne bouge pas. Pour Mailpit, l'enjeu est faible : 15,1 Mo, soit 12,1
+s à 10 Mbit/s par création sans miroir, contre 141,5 s pour smtp4dev. Mailpit
+vient de docker.io, déjà dans la liste unique de la condition 10 de l'ADR-011
+: contrairement à Keycloak avec quay.io, il n'ajoute aucun amont au miroir.
+L'estimation du stockage de zot pour le profil standard passe de 831,6 à 846,7
+Mo en amd64, sans mesure qui la confirme.
+
+[FINOPS] Cumul avec le premier `task up`. Depuis BENCH-012 et l'ADR-013, la
+base est celle de R-04 : 1 787,0 Mo en amd64, zot, Postgres de l'ADR-012 et
+Keycloak compris. Le rapport part encore des 1 521,9 Mo d'avant Keycloak, d'où
+ses 1 537,0 Mo et ses 136,6 %. Avec Mailpit, le premier `task up` du profil
+standard passe à 1 802,1 Mo : 1 441,7 s à 10 Mbit/s, 160,2 % du budget de 900
+s, et 16,0 Mbit/s au minimum pour le seul téléchargement. La part de Mailpit
+est de 12,1 s, soit 1,3 % du budget. Sans miroir, le total vaut 1 724,4 Mo,
+153,3 % du budget et 15,3 Mbit/s au minimum. Avec maildev, il serait de 1
+861,9 Mo (165,5 %) ; avec smtp4dev, de 1 963,9 Mo (174,6 %).
+
+[FINOPS] Mémoire. J'applique la méthode de BENCH-005, reprise de BENCH-010 à
+BENCH-012 : plancher multiplié par 1,5, arrondi au demi-gibioctet supérieur,
+plus 4 Gio pour le portable, et une VM de 8 Gio sur un portable de 16 Gio. Je
+pars du plancher du profil standard avec Keycloak, 2 295,0 Mio (R-04,
+ADR-013). Mailpit y entre pour 15,3 Mio, la médiane de son pod, puisque sa
+couche au nœud est dans le bruit. Le plancher passe à 2 310,3 Mio : 3,5 Gio de
+VM et 7,5 Gio de portable, sans palier de plus. Sur un portable de 8 Gio, il
+reste 420,4 Mio de plancher avant la limite, et 79,0 Mio avant le palier de
+4,0 Gio, qui tient encore sur 8 Gio. Sur 16 Gio, il reste 3 151,0 Mio. Avec le
+majorant de 90,2 Mio, le plancher vaudrait 2 385,2 Mio : toujours 3,5 Gio de
+VM, à 4,1 Mio du palier suivant, et 345,5 Mio de reste sur 8 Gio. Le profil
+standard tient donc sur 8 Gio au repos avec Keycloak et Mailpit, dans les deux
+lectures. smtp4dev, compté à son pod de 118,9 Mio, porterait le plancher à 2
+413,9 Mio et la VM à 4,0 Gio ; maildev resterait à 3,5 Gio. Ces chiffres
+mêlent des séries de plusieurs benchmarks prises à des jours différents : ce
+sont des ordres de grandeur.
+
+[FINOPS] La limite de Keycloak décide du reste (condition 11 de l'ADR-013). À
+la limite de la référence, 2000Mi, le plancher monterait à environ 3 490,4 Mio
+avec Mailpit : 5,5 Gio de VM et 9,5 Gio de portable, au-delà de 8 Gio, avec
+encore 1 970,9 Mio de reste sur 16 Gio. Pour que Keycloak tienne sur 8 Gio à
+sa limite avec Mailpit, cette limite doit rester sous 1 240 Mi environ. Le
+calcul : 2 730,7 Mio moins 1 451,8, moins 15,3 pour Mailpit, moins les 23,3
+Mio que le nœud comptait en plus du pod de Keycloak. Avec le majorant de
+Mailpit, la limite tombe à 1 165 Mi. Rien ne prouve que Keycloak tient sous
+cette limite : son pod pèse environ 820 Mio au repos, ce qui laisse environ
+420 Mi pour le pic de démarrage, jamais mesuré. La demande de la référence,
+1700Mi, dépasse cette limite et doit baisser avec elle. Mailpit tournait sans
+demande ni limite pendant la mesure : le blueprint doit en poser, pour que son
+poids reste celui compté ici.
+
+[FINOPS] Côté GCP, je n'ai lancé aucune action cloud, et aucun budget n'est
+validable tant que la région n'est pas choisie (R-05). Le 2026-11-24, l'outil
+ne rend que le titre des grilles de prix de GKE et du réseau. Voici les trois
+voies, chiffrées sans prix inventé.
+
+[FINOPS] Rien sur `gcp`. Aucun pod, aucune ressource : 0 USD pour la brique.
+L'exemple n'envoie pas de mail (Q7), et les mails des parcours de connexion
+partent d'Identity Platform, qui les envoie lui-même avec la méthode `DEFAULT`
+[S58]. La page des limites de Firebase Authentication donne des quotas
+quotidiens d'envoi : en offre Blaze, par exemple, 10 000 réinitialisations et
+100 000 vérifications d'adresse par jour [S76]. Elle ne dit pas si ces envois
+sont facturés, et ne donne pas de quota propre à Identity Platform. Une démo
+reste loin de ces quotas.
+
+[FINOPS] Mailpit dans GKE Autopilot, en `oss` avec `managed_gap`. Autopilot
+facture les demandes de ressources du pod. Avec la rafale, disponible à partir
+de GKE 1.30.2-gke.1394000 sur un cluster en cgroupv2 [S75], le minimum de la
+classe généraliste est de 50m et 52 MiB [S74]. Mailpit pèse 15,3 Mio et 0,17 %
+d'un cœur au repos sur le PC, donc il y tient, sans mesure sur GKE. Les prix
+d'exemple de us-central1 sont de 0,0445 USD par vCPU-heure et 0,0049225 USD
+par Go-heure, avant remise d'engagement [S73]. Sur 730 heures allumées, cela
+fait environ 1,8 USD par mois. Sans rafale, le minimum passe à 250m et 512 MiB
+: 9,9 USD par mois, ou 10,1 si l'unité de la page est le Go décimal. Sans
+demande, Autopilot applique 0,5 vCPU et 2 GiB : 23,4 USD par mois, ou 24,0.
+Trois postes restent hors chiffre. Le stockage éphémère, 1 GiB par défaut
+[S74], a un prix non lu. Ouvrir l'interface ne coûte rien par `kubectl
+port-forward`, ni par une route sur la Gateway de l'application, qui n'ajoute
+pas d'équilibreur, mais cette route est à relire par [SECU]. Les journaux sont
+facturés au volume (R-18). Dans le MVP, ce pod ne recevrait rien : l'exemple
+n'envoie pas de mail, et rien de ce qui a été lu ne dit qu'Identity Platform
+joigne un hôte privé du cluster en `CUSTOM_SMTP`. S'il fallait publier le port
+SMTP, un équilibreur public s'ajouterait, à un prix non lu.
+
+[FINOPS] Relais réel, fournisseur tiers ou Google Workspace, sur le port 465
+ou 587. Je n'ai lu aucun prix et je n'en écris aucun. Au-delà de l'abonnement,
+cette voie ouvre deux coûts. Le premier est une facture hors de Cloud Billing
+: le budget d'alerte du projet de démo ne la voit pas (R-05), il lui faut donc
+son propre plafond. Le second est la sortie vers Internet. Les nœuds sont
+privés (ADR-008), et le socle mesuré n'a pas de Cloud NAT : il faudrait
+l'ajouter, ou une autre voie de sortie. Ce service et le trafic sortant sont
+facturés, à des prix que la page du réseau ne rend pas. L'identifiant du
+relais irait enfin dans Secret Manager, facturé à l'accès (R-18, R-29).
+
+[FINOPS] Note de coût. Je propose 4/5 pour les trois options au lieu de 5/5,
+par cohérence avec BENCH-012. Sur le PC, il n'y a ni licence ni service
+payant, et la mémoire et le volume sont comptés en 5.6. La réserve porte sur
+le cloud. Comme Keycloak dans BENCH-012, l'option elle-même peut tourner sur
+GKE si l'ADR-014 retient la voie du `managed_gap`, avec un pod facturé à
+l'heure, et la voie du relais ouvre une facture hors de GCP. Le coût ne
+départage pas : sans rafale, les trois options tiennent dans le même minimum
+d'Autopilot, et avec la rafale elles ne diffèrent que de quelques dizaines de
+centimes par mois. Les totaux passeraient à 84, 70 et 64, avec les mêmes
+écarts de 14 et 20 points.
+
+[FINOPS] Empreinte. La règle donne bien 4/5, 4/5 et 3/5, mais elle ne voit pas
+la hauteur des écarts. Sur le PC, Mailpit coûte 15,1 Mo et 15,3 Mio de pod,
+maildev 74,9 Mo et 59,2 Mio, smtp4dev 176,9 Mo et 118,9 Mio. Pour le critère
+des 15 minutes comme pour le portable de 8 Gio, Mailpit est le moins cher des
+trois, et smtp4dev serait le seul à coûter un palier de VM.
+
+[FINOPS] D'accord. Le coût ne départage pas, et le verdict tient sur la
+maturité, l'activité, la sécurité et l'expérience dev, avec 14 points d'écart.
+Sur le PC, Mailpit est en plus le moins cher. Trois conditions pour l'ADR-014
+: R-04 et ENF-01 passent à 1 802,1 Mo ; les demandes et limites de Mailpit
+sont explicites ; la limite de Keycloak est fixée sous 1 240 Mi environ et
+mesurée sur le golden repo, pic de démarrage compris, sinon le profil standard
+demande plus de 8 Gio (question 3 de l'ADR-013). Sur GCP, côté coût,
+préférence pour ne rien déployer : 0 USD, aucune ressource nouvelle, aucun
+mail applicatif à capter dans le MVP. Si [ARCHI] retient Mailpit sur GKE : une
+réplique, des demandes explicites au minimum avec la rafale, aucune exposition
+publique, un budget validé avant tout apply.
+
+[FINOPS] Questions ouvertes : la lecture d'une couche dans le bruit (majorant
+pour la note, pod pour le dimensionnement) est une proposition, à confirmer
+par Lucas pour les rapports suivants ; « per GB » (Go ou Gio, 2 % d'écart) ;
+facturation des mails d'Identity Platform et accès à un hôte SMTP privé
+inconnus ; mémoire de Mailpit avec beaucoup de mails non mesurée.
+
+[BENCH] Suite donnée. Les corrections 1 à 16 de [SECU] et 1 à 13 de [FINOPS]
+sont intégrées dans les sections 1 à 9, avec la grille réconciliée par le DSI
+le 2026-11-24 : Mailpit 81, maildev 70, smtp4dev 64 (section 6). Chaque
+relecture a calculé ses totaux sans la correction de l'autre : 82, 71 et 65
+pour [SECU], retirés de sa ligne par le DSI ; 84, 70 et 64 pour [FINOPS], dont
+les écarts de 14 et 20 points valent 11 et 17 dans la grille réconciliée. La
+sensibilité de la section 7 est recalculée sur cette grille : 84 avec
+l'adoption de Mailpit comptée en preuve directe, 79 en comptant ses avis,
+maildev à 72 avec une politique 3.x lue comme une rupture. Les sources de
+[SECU] gardent leurs numéros, S66 à S72 ; celles de [FINOPS], qu'elle
+numérotait S66 à S69, deviennent S73 à S76, renvois compris dans ses
+paragraphes ci-dessus, en 5.9 et en section 8. La réserve de [FINOPS] sur les
+ressources prend le numéro 10, après les réserves 7 à 9 de [SECU].
+
+[BENCH] Script et seuils. La correction 17 de [SECU] passe par un commit à
+part, après celui qui garde le script mesuré. Avant la relecture, le script
+versionné a pour SHA-256
+`30f6f4d7923442ca5551adce29c225aacd98349cf7bd98e2f269662c3ca23e09`. C'est le
+contenu du commit en place pendant la série : le dernier changement du script
+date du 2026-11-23 à 22:05:07 UTC, et la série a démarré à 22:42:38 UTC. La
+série ne relève pas le condensat du script lui-même, seulement ceux des 14
+fichiers de `tests/bench/bench-013/` (`manifests.tsv`), tous égaux à ceux du
+dépôt. Après la correction 17, qui ne touche que des commentaires, le script a
+pour SHA-256
+`b895830cc052bf17645c12eb751b43e6490deb79d3d78d08f7882edaa53c884a`.
+La section 4.1 n'a pas bougé : son SHA-256 vaut toujours
+`2d22574e54d5f817d73e5efdb069b794d66c935bc29f59d8b2cc68538f540346`.
+
+[BENCH] Les numéros de ligne cités par les deux relectures renvoient au
+rapport d'avant la relecture, dont les commentaires du gabarit sont retirés
+depuis ; la ligne 408 du script citée par [SECU] est devenue la 410. La plage
+`55b53af..9329120` scannée par [SECU] date d'avant le rebase de la branche sur
+`a341d35`, le 2026-11-24 : les sept commits y gardent les mêmes changements.
+Les points que [SECU] n'a pas vérifiés restent ouverts ; les deux premiers
+entrent dans ses conditions 2 et 4. Reste aussi la question de [FINOPS] sur la
+lecture d'une couche plus petite que le bruit (majorant pour la note, pod pour
+le dimensionnement), à confirmer par Lucas pour les rapports suivants.
