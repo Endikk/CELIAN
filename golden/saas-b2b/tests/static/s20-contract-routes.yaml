@@ -1,0 +1,10 @@
+# Routes of the API contract, one "<METHOD> <path>" per item, query strings
+# left out (spec 001, contracts/http-api.md). Control S20 compares them with
+# the machine description of the API, src/Api/openapi.json; inside CELIAN it
+# also compares them with the headings of the contract.
+routes:
+  - GET /api/healthz
+  - GET /api/readyz
+  - POST /api/notes
+  - GET /api/notes/{id}
+  - GET /api/notes
