@@ -127,6 +127,34 @@ test_s23_rejects_a_preset_extended_inside_a_rule if {
 	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"extends\"] extends a preset")
 }
 
+# Legacy keys that Renovate migrates into a key of the delay, and
+# experimental options of the delay.
+
+test_s23_rejects_stability_days_in_a_rule if {
+	rule := {"matchPackageNames": ["*"], "stabilityDays": 0}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"stabilityDays\"] is a legacy key")
+}
+
+test_s23_rejects_master_issue_approval_after_the_entry_of_adr_016 if {
+	rule := {"matchDatasources": ["docker"], "matchPackageNames": undated_rule.matchPackageNames, "masterIssueApproval": false}
+	denied_with(checked(config_with_rules([undated_rule, rule])), "[\"packageRules\", 1, \"masterIssueApproval\"] is a legacy key")
+}
+
+test_s23_rejects_unpublish_safe_at_the_top if {
+	renovate := with_value(valid_config, "unpublishSafe", true)
+	denied_with(checked(renovate), "[\"unpublishSafe\"] is a legacy key")
+}
+
+test_s23_rejects_the_package_manager_sync_of_the_delay if {
+	renovate := with_value(valid_config, "minimumReleaseAgePackageManagerSync", true)
+	denied_with(checked(renovate), "[\"minimumReleaseAgePackageManagerSync\"] is an experimental option")
+}
+
+test_s23_rejects_the_package_manager_delay_of_a_manager if {
+	renovate := with_value(valid_config, "npm", {"minimumReleaseAgePackageManager": "0 days"})
+	denied_with(checked(renovate), "[\"npm\", \"minimumReleaseAgePackageManager\"] is an experimental option")
+}
+
 # Registries without a release date (ADR-016): one entry, the block of the
 # ADR to the letter, description aside.
 

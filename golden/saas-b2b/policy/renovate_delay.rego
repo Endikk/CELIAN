@@ -83,6 +83,43 @@ deny contains msg if {
 	msg := sprintf("%s: %v sets the delay again; it is set once, at the top of renovate.json, apart from the entry of ADR-016", [label_delay, path])
 }
 
+# Legacy keys. Renovate migrates a configuration before it reads it, at every
+# depth, each packageRules entry included (lib/config/migration.ts, lines 92
+# to 119, Renovate 44.247.1). Three legacy keys turn into a key that S23
+# checks, and would pass under their old name:
+# - stabilityDays becomes minimumReleaseAge, 0 becoming null
+#   (lib/config/migrations/custom/stability-days-migration.ts, lines 12 to 23);
+# - masterIssueApproval becomes dependencyDashboardApproval
+#   (lib/config/migrations/migrations-service.ts, line 110);
+# - unpublishSafe set to true adds preset security:minimumReleaseAgeNpm to
+#   extends (lib/config/migrations/custom/unpublish-safe-migration.ts, lines
+#   19 to 37).
+# No other renamed property of migrations-service.ts (lines 93 to 119), and
+# no other custom migration, writes a key of the delay, the approval,
+# internalChecksFilter or extends.
+legacy_keys := {"stabilityDays", "masterIssueApproval", "unpublishSafe"}
+
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, _])
+	count(path) > 0
+	path[count(path) - 1] in legacy_keys
+	msg := sprintf("%s: %v is a legacy key that Renovate turns into the delay, the approval or a preset", [label_delay, path])
+}
+
+# Experimental options of the delay (lib/config/options/index.ts, lines 2506
+# to 2529, Renovate 44.247.1). With the sync, Renovate passes the delay to the
+# package managers, and upstream warns that the behaviour may change.
+experimental_delay_keys := {"minimumReleaseAgePackageManager", "minimumReleaseAgePackageManagerSync"}
+
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, _])
+	count(path) > 0
+	path[count(path) - 1] in experimental_delay_keys
+	msg := sprintf("%s: %v is an experimental option that hands the delay to the package managers", [label_delay, path])
+}
+
 deny contains msg if {
 	is_object(config)
 	object.get(config, "minimumReleaseAgeBehaviour", null) != "timestamp-required"
