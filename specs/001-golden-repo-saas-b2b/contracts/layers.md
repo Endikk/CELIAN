@@ -70,4 +70,16 @@ Sur `local`, le proxy d'Envoy Gateway est publié en NodePort à ports fixes par
 
 ## `app-config`
 
-ConfigMap fourni par chaque couche de cible, de même nom et de mêmes clés : hôte et port de la base, nom de la base, hôte et port du cache, mode TLS de chaque connexion. Les noms des clés se fixent à l'étape 3 et s'ajoutent ici.
+ConfigMap fourni par chaque couche de cible, de même nom et de mêmes clés : hôte et port de la base, nom de la base, hôte et port du cache, mode TLS de chaque connexion. L'API lit ses clés en variables d'environnement ; elles ne portent aucun secret, et l'utilisateur et le mot de passe de la base viennent des fichiers montés de `db-auth` ([contrat des Secrets](secrets.md)).
+
+Clés fixées à l'étape 3 (T021), gardées par U01 :
+
+| Clé | Valeur | Lue par l'API |
+| --- | --- | --- |
+| `DATABASE_HOST` | nom d'hôte de la base | dès l'étape 3 |
+| `DATABASE_PORT` | port de la base, de 1 à 65535 | dès l'étape 3 |
+| `DATABASE_NAME` | nom de la base, `app` | dès l'étape 3 |
+| `DATABASE_SSL_MODE` | `SSL Mode` de Npgsql : `Disable`, `Allow`, `Prefer`, `Require`, `VerifyCA` ou `VerifyFull` ; valeur de chaque cible fixée par T062 (research RS-03 et RS-12) | dès l'étape 3 |
+| `CACHE_HOST` | nom d'hôte du cache | à l'étape 19 |
+| `CACHE_PORT` | port du cache | à l'étape 19 |
+| `CACHE_TLS_MODE` | mode TLS du cache, valeurs fixées avec le moteur par l'ADR-015 (research RS-11) | à l'étape 19 |

@@ -11,6 +11,8 @@ L'application lit le même Secret, de même nom et de mêmes clés, sur les deux
 | `db-superuser` | `kubernetes.io/basic-auth` | `username`, `password` | `task up` | aucun : Cloud SQL ne donne pas de superutilisateur (ADR-012) | conteneur Postgres seulement ; jamais l'application |
 | `gateway-tls` | `kubernetes.io/tls` | `tls.crt`, `tls.key` | `task up`, méthode à trancher (research RS-10) | à trancher par [OPS] et [SECU] avec la classe de GKE | Gateway |
 
+L'API lit `db-auth` dans les fichiers `username` et `password` du dossier `/run/secrets/db-auth`, où la couche commune monte le Secret (étape 3, T021 ; montage écrit à l'étape 9, T087). Un saut de ligne final est ignoré ; un fichier absent ou vide arrête l'accès à la base, et le message nomme le fichier sans jamais donner sa valeur.
+
 `db-superuser` est un Secret de couche : son écart entre cibles se liste au README (ENF-02, ADR-012). Keycloak et Mailpit ajouteront leurs Secrets après leurs ADR. Flux n'a aucun identifiant Git par défaut (ADR-010, condition 4).
 
 ## Création sur `local`
