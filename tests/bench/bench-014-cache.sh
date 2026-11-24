@@ -34,6 +34,8 @@
 # lid open; a run during which "pmset -g log" shows a Sleep entry, or that
 # ends off AC power or lid closed, is marked invalid (power.tsv) and left out
 # of the summary (rule set after BENCH-012, check taken from BENCH-011).
+# While it runs, the script holds "caffeinate -i -s" (no idle sleep, no
+# system sleep on AC power); closing the lid still puts the Mac to sleep.
 #
 # Usage: tests/bench/bench-014-cache.sh [TRIAL_DIR]
 #   TRIAL_DIR, if given, must be missing or empty (default: a new mktemp -d).
@@ -83,7 +85,8 @@
 # Every other docker call only reads: ps, stats, manifest inspect,
 # buildx imagetools inspect, network inspect, version, info.
 # Power checks only read: pmset -g ps, pmset -g log, ioreg -r -k
-# AppleClamshellState.
+# AppleClamshellState. caffeinate -i -s -w <script pid> holds a sleep
+# assertion, released when the script exits.
 set -euo pipefail
 umask 077
 
@@ -133,6 +136,7 @@ CLI=""
 OLD_POD=""
 RUN_POWER_START=""
 RUN_POWER_STATE="n/a"
+CURRENT_RUN=""
 
 # --- Helpers ------------------------------------------------------------------
 
@@ -596,6 +600,7 @@ sleep_entries() {
 power_gate() {
   local opt=$1 run=$2 src lid
   RUN_POWER_START=$(local_now)
+  CURRENT_RUN="$opt $run"
   has_pmset || return 0
   src=$(power_source)
   lid=$(lid_closed)
@@ -646,6 +651,7 @@ timed_run() {
     delete_cluster >>"$log_file" 2>&1 || die "$opt run $run: delete failed"
     tsv runs.tsv "$opt" "$run" "$started" "$(seconds_between "$t_create" "$t_cluster")" \
       - - - "$node_mem" "$node_cpu" - - 0 "$(power_verdict "$opt" "$run")"
+    CURRENT_RUN=""
     return 0
   fi
 
@@ -712,6 +718,7 @@ timed_run() {
   tsv runs.tsv "$opt" "$run" "$started" "$(seconds_between "$t_create" "$t_cluster")" \
     "$ready_s" "$mem" "$cpu" "$node_mem" "$node_cpu" "$info" "$rest_restarts" \
     "$(power_verdict "$opt" "$run")"
+  CURRENT_RUN=""
 }
 
 # --- Start-up checks --------------------------------------------------------------
@@ -792,6 +799,10 @@ cleanup() {
   local rc=$?
   trap - EXIT INT TERM
   set +e
+  if [ -n "$CURRENT_RUN" ]; then
+    # shellcheck disable=SC2086 # "option run", split on purpose
+    log "cleanup: run $CURRENT_RUN did not finish, power state recorded: $(power_verdict $CURRENT_RUN)"
+  fi
   if cluster_exists; then
     log "cleanup: deleting the kind cluster $CLUSTER"
     delete_cluster >>"$LOGS/cleanup.log" 2>&1
@@ -873,6 +884,10 @@ main() {
   trap cleanup EXIT
   trap 'exit 130' INT
   trap 'exit 143' TERM
+  if command -v caffeinate >/dev/null; then
+    caffeinate -i -s -w $$ &
+    tsv versions.tsv keep-awake "caffeinate -i -s" -
+  fi
   log "trial directory: $TRIAL_DIR"
 
   for opt in $OPTIONS; do
