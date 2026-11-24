@@ -2,6 +2,8 @@
 # `conftest verify`. The delay has its tests in renovate_delay_test.rego.
 package renovate_rules
 
+import data.renovate_delay
+
 postgres_rule := {
 	"matchDatasources": ["docker"],
 	"matchPackageNames": ["/^(docker\\.io/)?(library/)?postgres$/"],
@@ -72,6 +74,31 @@ test_s23_accepts_files_under_a_folder if {
 		{"path": "golden/saas-b2b/renovate.json", "contents": valid_config},
 		{"path": "golden/saas-b2b/platform.yaml", "contents": valid_platform},
 	])
+}
+
+# Both renovate.json files, the one of CELIAN and the one of the golden repo,
+# write these entries, then the entry of ADR-016. The two packages accept
+# that layout, and no image is caught both by the entry of ADR-016 and by an
+# entry of this package, so their order does not change what Renovate does.
+
+test_s23_accepts_the_rules_before_the_entry_of_adr_016_in_both_packages if {
+    rules := array.concat(valid_rules, [renovate_delay.undated_registries_rule])
+    files := checked(config_with(rules), valid_platform)
+    accepted(files)
+    count(renovate_delay.deny) == 0 with input as files
+}
+
+test_s23_the_entry_of_adr_016_catches_no_watched_image if {
+    every name in watched_names {
+        not catches(renovate_delay.undated_registries_rule, name)
+    }
+}
+
+test_s23_the_watched_entries_catch_no_image_of_adr_016 if {
+    undated_images := {"ghcr.io/gitleaks/gitleaks", "ghcr.io/project-zot/zot", "quay.io/keycloak/keycloak", "mcr.microsoft.com/dotnet/aspnet"}
+    every rule in valid_rules {
+        not catches_any(rule, undated_images)
+    }
 }
 
 test_s23_accepts_exact_names_and_case_insensitive_regexes if {

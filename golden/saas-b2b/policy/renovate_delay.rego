@@ -8,8 +8,8 @@
 # The rules that hold for any Renovate configuration of CELIAN live here,
 # apart from the rules that follow platform.yaml, in package renovate_rules.
 # tests/static/s23-renovate.sh runs both packages on renovate.json of the
-# generated project. In CELIAN, scripts/renovate/check-delay.sh runs this
-# package on the renovate.json of CELIAN (ADR-016, condition 2).
+# generated project. In CELIAN, scripts/renovate/check-renovate.sh runs both
+# packages on the renovate.json of CELIAN (ADR-016, condition 2).
 #
 # Input: one renovate.json, given to `conftest test --combine`, a list of
 # objects with a `path` and the parsed `contents` (research RS-18).

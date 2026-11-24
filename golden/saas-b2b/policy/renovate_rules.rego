@@ -14,9 +14,12 @@
 # Package renovate_delay checks the shape of renovate.json; this one reads it
 # through renovate_delay.config.
 # Renovate never reads this file in CELIAN (research RS-17): these policies
-# and the validator run by X01 are its only checks. Neither can tell whether
-# a manager of Renovate finds each image; the steps that write those files
-# give Renovate a way to find them.
+# and the validator run by X01 are its only checks. The Renovate of CELIAN
+# reads the renovate.json of CELIAN, and applies it to the files of golden/:
+# that file carries the same entries, and scripts/renovate/check-renovate.sh
+# runs this package on it, against golden/saas-b2b/platform.yaml. Neither
+# check can tell whether a manager of Renovate finds each image; the steps
+# that write those files give Renovate a way to find them.
 package renovate_rules
 
 import data.renovate_delay

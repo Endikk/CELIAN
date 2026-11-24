@@ -30,6 +30,29 @@
   ],
   "packageRules": [
     {
+      "description": "ADR-012, condition 5, for the files of golden/: Postgres stays on the major of golden/saas-b2b/platform.yaml, the default major of Cloud SQL. Another major goes by hand, in a release that passes the whole matrix. Same entry as golden/saas-b2b/renovate.json; scripts/renovate/check-renovate.sh checks both against platform.yaml.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(docker\\.io/)?(library/)?postgres$/"],
+      "allowedVersions": "/^18\\./"
+    },
+    {
+      "description": "ADR-004, version rule, point 5, for the files of golden/: the node image stays on the Kubernetes minor of golden/saas-b2b/platform.yaml. The minor changes by hand.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(docker\\.io/)?kindest/node$/"],
+      "allowedVersions": "/^v1\\.36\\./"
+    },
+    {
+      "description": "ADR-004, version rule, point 5, for the files of golden/: kind and its node image move in one PR. Renovate cannot refuse a PR that holds only one of them: complete it by hand before merging.",
+      "matchPackageNames": ["kubernetes-sigs/kind", "/^(docker\\.io/)?kindest/node$/"],
+      "groupName": "kind and its node image"
+    },
+    {
+      "description": "ADR-005, updates, point 2, for the files of golden/: the charts and the controller image of Envoy Gateway move in one PR. Renovate ignores vendor folders: the vendored render and its sums are redone by hand in the same PR.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(docker\\.io/)?envoyproxy/gateway(-helm|-crds-helm)?$/"],
+      "groupName": "Envoy Gateway"
+    },
+    {
       "description": "Principle VI, ADR-016: these registries give Renovate no release date, so it cannot count the 7 days. Each update waits on the Dependency Dashboard: only Lucas ticks it, never an agent, once the upstream release of the proposed digest is 7 days old, or at once for the fix of a published advisory.",
       "matchDatasources": ["docker"],
       "matchPackageNames": ["/^(ghcr\\.io|quay\\.io|mcr\\.microsoft\\.com)/.+$/"],
