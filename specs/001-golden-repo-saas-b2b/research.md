@@ -40,6 +40,36 @@ Alternatives : un compteur de visites, écarté parce qu'il ne prouve pas la rel
 
 Sources : spec, FR-009, récits 1 et 2 ; ADR-009, standards (Valkey parle RESP).
 
+### Relevé du 2026-11-24 (T015)
+
+Fait par [DEV]. Sources : la documentation d'ASP.NET Core 10, de Npgsql et de PostgreSQL 18, et le code source d'ASP.NET Core lu par `gh api`. Les versions et les dates des paquets sont au point RS-18.
+
+Format des erreurs. ASP.NET Core produit des détails de problème quand l'application appelle `AddProblemDetails` : le middleware `UseExceptionHandler` en écrit un pour une exception non gérée, `UseStatusCodePages` pour une réponse d'erreur encore sans corps. La page cite la RFC 9457 pour le service des détails de problème. `TypedResults.ValidationProblem` répond 400 avec un `HttpValidationProblemDetails`, de type de contenu `application/problem+json`, titre par défaut « One or more validation errors occurred. », et un dictionnaire `errors` qui range les messages par nom de champ. La page des exceptions pour développeur s'active d'elle-même en environnement `Development` avec `WebApplication.CreateBuilder`, et elle montre la trace de pile ; hors `Development`, `ThrowOnBadRequest` vaut `false`. `WebApplicationFactory` démarre l'application en `Development` si rien ne fixe l'environnement : les tests U01 la démarrent donc en `Production`, l'environnement de l'image, pour vérifier qu'aucune erreur ne laisse passer de détail.
+
+Validation intégrée de .NET 10 (`AddValidation`), écartée : elle ne refuse pas un champ inconnu sans `JsonUnmappedMemberHandling.Disallow`, et la règle « de 1 à 500 caractères après suppression des blancs » ne s'écrit pas en attribut `DataAnnotations`. L'API valide le corps elle-même et nomme chaque champ fautif, champ inconnu compris. Les caractères se comptent en points de code Unicode, comme `char_length` de PostgreSQL, pour que la contrainte de la table dise la même chose.
+
+Description machine des routes : OpenAPI 3.1, la version par défaut d'ASP.NET Core 10 (3.2 à partir de .NET 11). Le paquet `Microsoft.AspNetCore.OpenApi` 10.0 expose `IOpenApiDocumentProvider`, enregistré comme service à clé sous le nom du document en minuscules, `v1` par défaut (`AddKeyedSingleton<IOpenApiDocumentProvider, OpenApiDocumentService>(documentName)`). Retenu : U01 génère le document en mémoire et le compare au fichier versionné `src/Api/openapi.json`, que S20 lit sans SDK. L'API n'appelle pas `MapOpenApi`, dont la route `/openapi/{documentName}.json` sortirait du contrat (S20). Le paquet n'entre que dans le projet de tests, et l'image de l'API ne l'embarque pas. Écartée : la génération au build par `Microsoft.Extensions.ApiDescription.Server`, qui lance le point d'entrée de l'application avec un serveur simulé à chaque `dotnet build` et demande d'écarter le code de la base derrière un test du nom d'assembly `GetDocument.Insider`.
+
+Npgsql. `NpgsqlDataSource` est le point d'entrée recommandé depuis la version 7.0 ; il est sûr entre fils d'exécution, et une application en garde une seule instance. Les paramètres positionnels (`$1`) sont recommandés : le SQL part tel quel. Plusieurs instructions passent par `NpgsqlBatch` ; une transaction s'ouvre par `BeginTransactionAsync` et se passe à chaque commande. Paramètres de connexion : `Host`, `Port` (5432 par défaut), `Database`, `Username`, `Password`, `SSL Mode`, `Timeout` (15 s) et `Command Timeout` (30 s). `SSL Mode` vaut `Prefer` par défaut, « allows SSL but does not require it, and does not validate certificates », et accepte `Disable`, `Allow`, `Prefer`, `Require`, `VerifyCA` et `VerifyFull`. Le mode retenu face à Cloud SQL reste à T062 ; l'API lit la valeur dans `app-config`. Une colonne `timestamp with time zone` se lit en `DateTime` UTC par défaut, et en `DateTimeOffset` de décalage nul.
+
+Effets : `src/Api/` (T020 à T024), `src/Api.Tests/` (T017), `tests/static/s20-api-routes.sh` (T018), clés d'`app-config` dans [contracts/layers.md](contracts/layers.md).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://learn.microsoft.com/en-us/aspnet/core/fundamentals/error-handling-api?view=aspnetcore-10.0> | 2026-11-24 | `AddProblemDetails`, `UseExceptionHandler`, `UseStatusCodePages`, page des exceptions en `Development`, `ThrowOnBadRequest`, RFC 9457 |
+| <https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.http.typedresults.validationproblem?view=aspnetcore-10.0> | 2026-11-24 | 400 avec `HttpValidationProblemDetails`, titre par défaut |
+| <https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.http.httpresults.validationproblem?view=aspnetcore-10.0> | 2026-11-24 | Type de contenu `application/problem+json` |
+| <https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests?view=aspnetcore-10.0> | 2026-11-24 | Environnement `Development` par défaut, `UseEnvironment`, `ConfigureTestServices`, SDK `Microsoft.NET.Sdk.Web` pour le projet de tests |
+| <https://learn.microsoft.com/en-us/aspnet/core/release-notes/aspnetcore-10.0?view=aspnetcore-10.0> | 2026-11-24 | `AddValidation` et champs non reconnus |
+| <https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/aspnetcore-openapi?view=aspnetcore-10.0> | 2026-11-24 | OpenAPI 3.1 par défaut en .NET 10, document `v1`, génération au build et `GetDocument.Insider` |
+| <https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.openapi.iopenapidocumentprovider?view=aspnetcore-10.0> | 2026-11-24 | `IOpenApiDocumentProvider`, paquet `Microsoft.AspNetCore.OpenApi` 10.0.0 |
+| <https://github.com/dotnet/dotnet/blob/b0f34d51fccc69fd334253924abd8d6853fad7aa/src/aspnetcore/src/OpenApi/src/Extensions/OpenApiServiceCollectionExtensions.cs> | 2026-11-24 | Service à clé, nom du document en minuscules |
+| <https://github.com/dotnet/dotnet/blob/b0f34d51fccc69fd334253924abd8d6853fad7aa/src/aspnetcore/src/OpenApi/src/Extensions/OpenApiEndpointRouteBuilderExtensions.cs> | 2026-11-24 | Écriture du document : `OpenApiJsonWriter` et `SerializeAsync` |
+| <https://www.npgsql.org/doc/basic-usage.html> | 2026-11-24 | `NpgsqlDataSource`, paramètres positionnels, `NpgsqlBatch`, transactions |
+| <https://www.npgsql.org/doc/connection-string-parameters.html> | 2026-11-24 | Paramètres de connexion et leurs défauts |
+| <https://www.npgsql.org/doc/security.html> | 2026-11-24 | Valeurs de `SSL Mode`, défaut `Prefer` |
+| <https://www.npgsql.org/doc/types/datetime.html> | 2026-11-24 | Lecture de `timestamp with time zone` |
+
 ## RS-04. Création du schéma
 
 Décision : un script SQL idempotent, embarqué dans l'API et exécuté au démarrage sous le rôle de `db-auth`, propriétaire de la base `app`.
@@ -51,6 +81,25 @@ Pourquoi : le rôle de l'application n'est pas superutilisateur (ADR-012, condit
 Alternatives : migrations d'Entity Framework Core (écarté avec RS-03) ; script dans `/docker-entrypoint-initdb.d`, réservé par l'ADR-012 à la création du rôle et inexistant sur Cloud SQL.
 
 Sources : ADR-012, conditions 2 et 8.
+
+### Relevé du 2026-11-24 (T016)
+
+Fait par [DEV], à relire par [SECU], second porteur de T016. Sources : la documentation de PostgreSQL 18 et celle de Cloud SQL.
+
+PostgreSQL 18, en local. Dans une base neuve, `PUBLIC` garde `USAGE` sur le schéma `public` mais n'y a plus `CREATE` depuis PostgreSQL 15 ; seule une base mise à niveau depuis la 14 ou avant le garde. Le rôle prédéfini `pg_database_owner` « always has exactly one implicit member: the current database owner » et « Initially, this role owns the `public` schema, so each database owner governs local use of that schema ». Le rôle de `db-auth`, propriétaire de la base `app` (ADR-012, condition 8), crée donc la table dans `public` sans `SUPERUSER`, sans `CREATEDB` et sans `CREATEROLE`. Le script de l'API n'emploie que `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS` et `pg_advisory_xact_lock`, verrou de transaction « held until the current transaction ends ». La section des verrous consultatifs ne mentionne aucun privilège requis, quand d'autres sections du même chapitre réservent leurs fonctions aux superutilisateurs ; le droit d'exécution par défaut n'y est pas écrit. `IF NOT EXISTS` émet une notice et ne garantit pas que la table existante ressemble à celle du script : un changement de forme demandera une migration, hors de cette étape.
+
+Cloud SQL. Le rôle `cloudsqlsuperuser` porte `CREATEROLE`, `CREATEDB` et `LOGIN`, « It does not have the `SUPERUSER` or `REPLICATION` attributes », et il est « granted automatically to new PostgreSQL users who use built-in authentication ». Un utilisateur IAM ne le reçoit que si on le lui donne. Ni la page des utilisateurs ni celle des bases ne disent qui possède une base créée par la console, `gcloud` ou l'API : seul l'exemple `psql` fixe un propriétaire (`CREATE DATABASE ... WITH OWNER ...`).
+
+Conclusion pour la parité (R-35). En local, l'utilisateur de `db-auth` a moins d'attributs que sur Cloud SQL, et tient de sa seule qualité de propriétaire le droit de créer dans `public`. Sur Cloud SQL, ce droit n'est établi par aucune page lue : si la base `app` appartient à un autre rôle que l'utilisateur de `db-auth`, le script de démarrage échouera sur `CREATE TABLE`. À trancher par [OPS] et [SECU] en écrivant la couche `gcp` (T107) : base créée avec l'utilisateur de `db-auth` pour propriétaire, ou droit `CREATE` sur `public` donné par un rôle d'administration ; la vérification réelle attend le premier apply, avec l'accord de Lucas (principe X). L'écart restant se liste au README (ENF-02).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://www.postgresql.org/docs/18/ddl-schemas.html> | 2026-11-24 | Sections 5.10.4 et 5.10.6 : `USAGE` et `CREATE` sur `public`, défaut depuis PostgreSQL 15 |
+| <https://www.postgresql.org/docs/18/predefined-roles.html> | 2026-11-24 | Section 21.5 : `pg_database_owner`, membre implicite, propriétaire initial de `public` |
+| <https://www.postgresql.org/docs/18/functions-admin.html> | 2026-11-24 | Section 9.28.10 : `pg_advisory_xact_lock`, aucune restriction écrite |
+| <https://www.postgresql.org/docs/18/sql-createtable.html> | 2026-11-24 | `IF NOT EXISTS`, `CHECK`, `DEFAULT` |
+| <https://docs.cloud.google.com/sql/docs/postgres/users> | 2026-11-24 | Attributs de `cloudsqlsuperuser`, rôle donné aux utilisateurs intégrés |
+| <https://docs.cloud.google.com/sql/docs/postgres/create-manage-databases> | 2026-11-24 | Propriétaire d'une base créée par l'API non documenté |
 
 ## RS-05. Front et image du front
 
@@ -481,6 +530,10 @@ Filtre de chemins (point 3 du relevé du 2026-11-23) : décision d'[OPS], `e2e-l
 | <https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2604-Readme.md> | 2026-11-25 | Image 20261116.202.1 : Docker Server 29.4.2, kind 0.33.0, kubectl 1.37.2, bash 5.3.9, iproute2 |
 | <https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md> | 2026-11-25 | Image 20261116.376.1 : Docker Server 28.0.4, kind 0.33.0, kubectl 1.37.2, bash 5.2.21 ; annonce de la bascule |
 
+### Décision du DSI du 2026-11-24 sur RS-17, point 2
+
+Les Dockerfile du golden repo restent dans les motifs par défaut du gestionnaire `dockerfile` du Renovate de CELIAN. Leurs images montent par des PR de CELIAN, sous ses règles, comme les workflows et les hooks du golden repo.
+
 ## RS-18. Outils de test
 
 Décision : scripts bash pour les tests sur kind et les contrôles préalables, comme les scripts de BENCH ; politiques en Rego exécutées par conftest, outil que nomment les ADR-005 à ADR-011 ; validation de schéma par kubeconform, nommé par US-007, outil à confirmer avec [QA] (ADR-005, condition 5) ; Trivy pour le HCL, le SBOM et le scan des images (RS-22) ; conftest aussi pour la décision du scan (RS-23).
@@ -643,6 +696,82 @@ kind : 0.33.0 reste la dernière release (2026-08-26), et la release donne toujo
 | <https://dl.k8s.io/release/v1.36.6/bin/linux/amd64/kubectl.sha256> | 2026-11-25 | SHA-256 du binaire linux/amd64 |
 | <https://api.github.com/repos/kubernetes-sigs/kind/releases> | 2026-11-25 | v0.33.0 dernière release, du 2026-08-26 ; image de nœud v1.36.4 et son condensat |
 | <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/presets/internal/custom-managers.preset.ts> | 2026-11-25 | Lignes 63 à 78 : `githubActionsVersions`, motif des variables `_VERSION` des workflows |
+
+### Relevé du 2026-11-24 : paquets NuGet et images de l'API (T015)
+
+Fait par [DEV] le 2026-11-24. Sources : l'API d'enregistrement de nuget.org, les pages des paquets, l'API GitHub lue par `gh api`, l'API de catalogue de mcr.microsoft.com et la documentation de NuGet, de xUnit.net, de .NET et de Docker. Les choix d'usage (format des erreurs, OpenAPI, Npgsql) sont au point RS-03.
+
+Paquets retenus, en référence directe. L'âge se compte au 2026-11-24 depuis le champ `published` de nuget.org.
+
+| Paquet | Version | Publiée le (UTC) | Licence | Projet | Pourquoi |
+| --- | --- | --- | --- | --- | --- |
+| `Npgsql` | 10.0.3 | 2026-05-27 11:33 | PostgreSQL | API | Accès à la base, sans ORM (RS-03) |
+| `xunit.v3.mtp-v2` | 4.0.3 | 2026-11-09 00:41 | Apache-2.0, « Copyright (C) .NET Foundation » | tests | Framework de test, sur Microsoft Testing Platform v2 |
+| `Microsoft.AspNetCore.Mvc.Testing` | 10.0.15 | 2026-11-10 13:08 | MIT | tests | `WebApplicationFactory`, l'API en mémoire |
+| `Microsoft.AspNetCore.OpenApi` | 10.0.15 | 2026-11-10 13:08 | MIT | tests | Génération du document OpenAPI, dans les tests seulement (RS-03) |
+
+Npgsql : 11.0.0 et 10.0.4 sont sorties le 2026-11-20, à 4 jours de la lecture, sous le délai de 7 jours. Aucune ne corrige un avis publié : le seul avis du dépôt, GHSA-x9vc-6hfv-hg8c (CVE-2024-32655), date du 2024-05-09 et vise des versions antérieures à 8.0.3, et le jalon de 10.0.4 ne liste que des corrections de bogues. 11.0.0 dépend en plus des bibliothèques `Microsoft.Extensions.*` 11.0.0. 10.0.3 est retenue ; dépôt `npgsql/npgsql`, licence PostgreSQL, non archivé.
+
+xUnit.net v3 : la page de démarrage n'utilise plus que `xunit.v3.mtp-v2`, un projet de tests est un exécutable, et `dotnet run` lance les tests. Le paquet `xunit.v3` 4.0.3 ne fait que dépendre de `xunit.v3.mtp-v2` 4.0.3. Ni `xunit.runner.visualstudio` ni `Microsoft.NET.Test.Sdk`, qui ne servent qu'avec VSTest. Le projet de tests prend le SDK `Microsoft.NET.Sdk.Web`, comme le demande la page des tests d'intégration.
+
+Paquets transitifs du verrou, tous publiés depuis plus de 7 jours : `xunit.v3.assert`, `xunit.v3.common`, `xunit.v3.core.mtp-v2`, `xunit.v3.extensibility.core`, `xunit.v3.runner.common` et `xunit.v3.runner.inproc.console` 4.0.3 (2026-11-09) ; `xunit.analyzers` 2.3.0 (2026-11-09) ; `Microsoft.AspNetCore.TestHost` et `Microsoft.Extensions.DependencyModel` 10.0.15 (2026-11-10) ; `Microsoft.Testing.Platform`, `Microsoft.Testing.Platform.MSBuild`, `Microsoft.Testing.Extensions.Telemetry` et `Microsoft.Testing.Extensions.TrxReport.Abstractions` 2.5.2 (2026-10-27) ; `Microsoft.OpenApi` 2.13.0 (2026-10-19) ; `Microsoft.ApplicationInsights` 2.23.0 (2025-02-19) ; `System.Security.AccessControl` 6.0.1 (2024-04-09) ; `Microsoft.Bcl.AsyncInterfaces` 6.0.0 (2021-11-08) ; `Microsoft.Win32.Registry` 5.0.0 (2020-11-09). NuGet prend pour une dépendance transitive la plus basse version admise par sa contrainte (« lowest applicable version ») : `Microsoft.AspNetCore.OpenApi` 10.0.15 demande `Microsoft.OpenApi` dans `[2.13.0, 3.0.0)` et reçoit 2.13.0. Le SDK .NET 10 élague par défaut, pour `net10.0`, les paquets déjà fournis par le framework partagé (`PrunePackageReference`) : `Microsoft.Extensions.Hosting`, que demande `Microsoft.AspNetCore.Mvc.Testing`, n'apparaît pas dans le verrou.
+
+Télémétrie : `Microsoft.Testing.Extensions.Telemetry` envoie par défaut des données d'usage à Microsoft, comme les commandes du SDK. `TESTINGPLATFORM_TELEMETRY_OPTOUT` ou `DOTNET_CLI_TELEMETRY_OPTOUT` à `1` coupe la première, `DOTNET_CLI_TELEMETRY_OPTOUT` à `1` ou `true` la seconde : l'image de construction pose `DOTNET_CLI_TELEMETRY_OPTOUT=1`.
+
+Verrouillage : `RestorePackagesWithLockFile` à `true` fait écrire `packages.lock.json` à la racine de chaque projet, avec tout le graphe des paquets. `dotnet restore --locked-mode` restaure exactement ce graphe, ou échoue si les références ont changé depuis le verrou. La page conseille de versionner le verrou d'une application. L'image de construction restaure en mode verrouillé ; `tests/unit/u01-api.sh --update-locks` réécrit les verrous dans l'image, sans SDK sur le poste. `nuget.config` vide les sources héritées par `<clear />` et ne garde que `https://api.nuget.org/v3/index.json`. Le réglage `minPublishAgeHours`, qui appliquerait le délai à la restauration, demande NuGet 8.0 et le SDK .NET 11.0.100 : hors de portée du SDK 10.0.404.
+
+Renovate de CELIAN : le gestionnaire `nuget` lit par défaut `\.(?:cs|fs|vb|sql)proj$`, `\.(?:props|targets)$`, `dotnet-tools.json` et `global.json`, et confie l'entretien de `packages.lock.json` à l'outil du gestionnaire. Les `.csproj` du golden repo montent donc par des PR de CELIAN, et nuget.org donne la date de chaque version au délai de 7 jours.
+
+.NET : la dernière version de la branche 10.0 est 10.0.15, sortie le 2026-11-10, marquée `security: true`, avec le SDK 10.0.404 (`releases.json` de `dotnet/core`). Aucune version plus récente à la lecture.
+
+Images de base. Règle de l'ADR-016 décidée par Lucas le 2026-11-24 : condensat de 7 jours au moins, daté par l'API de catalogue de mcr.microsoft.com, ou correctif d'un avis publié. L'API de catalogue ne donne que le condensat courant de chaque tag, avec la date de création du tag et celle de son dernier déplacement. Les deux tags ont bougé le 2026-11-23 :
+
+| Tag | Condensat courant | `createdDate` du tag | `lastModifiedDate` |
+| --- | --- | --- | --- |
+| `dotnet/sdk:10.0.404` | `sha256:8c6edfb26c85153f236d26efebd9ad349aec403583f343f201ee67838b23658d` | 2026-11-10 18:46:19 | 2026-11-23 17:17:22 |
+| `dotnet/aspnet:10.0.15` | `sha256:aac50ceef10391e78a899e3d2ccd00bbafa2dcb56ccf4586cbccf00edb84fc21` | 2026-11-10 18:43:57 | 2026-11-23 17:16:00 |
+
+Le catalogue ne date donc plus les condensats de BENCH-005. L'historique de `build-info/docker/image-info.dotnet-dotnet-docker-main.json`, dans le dépôt `dotnet/versions` où Microsoft consigne chaque publication, donne leur entrée et leur sortie. Les images 10.0.404 et 10.0.15 ont connu trois condensats :
+
+| Construction | `dotnet/sdk:10.0.404` | `dotnet/aspnet:10.0.15` | Inscrite dans `dotnet/versions` | 7 jours atteints le |
+| --- | --- | --- | --- | --- |
+| initiale | `sha256:fe0fd4e93bd2fbb47c883b7a6369e5c8d3db8bf01cdc5981f6ee35fbdf3ff4fb` | `sha256:bfd912c83295ce66d4b706ebb8541b9f14259b0e76fbb88b2751f58ce2399d2e` | 2026-11-10 20:12 (`7c46f54d`) | 2026-11-17 |
+| BENCH-005 | `sha256:bef136a371963aaa46ec97882845ef6f54dec15728bb4b128b1c2a400ffbc9b4` | `sha256:12b1135f5f8b3c0a214f2a680ff2033dff4f684f445d6c697d9524ceeb303586` | 2026-11-18 17:45 (`55dceb8f`) | 2026-11-25 à 17 h 45 |
+| courante | `sha256:8c6edfb26c85153f236d26efebd9ad349aec403583f343f201ee67838b23658d` | `sha256:aac50ceef10391e78a899e3d2ccd00bbafa2dcb56ccf4586cbccf00edb84fc21` | 2026-11-23 17:19 (`782fa161`) | 2026-11-30 à 17 h 17 |
+
+Les trois constructions portent la même version de .NET. Entre elles change l'image de base Ubuntu `noble` de `runtime-deps` (`baseImageDigest`) : ce sont des reconstructions sur une base renouvelée. Aucun avis de sécurité qui les motive n'a été relevé, et les notices d'Ubuntu n'ont pas été lues.
+
+Retenus pour `src/Api/Dockerfile`, comme le demande T025 : les condensats de BENCH-005, ligne « BENCH-005 » du tableau, sous les tags `sdk:10.0.404` et `aspnet:10.0.15`. Ils atteignent 7 jours le 2026-11-25 à 17 h 45 UTC, d'après `dotnet/versions` : la PR ne fusionne pas avant. Une reconstruction plus récente existe, celle du 2026-11-23 ; si [SECU] y trouve le correctif d'un avis publié, elle passe sans le délai, sinon elle se reprend à partir du 2026-11-30. Les condensats de la construction initiale passent le délai mais ont deux renouvellements de base de retard.
+
+Faits relevés sur les images : `runtime-deps` 10.0 `noble` pose `APP_UID=1654` et `ASPNETCORE_HTTP_PORTS=8080`, et crée l'utilisateur de cet UID (Dockerfile au commit `ebca79f4`, celui de la construction du 2026-11-18) : `USER $APP_UID` donne un UID numérique au profil `restricted`, et Kestrel écoute sur un port non privilégié. `docker build` est un alias de `docker buildx build` ; `--output type=local,dest=<dossier>` copie le système de fichiers de l'étape visée, et une étape `FROM scratch` qui ne copie qu'un fichier n'exporte que lui ; l'exporteur `cacheonly` construit sans rien garder que le cache ; `--progress plain` affiche la sortie des commandes.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://www.nuget.org/packages/Npgsql> | 2026-11-24 | Versions et dates, licence PostgreSQL, dépendances de 11.0.0 |
+| <https://api.nuget.org/v3/registration5-semver1/npgsql/10.0.3.json> | 2026-11-24 | `published` de 10.0.3 |
+| <https://api.github.com/repos/npgsql/npgsql/releases> | 2026-11-24 | Dates des releases 10.0.3, 10.0.4 et 11.0.0 |
+| <https://api.github.com/repos/npgsql/npgsql/security-advisories> | 2026-11-24 | Seul avis : GHSA-x9vc-6hfv-hg8c, 2024 |
+| <https://api.github.com/repos/npgsql/npgsql/issues?milestone=139&state=closed> | 2026-11-24 | Contenu de 10.0.4 : corrections de bogues |
+| <https://www.nuget.org/packages/xunit.v3> | 2026-11-24 | Versions, licence Apache-2.0, copyright .NET Foundation, dépendance vers `xunit.v3.mtp-v2` |
+| <https://xunit.net/docs/getting-started/v3/getting-started> | 2026-11-24 | Paquet, projet exécutable, `dotnet run` |
+| <https://xunit.net/releases/v3/4.0.3> | 2026-11-24 | Release du 2026-11-08, sans correctif de sécurité |
+| <https://api.nuget.org/v3/registration5-semver1/xunit.v3.mtp-v2/4.0.3.json> | 2026-11-24 | `published` ; idem pour chaque paquet transitif cité, à son adresse `registration5-semver1/<id>/<version>.json` |
+| <https://api.nuget.org/v3/catalog0/data/2026.11.10.13.59.41/microsoft.aspnetcore.mvc.testing.10.0.15.json> | 2026-11-24 | Licence MIT, dépendances |
+| <https://api.nuget.org/v3/catalog0/data/2026.11.10.13.40.01/microsoft.aspnetcore.openapi.10.0.15.json> | 2026-11-24 | Licence MIT, `Microsoft.OpenApi` dans `[2.13.0, 3.0.0)` |
+| <https://learn.microsoft.com/en-us/nuget/consume-packages/package-references-in-project-files> | 2026-11-24 | Verrou, mode verrouillé, `PrunePackageReference` |
+| <https://learn.microsoft.com/en-us/nuget/concepts/dependency-resolution> | 2026-11-24 | « Lowest applicable version » |
+| <https://learn.microsoft.com/en-us/nuget/reference/nuget-config-file> | 2026-11-24 | `<clear />`, adresse de nuget.org, `minPublishAgeHours` réservé à NuGet 8.0 |
+| <https://docs.renovatebot.com/modules/manager/nuget/> | 2026-11-24 | Motifs par défaut, entretien de `packages.lock.json` |
+| <https://learn.microsoft.com/en-us/dotnet/core/testing/microsoft-testing-platform-telemetry> | 2026-11-24 | Télémétrie de MTP et variables qui la coupent |
+| <https://learn.microsoft.com/en-us/dotnet/core/tools/telemetry> | 2026-11-24 | Télémétrie du SDK, `DOTNET_CLI_TELEMETRY_OPTOUT` |
+| <https://github.com/dotnet/core/blob/main/release-notes/10.0/releases.json> | 2026-11-24 | 10.0.15 du 2026-11-10, `security: true`, SDK 10.0.404 |
+| <https://mcr.microsoft.com/api/v1/catalog/dotnet/sdk/tags?reg=mar> | 2026-11-24 | Tag `10.0.404` : `digest`, `createdDate`, `lastModifiedDate` |
+| <https://mcr.microsoft.com/api/v1/catalog/dotnet/aspnet/tags?reg=mar> | 2026-11-24 | Tag `10.0.15` : `digest`, `createdDate`, `lastModifiedDate` |
+| <https://github.com/dotnet/versions/commits/main/build-info/docker/image-info.dotnet-dotnet-docker-main.json> | 2026-11-24 | Commits `7c46f54d`, `55dceb8f` et `782fa161` ; condensats et `baseImageDigest` à chacun |
+| <https://github.com/dotnet/dotnet-docker/blob/ebca79f4aa976b9bce41672fce41e884e4fa1b8c/src/runtime-deps/10.0/noble/amd64/Dockerfile> | 2026-11-24 | `APP_UID=1654`, `ASPNETCORE_HTTP_PORTS=8080`, création de l'utilisateur |
+| <https://docs.docker.com/reference/cli/docker/buildx/build/> | 2026-11-24 | Alias `docker build`, `--file`, `--target`, `--output`, `--progress` |
+| <https://docs.docker.com/build/exporters/> | 2026-11-24 | Exporteurs `local` et `cacheonly` |
+| <https://docs.docker.com/build/exporters/local-tar/> | 2026-11-24 | `type=local,dest=`, étape `FROM scratch` qui n'exporte que ce qu'elle copie |
 
 ## RS-19. Mesures de la gate
 
