@@ -6,7 +6,7 @@
 | Sujet | Forme de Postgres dans le cluster kind de la cible `local` : manifests écrits à la main ou opérateur |
 | Statut | relu |
 | Ouvert le | 2026-11-20 |
-| Mis à jour le | 2026-11-21 |
+| Mis à jour le | 2026-11-24 |
 | Auteur | [BENCH] |
 | Relecteurs | [SECU] pour les licences et les CVE, [FINOPS] pour les coûts |
 | Périmètre | Projet généré sur PC (cluster kind, ADR-004). La cible `gcp` garde Cloud SQL (principe III) |
@@ -283,15 +283,20 @@ du cluster. `docker start` n'apparaît que derrière `NODE_RESTART=1`. Le
 script crée en revanche le nœud par `kind create cluster`, qui lance lui-même
 un conteneur privilégié [S60]. Il le supprime par `kind delete cluster`, et
 retire le réseau `kind` par `docker network rm` s'il l'a créé et qu'il est
-vide. Il appelle `perl` pour l'horloge et pour réécrire les références
-d'images. Aucune de ces commandes n'est soumise à confirmation.
+vide. Pour la série du 2026-11-20, il appelait `perl` pour l'horloge et pour
+réécrire les références d'images ; il n'y fait plus appel depuis la série du
+2026-11-24 (section 4.4). Aucune de ces commandes n'est soumise à
+confirmation.
 
-[BENCH] Redémarrage du nœud non mesuré. Le relancer demande `docker stop`
-puis `docker start` sur le conteneur du nœud, comme dans BENCH-007.
+[BENCH] Redémarrage du nœud, non mesuré dans la série du 2026-11-20. Le
+relancer demande `docker stop` puis `docker start` sur le conteneur du nœud,
+comme dans BENCH-007.
 `docker stop` et `docker start` sont réservés à Lucas par consigne du DSI :
 aucune règle de `.claude/settings.json` ne les filtre, et une règle ne verrait
 pas une commande lancée par le script. Le script prévoit ce redémarrage
-derrière `NODE_RESTART=1`, désactivé par défaut (section 8).
+derrière `NODE_RESTART=1`, désactivé par défaut (section 8). Lucas l'a
+autorisé le 2026-11-21, et la série du 2026-11-24 le mesure pour O1
+(section 4.4).
 
 ### 4.4 Résultats
 
@@ -409,6 +414,109 @@ paramètres écrit que l'opérateur supprime les PVC avec l'objet
 le PVC est resté et la donnée relue dans trois exécutions sur trois. La
 cause n'a pas été cherchée ; la conclusion de M6 (c) pour O3 ne vaut que pour
 ce délai entre suppression et réapplication.
+
+#### Redémarrage du nœud (2026-11-24)
+
+[BENCH] Lucas a autorisé le 2026-11-21 `docker stop` puis `docker start` du
+seul nœud de mesure, `celian-bench-011-control-plane`, que le script crée
+lui-même, sans objection de [SECU] (section 10). O2 et O3 ne sont pas
+remesurés : l'ADR-012 retient O1. La série a tourné le 2026-11-24 de 00:26:23
+à 00:41:52 UTC, sous le verrou commun `bench-lock-s4`, que le script prend au
+démarrage et rend à la fin. Réglages : `OPTIONS=statefulset RUNS=3
+IDLE_WAIT=120 NODE_RESTART=1`. Le script a fini sans erreur (dossier
+`b011r/series-1` du dossier de travail de [BENCH]).
+
+[BENCH] Protocole ajouté à celui de 4.3, dans chaque exécution, après M6 (c) :
+une ligne écrite et validée juste avant l'arrêt ; `docker stop` du nœud, avec
+le délai par défaut de Docker avant l'arrêt forcé, 10 s pour un conteneur
+Linux [S62] ; `docker start` ; export du kubeconfig dans le dossier d'essai ;
+attente du cluster prêt (nœud `Ready`, pods, déploiements et DaemonSets de
+`kube-system` et de `local-path-storage` prêts), puis de « prêt » au sens de
+4.1 (trois `SELECT 1` réussis de suite par le Service) ; relecture de la ligne
+écrite après « prêt » en début d'exécution et de celle écrite avant l'arrêt.
+Le cluster prêt et « prêt » se comptent depuis la fin de `docker start`, le
+total depuis le début de `docker stop`. Le script relève aussi l'UID du pod
+Postgres avant et après, les redémarrages de son conteneur, le nombre de PVC
+et l'empreinte tronquée du Secret.
+
+[BENCH] Alimentation : secteur pendant les trois exécutions, capot ouvert,
+batterie de 47 % au début de la première à 63 % à la fin de la troisième,
+aucune entrée `Sleep` de `pmset -g log` pendant une exécution. Les trois
+exécutions sont valides (`power.tsv`). Le lanceur a attendu le secteur de
+00:02 à 00:26 UTC sans rien lancer (`attempts.log`). Un lancement sur
+batterie, à 00:03 UTC, s'est arrêté au contrôle d'alimentation, avant toute
+mesure. La charge moyenne de l'hôte sur une minute valait 16,0, 11,2 et 7,0
+au début des trois exécutions, plus que dans la série du 2026-11-20 (2,9 à
+9,1). Aucun autre conteneur ni cluster kind ne tournait (`load.tsv`).
+
+| Mesure | Exécution 1 | Exécution 2 | Exécution 3 | Médiane | Écart |
+| --- | --- | --- | --- | --- | --- |
+| Arrêt du nœud (`docker stop`) | 10,4 s | 10,3 s | 10,3 s | 10,3 s | 0,1 s |
+| Démarrage du nœud (`docker start`) | 0,1 s | 0,1 s | 0,1 s | 0,1 s | 0,0 s |
+| Cluster prêt, depuis la fin de `docker start` | 46,5 s | 46,5 s | 48,7 s | 46,5 s | 2,2 s |
+| « Prêt » de 4.1, depuis la fin de `docker start` | 49,0 s | 49,0 s | 51,3 s | 49,0 s | 2,3 s |
+| Total, du début de `docker stop` à « prêt » | 59,5 s | 59,4 s | 61,7 s | 59,5 s | 2,3 s |
+| Ligne écrite après « prêt », en début d'exécution | gardée | gardée | gardée | | |
+| Ligne écrite juste avant l'arrêt | gardée | gardée | gardée | | |
+| Pod Postgres après le redémarrage | même UID | même UID | même UID | | |
+| Redémarrages du conteneur Postgres | 1 | 1 | 1 | | |
+| PVC et Secret après le redémarrage | 1 PVC, empreinte inchangée | 1 PVC, empreinte inchangée | 1 PVC, empreinte inchangée | | |
+
+[BENCH] Résultat : la donnée survit au redémarrage du nœud trois fois sur
+trois. Les deux lignes sont relues dans le même pod, dont le conteneur
+Postgres a redémarré une fois. Il reste un seul PVC, et le Secret garde son
+empreinte. Personne n'intervient : après `docker start`, le script ne fait
+qu'exporter le kubeconfig et attendre. Le nœud fait l'essentiel du délai,
+46,5 s en médiane jusqu'au cluster prêt, et Postgres répond 2,5 à 2,6 s plus
+tard. BENCH-007 relevait déjà 38,1 à 44,8 s jusqu'au nœud prêt (M7), avec son
+propre script.
+
+[BENCH] L'arrêt dure 10,3 à 10,4 s, juste au-dessus des 10 s que Docker
+attend par défaut avant de tuer le conteneur par `SIGKILL` [S62]. Le fichier
+de kind qui crée le nœud ne passe pas `--stop-timeout` [S60]. Le nœud a donc
+probablement été tué, Postgres compris, avant de s'arrêter de lui-même. Ce
+n'est pas établi : le script ne relève pas le code de sortie du conteneur, qui
+le dirait. Dans ce cas, la ligne validée juste avant l'arrêt a survécu à un
+arrêt sans fermeture propre de Postgres.
+
+[BENCH] Les autres relevés de la série ne remplacent pas ceux du 2026-11-20,
+qui fondent les notes, et n'en changent aucune. M1 vaut 10,1 s en médiane
+(10,0 à 11,2), sous le seuil 3 de 90 s, et M7 3,3 s (3,3 à 4,4). M6 (a), (b)
+et (c) gardent la donnée trois fois sur trois, sans redémarrage du pod en (b).
+La version servie reste « 18.7 (Debian 18.7-1.pgdg13+5) », et l'image de
+Postgres est tirée à chaque création, en 5,5 à 6,0 s (M5). La série ne compte
+pas de nœud de base : M2 n'est pas recalculée.
+
+[BENCH] Ce que le résultat apporte à la question 4 de l'ADR-006 et à
+`task app:down` de l'ADR-011. Aucune des deux commandes d'arrêt ne redémarre
+le nœud : `task down` supprime le cluster, donnée comprise, et
+`task app:down` garde le nœud en marche mais supprime les namespaces de
+l'application avec ce qu'ils contiennent. La mesure ne change donc ni l'une ni
+l'autre, comme l'ADR-012 l'écrit dans sa section « Redémarrage du nœud ». Elle
+couvre un cas qu'elles laissent ouvert : un cluster gardé dont le nœud est
+arrêté puis relancé par `docker stop` et `docker start`, hors de toute
+commande du projet. Avec O1, la donnée et le Secret restent, et Postgres
+répond environ une minute après le début de l'arrêt, sans action. Elle donne aussi un premier chiffre à la variante que l'ADR-011 laisse
+hors de sa décision, l'arrêt du nœud entre deux sessions au lieu de sa
+suppression : pour la seule couche Postgres, 49,0 s de `docker start` à
+« prêt », donnée gardée. Le nœud mesuré ne porte ni gateway, ni Flux, ni
+application, ni miroir, si bien que le délai d'une stack complète reste à
+mesurer. Un redémarrage du moteur ou du poste n'est pas couvert non plus. La
+condition de révision de l'ADR-012 qui porte sur cette mesure, une perte de
+données qu'aucune condition ne corrige, n'est pas remplie.
+
+[BENCH] Changements du script pour cette série, sans effet sur les mesures
+de la série du 2026-11-20. L'horloge à la milliseconde vient de `date`,
+`gdate` ou zsh, et le figeage des images passe par `sed` au lieu de `perl`,
+que les consignes du DSI excluent désormais au même titre que python et node.
+Pour O1, les deux manifests figés de la série sont identiques, octet pour
+octet, à ceux du 2026-11-20 (`cmp`). Le script refuse une exécution hors
+secteur ou capot fermé, et écarte du résumé une exécution pendant laquelle
+`pmset -g log` montre une mise en veille (règle posée après BENCH-012).
+L'inventaire en tête du script liste ces lectures, avec `docker stop` et
+`docker start`. Le script de la série a pour SHA-256
+`8ac47bfd3f0b0fccac15cd723f3379affbe69c44cff9f7805830bf01d469acf5`, celui du
+commit « test: run the BENCH-011 node restart series on AC power only ».
 
 ## 5. Notation par critère
 
@@ -671,8 +779,9 @@ matrice (principe I) :
    Si le volume existe sans le Secret, `task up` s'arrête avec un message qui
    propose de supprimer les deux, au lieu de tirer une nouvelle valeur.
 4. Donnée gardée au rechargement et à la suppression du pod (US-1,
-   scénario 3 ; FR-007), testée comme M6 (a) et (b). Le redémarrage du nœud
-   reste à mesurer, avec l'accord de Lucas (section 8).
+   scénario 3 ; FR-007), testée comme M6 (a) et (b). Le redémarrage du nœud,
+   mesuré pour O1 le 2026-11-24 avec l'accord de Lucas, garde la donnée trois
+   fois sur trois (section 4.4).
 5. Parité de majeure avec Cloud SQL (ENF-02) : la majeure locale est la
    majeure par défaut de Cloud SQL, relevée à chaque release du blueprint et
    tenue en une seule valeur pour les deux couches, comme la mineure de
@@ -811,7 +920,7 @@ rapport dans une PR à part.
 | Limite | Effet possible sur le verdict | Ce qui la lèverait |
 | --- | --- | --- |
 | Une seule machine (macOS, OrbStack, arm64), moteur non libre (R-26) | Temps et mémoire propres à ce poste ; les volumes, eux, sont lus au registre pour l'amd64 | Relancer le script sur Linux amd64 avec Docker Engine |
-| Redémarrage du nœud non mesuré. `docker stop` et `docker start` sont réservés à Lucas par consigne du DSI : aucune règle de `.claude/settings.json` ne les filtre, et une règle ne verrait pas une commande lancée par le script | La donnée gardée après un redémarrage du poste n'est pas prouvée pour les trois options | `NODE_RESTART=1`, après accord, qui lance `docker stop celian-bench-011-control-plane` puis `docker start celian-bench-011-control-plane` dans chaque exécution |
+| Limite « redémarrage du nœud non mesuré » levée le 2026-11-24 pour O1 : `docker stop` puis `docker start` du seul `celian-bench-011-control-plane`, autorisés par Lucas le 2026-11-21, trois exécutions valides sur secteur, donnée et Secret gardés trois fois sur trois (section 4.4) | O2 et O3 ne sont pas remesurés, sans effet puisque l'ADR-012 retient O1. Restent hors mesure le redémarrage du moteur ou du poste, et le délai d'une stack complète | Refaire la série après un redémarrage d'OrbStack et du poste, puis avec la stack du golden repo |
 | Images tirées sur le réseau à chaque exécution | M1 dépend du débit du moment : 27,2 à 28,1 s pour tirer Spilo, 2,9 à 6,6 s pour les autres images | Remesurer après la solution de R-25 (BENCH-010), cache du nœud plein |
 | Un test de fumée a tourné après l'écriture des seuils (2026-11-20, de 20:13 à 20:22 UTC, une exécution par option) | Aucun : les seuils étaient déjà posés et hachés ; le test a conduit à relever les redémarrages au repos plutôt qu'en fin d'exécution | Sans objet |
 | M6 (c) supprime l'objet qui porte Postgres, pas le namespace | La lecture de la commande d'arrêt reste ouverte (question 4 de l'ADR-006) ; supprimer le namespace emporterait le volume dans les trois options | Refaire M6 avec la commande d'arrêt retenue |
@@ -824,9 +933,11 @@ rapport dans une PR à part.
 
 ## 9. Sources
 
-[BENCH] Lues le 2026-11-20, sauf S49 à S61, lues le 2026-11-21 par [SECU].
+[BENCH] Lues le 2026-11-20, sauf S49 à S61, lues le 2026-11-21 par [SECU],
+et S62, lue le 2026-11-24 par [BENCH].
 Les compléments de S2, S3, S16, S27 et S38 viennent de la relecture [SECU] du
-2026-11-21, celui de S7 de la relecture [FINOPS] du même jour. Les fichiers
+2026-11-21, celui de S7 de la relecture [FINOPS] du même jour, celui de S60
+de la lecture du 2026-11-24 par [BENCH]. Les fichiers
 de dépôt GitHub ont été lus par l'API de GitHub (`gh api`), au tag ou au
 commit indiqué ; les comptes de commits sont ceux de la branche par défaut, du
 2025-11-20 au 2026-11-20, bots exclus (comptes en `[bot]` et `cnpg-bot`).
@@ -892,7 +1003,8 @@ commit indiqué ; les comptes de commits sont ceux de la branche par défaut, du
 | S57 | <https://docs.docker.com/dhi/how-to/use/>, <https://docs.docker.com/dhi/how-to/verify/> | 2026-11-21 | Tirer depuis `dhi.io` demande une authentification et un Secret de tirage dans Kubernetes ; vérification cosign par clé, avec `--insecure-ignore-tlog` | Oui |
 | S58 | <https://github.com/zalando/spilo/tree/4.1-p2> (`.github/workflows/publish-ghcr-container.yaml`, `postgres-appliance/Dockerfile`, `build_scripts/base.sh`, `scripts/configure_spilo.py`) | 2026-11-21 | Publication sans argument de construction ni signature ; `TIMESCALEDB_APACHE_ONLY=true` ; boîte à outils hors mode Apache seulement ; `local all all trust` et rejet du non-SSL par défaut | Oui |
 | S59 | <https://kyverno.io/docs/guides/exceptions/> | 2026-11-21 | Une `ValidatingPolicy` peut sauter ses contrôles pour des images listées (`exceptions.allowedImages`) | Oui |
-| S60 | <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/providers/docker/provision.go> | 2026-11-21 | Nœud créé par `docker run` avec `--privileged` (ligne 226) | Oui |
+| S60 | <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/providers/docker/provision.go> | 2026-11-21 et 2026-11-24 | Nœud créé par `docker run` avec `--privileged` (ligne 226) ; aucune option `--stop-timeout` dans le fichier | Oui |
+| S62 | <https://docs.docker.com/reference/cli/docker/container/stop/> | 2026-11-24 | `SIGTERM` par défaut, modifiable par `STOPSIGNAL` ; délai fixé par le démon, « 10 seconds for Linux containers » ; passé ce délai, le conteneur est « forcibly killed with a `SIGKILL` signal » ; délai modifiable à la création par `--stop-timeout` | Oui |
 | S61 | <https://github.com/zalando/postgres-operator/blob/v2.0.3/pkg/util/util.go>, `pkg/util/constants/roles.go` | 2026-11-21 | Mots de passe générés par `crypto/rand`, 64 caractères | Oui |
 
 ## 10. Relectures
