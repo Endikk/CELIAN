@@ -995,7 +995,7 @@ main() {
   else
     TRIAL_DIR=$(mktemp -d)
   fi
-  TRIAL_DIR=$(cd "$TRIAL_DIR" && pwd)
+  TRIAL_DIR=$(CDPATH='' cd -- "$TRIAL_DIR" && pwd)
   LOGS="$TRIAL_DIR/logs"
   mkdir -p "$LOGS"
 

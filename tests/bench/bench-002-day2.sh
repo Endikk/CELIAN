@@ -53,7 +53,7 @@ readonly UV_EXCLUDE_NEWER="2026-11-19T00:00:00Z"
 export npm_config_ignore_scripts=true
 export npm_config_min_release_age=7
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 readonly SCRIPT_DIR
 SELF="$SCRIPT_DIR/$(basename "${BASH_SOURCE[0]}")"
 readonly SELF
@@ -447,7 +447,7 @@ main() {
   else
     TRIAL_DIR="$(mktemp -d)"
   fi
-  TRIAL_DIR="$(cd "$TRIAL_DIR" && pwd)"
+  TRIAL_DIR="$(CDPATH='' cd -- "$TRIAL_DIR" && pwd)"
   # configstore (a yo dependency) writes under XDG_CONFIG_HOME.
   export XDG_CONFIG_HOME="$TRIAL_DIR/xdg-config"
   mkdir -p "$XDG_CONFIG_HOME"

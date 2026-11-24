@@ -186,7 +186,7 @@ readonly OPTIONS RUNS IDLE_WAIT REGISTRY ARCHIVE_SOURCE ARCHIVE_SRC MIRROR_PHASE
 readonly REG_NAME="$NAME-mirror-$REGISTRY"
 readonly MIRROR_URL="http://$REG_NAME:5000"
 
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
 readonly STACK="$SCRIPT_DIR/bench-005/stack"
 readonly FILES="$SCRIPT_DIR/bench-010"
 
@@ -1022,7 +1022,7 @@ check_options() {
         esac
         REG_IMAGE=$(registry_image)
         [ -n "$REGISTRY_DIR" ] && [ -d "$REGISTRY_DIR/config" ] || die "option mirror needs REGISTRY_DIR, written by MIRROR_PHASE=prepare-*"
-        REGISTRY_DIR=$(cd "$REGISTRY_DIR" && pwd)
+        REGISTRY_DIR=$(CDPATH='' cd -- "$REGISTRY_DIR" && pwd)
         check_registry
         ;;
       archive)
@@ -1100,7 +1100,7 @@ main() {
       REG_IMAGE=$(registry_image)
       [ -n "$REGISTRY_DIR" ] || die "MIRROR_PHASE=$MIRROR_PHASE needs REGISTRY_DIR"
       mkdir -p "$REGISTRY_DIR"
-      REGISTRY_DIR=$(cd "$REGISTRY_DIR" && pwd)
+      REGISTRY_DIR=$(CDPATH='' cd -- "$REGISTRY_DIR" && pwd)
       prepare_registry "${MIRROR_PHASE#prepare-}"
       exit 0
       ;;
@@ -1117,7 +1117,7 @@ main() {
   else
     TRIAL_DIR=$(mktemp -d)
   fi
-  TRIAL_DIR=$(cd "$TRIAL_DIR" && pwd)
+  TRIAL_DIR=$(CDPATH='' cd -- "$TRIAL_DIR" && pwd)
   LOGS="$TRIAL_DIR/logs"
   CERTS="$TRIAL_DIR/certs.d"
   mkdir -p "$LOGS" "$CERTS" "$TRIAL_DIR/archives"

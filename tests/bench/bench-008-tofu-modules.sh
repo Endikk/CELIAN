@@ -67,7 +67,7 @@ RUNS="${RUNS:-3}"
 PAUSE="${PAUSE:-5}"
 readonly OPTIONS RUNS PAUSE
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname "$0")" && pwd)"
 readonly SCRIPT_DIR
 readonly CONFIG_ROOT="$SCRIPT_DIR/bench-008"
 
@@ -208,7 +208,7 @@ prepare_trial_dir() {
       die "the temporary directory is inside a Git work tree; pass a TRIAL_DIR outside any repository"
     fi
   fi
-  TRIAL_DIR="$(cd "$TRIAL_DIR" && pwd)"
+  TRIAL_DIR="$(CDPATH='' cd -- "$TRIAL_DIR" && pwd)"
   LOGS="$TRIAL_DIR/logs"
   EMPTY_HOME="$TRIAL_DIR/home"
   mkdir -p "$LOGS" "$EMPTY_HOME"

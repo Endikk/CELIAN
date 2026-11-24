@@ -129,7 +129,7 @@ BENCH_LOCK="${BENCH_LOCK:-}"
 KEEP_CLUSTER="${KEEP_CLUSTER:-0}"
 readonly OPTIONS RUNS IDLE_WAIT BENCH_LOCK KEEP_CLUSTER
 
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
 readonly DATA_DIR="$SCRIPT_DIR/bench-012"
 TRIAL_DIR=""
 LOGS=""
@@ -269,7 +269,7 @@ check_files() {
   [ "$sum" = "$KC_QUICKSTART_SHA256" ] || die "keycloak quickstart: SHA-256 $sum differs from $KC_QUICKSTART_SHA256"
   tsv files.tsv reference "keycloak-quickstarts@$KC_QUICKSTART_COMMIT kubernetes/keycloak.yaml" "$sum"
   # shellcheck disable=SC2086 # LAYER_DIRS is a list of directory names
-  for rel in $(cd "$DATA_DIR" && find $LAYER_DIRS -type f | LC_ALL=C sort); do
+  for rel in $(CDPATH='' cd -- "$DATA_DIR" && find $LAYER_DIRS -type f | LC_ALL=C sort); do
     [ -f "$DATA_DIR/$rel" ] || die "missing $DATA_DIR/$rel"
     tsv files.tsv layer "$rel" "$(file_sum "$DATA_DIR/$rel")"
   done
@@ -1011,7 +1011,7 @@ main() {
   else
     TRIAL_DIR=$(mktemp -d)
   fi
-  TRIAL_DIR=$(cd "$TRIAL_DIR" && pwd)
+  TRIAL_DIR=$(CDPATH='' cd -- "$TRIAL_DIR" && pwd)
   LOGS="$TRIAL_DIR/logs"
   mkdir -p "$LOGS"
   export KUBECONFIG="$TRIAL_DIR/kubeconfig"
