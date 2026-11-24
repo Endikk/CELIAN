@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-24 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas, décisions du 2026-11-24 sur BENCH-013 ; validation de l'ADR en attente |
+| Décideur | Lucas, décisions et acceptation du 2026-11-24 sur BENCH-013 |
 | BENCH lié | [BENCH-013](../benchmarks/BENCH-013-serveur-mails-test.md) |
 | Remplace | aucun |
 
@@ -173,6 +173,24 @@ La porte reste ouverte. Mailpit tourne sur tout cluster conforme (BENCH-013, sec
 3. Vérification d'adresse sur `local`, pour [PO] et [SECU]. L'inscription est ouverte (réponse de Lucas à la question 5 de l'ADR-013). Activer la vérification par mail dans le royaume ferait de Mailpit un outil utile dès le MVP et exercerait le chemin du mail ; sur `gcp`, le parcours équivalent passe par le SDK de Google, sous R-37. Avis de [ARCHI] : l'activer sur `local`, réglage exact à lire dans la documentation de 26.8.2 ([DEV]), et décider du pendant `gcp` avec le parcours de connexion.
 4. Clé SMTP dans `app-config`, pour Lucas et [PO]. Lecture de [ARCHI] de la décision de Lucas : l'hôte SMTP est un réglage du projet, que CELIAN ne remplit pas sur `gcp`. Avis de [ARCHI] : aucune clé tant que l'exemple n'envoie rien (Q7). Une clé vide sur `gcp` inviterait à une configuration fausse ; le README dit où l'ajouter et quelle valeur prend la couche `local`.
 5. Dates et seuils de suivi, pour Lucas et [SECU]. Relecture de la dérogation au plus tard le 2027-05-24, date de la prochaine vérification de BENCH-013, en plus de la relecture de [SECU] à chaque condensat. Signaux d'abandon qui rouvrent la décision (section « Condition de révision ») : aucune release stable pendant six mois, ou un avis du dépôt sans version corrective trente jours après sa publication. Avis de [ARCHI] : ces valeurs, à confirmer par [SECU].
+
+### Réponses de Lucas (2026-11-24)
+
+Lucas accepte cet ADR le 2026-11-24, avec les avis du DSI et de [ARCHI] :
+
+- Il confirme la règle d'interface web du DSI du 2026-11-20 : le
+  développeur lit dans son navigateur les mails de confirmation et de
+  réinitialisation, et le serveur d'Apache James reste écarté (question 1).
+- Il accepte les trois ajouts au schéma du catalogue : le type de cible
+  `absent`, `governance.model: individual` et le standard `smtp`, posés dans
+  la PR de schéma de la phase 3 (question 2).
+- La vérification d'adresse par mail sur `local` revient à [PO] et à
+  [SECU] (question 3).
+- Aucune clé SMTP dans `app-config` tant que l'exemple n'envoie rien
+  (question 4).
+- La dérogation à ENF-03 est relue au plus tard le 2027-05-24, et plus tôt
+  si un signal d'abandon apparaît : aucune release stable en six mois, ou
+  un avis sans correctif au bout de trente jours (question 5).
 
 ## Conformité à la constitution
 
