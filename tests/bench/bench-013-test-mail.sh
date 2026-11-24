@@ -9,15 +9,17 @@
 # Commands that create, modify or delete a container or a network ([SECU]
 # rule of 2026-11-20). They are all listed here; the script runs no other:
 #   - kind create cluster --name celian-bench-013: creates the node container
-#     celian-bench-013-control-plane, and the Docker network "kind" if it does
-#     not exist yet; pulls the node image if it is missing from the cache;
+#     celian-bench-013-control-plane, which kind starts with "docker run
+#     --privileged", and the Docker network "kind" if it does not exist yet;
+#     pulls the node image if it is missing from the cache;
 #   - kind delete cluster --name celian-bench-013: deletes that container. The
 #     "kind" network is left in place;
 #   - kubectl apply, create and delete, against that cluster only: pods run
 #     in the containerd of the node, never as containers of the host engine.
-# Read-only Docker commands: docker version, docker info, docker network
-# inspect, docker manifest inspect (registry metadata, no layer download),
-# docker stats.
+# Read-only Docker commands: docker version, docker info, docker ps -q,
+# docker network inspect, docker manifest inspect (registry metadata, no layer
+# download), docker stats.
+# Outbound reads: docker manifest inspect and node image pulls (Docker Hub).
 # Never used: docker run, start, restart, exec, cp, build, pull, rm and
 # network rm; kind load; kubectl exec, cp, debug and port-forward; curl, wget,
 # python, node, perl.
