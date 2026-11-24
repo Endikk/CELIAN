@@ -14,10 +14,10 @@
 #   local/scripts/mirror.sh: docker container rm
 #   local/scripts/mirror.sh: docker run
 #   local/scripts/mirror.sh: docker volume rm
-# Outside the inventory: `task test` builds the test stage of the API image
-# with `docker build`, keeping the build cache and no image
-# (tests/unit/u01-api.sh).
-
+# Outside the inventory: `task test` builds the test stages of the API and
+# front images with `docker build`, keeping the build cache and no image
+# (tests/unit/u01-api.sh, tests/unit/u02-front.sh).
+# Outside the inventory: `task test` builds the test stages of the API and
 version: '3'
 
 includes:
@@ -61,6 +61,8 @@ tasks:
     cmds:
       # U01, in the build image of the API: Docker, and no .NET SDK.
       - bash tests/unit/u01-api.sh
+      # U02, in the build image of the front: Docker, and no Node.js.
+      - bash tests/unit/u02-front.sh
 
   test:e2e:
     desc: Run the tests on kind of the current profile; the cluster is created, then deleted.
