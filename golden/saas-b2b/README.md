@@ -18,7 +18,7 @@ La spécification, le plan et les tâches sont dans [`specs/001-golden-repo-saas
 
 | Contrôle | Attendu |
 | --- | --- |
-| Moteur de conteneurs | joignable par la commande `docker` : `docker info` répond |
+| Moteur de conteneurs | local, joint par la commande `docker` à travers un socket unix (un contexte `tcp://` ou `ssh://`, ou `DOCKER_HOST` vers une autre machine, est refusé) ; `docker info` répond en moins de 10 s |
 | kind | 0.33.0 exactement (ADR-004) |
 | kubectl | 1.35 à 1.37, une mineure autour de celle du cluster, 1.36 dans `platform.yaml` (ADR-006) |
 | Docker Engine, sous Linux seulement | 28.0.0 ou plus (ADR-011) |
