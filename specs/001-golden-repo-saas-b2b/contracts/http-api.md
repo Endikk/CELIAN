@@ -37,6 +37,8 @@ Corps de la requête : `{"body": "<texte>"}`. `body` obligatoire, de 1 à 500 ca
 | --- | --- |
 | 201 | `{"id": "<uuid>", "body": "<texte>", "createdAt": "<horodatage ISO 8601>"}`, en-tête d'emplacement vers la note |
 | 400 | détail de problème qui nomme `body` et la règle enfreinte |
+| 413 | corps de plus de 16 Kio, refusé avant toute lecture (décision du DSI du 2026-11-24) |
+| 415 | corps qui n'est pas du JSON (décision du DSI du 2026-11-24) |
 
 ## `GET /api/notes/{id}`
 
