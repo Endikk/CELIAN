@@ -1,6 +1,6 @@
 # Registre des risques
 
-Tenu par le DSI. Mis à jour le 24/11/2026. Probabilité et impact sont notés
+Tenu par le DSI. Mis à jour le 25/11/2026. Probabilité et impact sont notés
 faible, moyen ou fort : ce sont des jugements, pas des mesures. Un risque se
 ferme quand sa mitigation est en place et vérifiée.
 
@@ -1020,17 +1020,18 @@ Ouvert le 24/11/2026 avec l'ADR-016, sur proposition d'[ARCHI]. Renovate ne
 connaît la date de publication d'une image que sur Docker Hub. Pour ghcr.io,
 quay.io et mcr.microsoft.com, Lucas a choisi l'approbation manuelle : chaque
 mise à jour attend qu'il coche sa case sur le tableau de bord de Renovate,
-après avoir lu la date amont du condensat. Cinq images sont concernées :
-gitleaks, zot, les contrôleurs de Flux, Keycloak et les images .NET de l'API.
-Une absence retarde un correctif. Une date mal lue fait entrer un condensat de
-moins de 7 jours. Aucune alerte automatique ne couvre ces images : ni
-`osvVulnerabilityAlerts` ni la base d'avis de GitHub ne connaissent les
-images.
+après avoir lu la date amont du condensat. Quatre images sont concernées :
+zot, les contrôleurs de Flux, Keycloak et les images .NET de l'API. gitleaks
+en est sorti le 25/11/2026 : il est tiré de Docker Hub, que Renovate date
+(ADR-016, question 3). Une absence retarde un correctif. Une date mal lue
+fait entrer un condensat de moins de 7 jours. Aucune alerte automatique ne
+couvre ces images : ni `osvVulnerabilityAlerts` ni la base d'avis de GitHub
+ne connaissent les images.
 
 Probabilité moyenne : Keycloak a publié trois condensats de 26.8.2 en dix
 jours, et mcr.microsoft.com modifie ses tags après leur création. Impact
-moyen, fort pour l'image d'exécution de l'API, la seule des cinq qui part sur
-GKE.
+moyen, fort pour l'image d'exécution de l'API, la seule des quatre qui part
+sur GKE.
 
 Mitigation :
 
@@ -1045,7 +1046,8 @@ Mitigation :
   révoqué (ADR-016, conditions 3 et 5 ; R-07) ; règles `deny` sur les formes
   courantes de `gh issue edit`, des `gh api` en `PATCH` et des mutations
   GraphQL, filtre de motifs en appoint ;
-- copie de Docker Hub au cas par cas, gitleaks d'abord, dans une PR à part ;
+- copie de Docker Hub au cas par cas : faite pour gitleaks le 25/11/2026,
+  Keycloak attend l'étape 15 (ADR-016, question 3) ;
 - relecture de la dérogation au plus tard le 2027-02-24, et à la fermeture de
   chacun des tickets Renovate 38656, 39064 et 38572 ; le risque se ferme avec
   le dernier registre levé.
