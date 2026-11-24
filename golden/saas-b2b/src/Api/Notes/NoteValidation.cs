@@ -36,6 +36,19 @@ public static class NoteValidation
 
     private const string BodyRule = "Must hold 1 to 500 characters once leading and trailing white space is removed";
 
+    private const string UnknownFieldRule = "Unknown field: the only accepted field is 'body'.";
+
+    /// <summary>
+    /// Longest field name that an error repeats, in characters. With this cut
+    /// and only the first unknown field named, a request of 16 KiB draws a few
+    /// hundred bytes; naming every unknown field drew 107 KB in U01 (review
+    /// [SECU] of step 3).
+    /// </summary>
+    private const int MaxNamedFieldCharacters = 32;
+
+    /// <summary>Stands for the name of an unknown field that is not valid Unicode, and cannot be repeated.</summary>
+    private const string UnreadableFieldName = "(field name that is not valid Unicode)";
+
     private static readonly IReadOnlyDictionary<string, string[]> NoErrors = new Dictionary<string, string[]>();
 
     /// <summary>Reads {"body": "..."}, the only accepted shape, and returns the trimmed body.</summary>
@@ -60,6 +73,8 @@ public static class NoteValidation
 
             var errors = new Dictionary<string, string[]>(StringComparer.Ordinal);
             var bodies = new List<JsonElement>();
+            JsonProperty? firstUnknown = null;
+            var unknownCount = 0;
             foreach (var property in document.RootElement.EnumerateObject())
             {
                 if (property.NameEquals(BodyField))
@@ -68,8 +83,16 @@ public static class NoteValidation
                 }
                 else
                 {
-                    errors[property.Name] = ["Unknown field: the only accepted field is 'body'."];
+                    firstUnknown ??= property;
+                    unknownCount++;
                 }
+            }
+
+            // One unknown field named, whatever their number: the answer stays
+            // small, and the client learns that only 'body' is accepted.
+            if (firstUnknown is { } unknown)
+            {
+                errors[NameForErrors(unknown)] = [UnknownFieldsRule(unknownCount)];
             }
 
             string? body = null;
@@ -157,6 +180,47 @@ public static class NoteValidation
         body = trimmed;
         return null;
     }
+
+    /// <summary>The name of an unknown field as its error gives it: cut after 32 characters, never split inside a character.</summary>
+    private static string NameForErrors(JsonProperty property)
+    {
+        string name;
+        try
+        {
+            name = property.Name;
+        }
+        catch (InvalidOperationException)
+        {
+            return UnreadableFieldName;
+        }
+
+        if (!IsWellFormed(name))
+        {
+            return UnreadableFieldName;
+        }
+
+        var characters = 0;
+        var end = 0;
+        foreach (var rune in name.EnumerateRunes())
+        {
+            if (characters == MaxNamedFieldCharacters)
+            {
+                return name[..end] + "...";
+            }
+
+            characters++;
+            end += rune.Utf16SequenceLength;
+        }
+
+        return name;
+    }
+
+    private static string UnknownFieldsRule(int count) =>
+        count == 1
+            ? UnknownFieldRule
+            : string.Create(
+                CultureInfo.InvariantCulture,
+                $"{UnknownFieldRule} The request holds {count} unknown fields; this error names the first.");
 
     private static bool IsWellFormed(string text)
     {
