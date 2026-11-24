@@ -127,15 +127,17 @@ Contre la fuite d'identifiants (R-07), le même fichier :
 - refuse `gh auth token` et les commandes `gcloud` qui impriment un jeton ;
 - refuse la lecture de `~/.config/gh`, `~/.config/gcloud`, `~/.ssh`, `~/.aws`,
   `~/.kube`, `~/.docker/config.json`, `~/.netrc` et `~/.git-credentials` ;
-- demande une confirmation humaine pour les canaux de sortie les plus
-  sensibles : `gh auth`, `gh gist`, `security`, l'ajout ou la modification
-  d'un remote, et un `git push` vers une URL.
+- refuse les canaux de sortie les plus sensibles : `gh auth`, `gh gist`,
+  `security`, l'ajout ou la modification d'un remote, et un `git push` vers
+  une URL.
 
-Une règle `ask` du projet passe devant un `allow` de l'utilisateur, et elle
-demande confirmation même en mode bypass. Une règle `deny` bloque dans tous
-les modes, sans rien demander
+Le fichier ne porte plus aucune règle `ask` depuis le 24/11/2026, décision de
+Lucas : une règle `ask` demande confirmation même en mode bypass, et Lucas ne
+veut plus aucune demande d'autorisation. Les huit dernières sont devenues des
+`deny`, qui bloquent dans tous les modes sans rien demander
 (<https://code.claude.com/docs/en/permissions>,
-<https://code.claude.com/docs/en/permission-modes>, relus le 20/11/2026).
+<https://code.claude.com/docs/en/permission-modes>, relus le 24/11/2026).
+Une commande qui en relève, Lucas la lance lui-même.
 
 Le 21/11/2026, Lucas a retiré les règles `ask` sur `curl`, `wget`, `python`,
 `python3`, `node`, `docker run`, `docker exec` et `docker cp`, ainsi que
