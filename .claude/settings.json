@@ -64,7 +64,10 @@
       "Bash(git remote set-url *)",
       "Bash(git push http*)",
       "Bash(git push git@*)",
-      "Bash(git push ssh://*)"
+      "Bash(git push ssh://*)",
+      "Bash(gh issue edit *)",
+      "Bash(gh api * PATCH *)",
+      "Bash(gh api *-XPATCH*)"
     ]
   }
 }
