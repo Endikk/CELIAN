@@ -4,14 +4,18 @@
   Npgsql only, no ORM (research RS-03); version and date in research RS-18.
 -->
 <Project Sdk="Microsoft.NET.Sdk.Web">
+  <!-- No file of the project folder is published unless listed here. By
+       default the Web SDK publishes every **\*.json and **\*.config file of
+       the folder (Sdk.StaticWebAssets.StaticAssets.ProjectSystem.props, branch
+       release/10.0.4xx of dotnet/sdk): a key file left in src/Api/, even
+       untracked, would ship in the image (review [SECU] of step 3). The API
+       needs none at run time; openapi.json, read by S20 and the tests, stays
+       out of the image, and no route serves it (research RS-03). -->
+  <PropertyGroup>
+    <EnableDefaultContentItems>false</EnableDefaultContentItems>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Npgsql" Version="10.0.3" />
-  </ItemGroup>
-
-  <!-- openapi.json describes the routes for S20 and the tests; the image does
-       not ship it, and no route serves it (research RS-03). -->
-  <ItemGroup>
-    <Content Remove="openapi.json" />
-    <None Include="openapi.json" />
   </ItemGroup>
 </Project>
