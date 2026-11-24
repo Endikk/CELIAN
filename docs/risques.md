@@ -45,6 +45,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-35 | Postgres local écrit à la main dans chaque projet généré | Moyenne | Moyen | DEV, SECU | Ouvert |
 | R-36 | Failles connues sans paquet associé, invisibles aux scanners | Moyenne | Moyen | SECU, OPS | Ouvert |
 | R-37 | Parcours de connexion différent entre le PC et GCP | Moyenne | Moyen | DEV, QA | Ouvert |
+| R-38 | Mise à jour des images sans date suspendue à une personne | Moyenne | Moyen, fort pour l'image d'exécution de l'API | SECU, DSI | Ouvert |
 
 ## Détail
 
@@ -918,7 +919,9 @@ Mitigation :
   configuration par défaut de l'image active la recherche, l'interface et la
   gestion ;
 - image figée par condensat, suivie par Renovate avec l'exception de sécurité
-  du principe VI, et incluse dans le SBOM et le scan Trivy du projet généré ;
+  du principe VI, et incluse dans le SBOM et le scan Trivy du projet généré.
+  Renovate ne date pas ghcr.io : chaque mise à jour attend l'approbation de
+  Lucas sur le tableau de bord, qui compte les 7 jours (ADR-016, R-38) ;
 - stockage jamais versionné ni publié (R-25) ;
 - lecture mensuelle des avis du dépôt par [SECU] ;
 - test de la condition 7 dans la matrice, avec un pod qui relève ce que le
@@ -1010,3 +1013,39 @@ Mitigation :
 - test du parcours réel avant toute proposition de la combinaison `gcp`, au
   premier déploiement autorisé ;
 - écart listé au README du projet généré.
+
+### R-38. Mise à jour des images sans date suspendue à une personne
+
+Ouvert le 24/11/2026 avec l'ADR-016, sur proposition d'[ARCHI]. Renovate ne
+connaît la date de publication d'une image que sur Docker Hub. Pour ghcr.io,
+quay.io et mcr.microsoft.com, Lucas a choisi l'approbation manuelle : chaque
+mise à jour attend qu'il coche sa case sur le tableau de bord de Renovate,
+après avoir lu la date amont du condensat. Cinq images sont concernées :
+gitleaks, zot, les contrôleurs de Flux, Keycloak et les images .NET de l'API.
+Une absence retarde un correctif. Une date mal lue fait entrer un condensat de
+moins de 7 jours. Aucune alerte automatique ne couvre ces images : ni
+`osvVulnerabilityAlerts` ni la base d'avis de GitHub ne connaissent les
+images.
+
+Probabilité moyenne : Keycloak a publié trois condensats de 26.8.2 en dix
+jours, et mcr.microsoft.com modifie ses tags après leur création. Impact
+moyen, fort pour l'image d'exécution de l'API, la seule des cinq qui part sur
+GKE.
+
+Mitigation :
+
+- lecture du tableau de bord une fois par semaine, et sur alerte de [SECU]
+  pour un avis publié (décision de Lucas du 24/11/2026) ;
+- S23 et le contrôle du `renovate.json` de CELIAN refusent tout écart au
+  bloc de l'ADR-016, et tout registre de plus passe par un ADR ;
+- trace de la date lue et de sa source dans chaque PR de ces registres,
+  relue par [SECU] à sa lecture mensuelle des avis ;
+- jeton des agents sans droit d'écriture sur les tickets, essayé par Lucas
+  avant l'installation de l'application Renovate, ancien jeton classique
+  révoqué (ADR-016, conditions 3 et 5 ; R-07) ; règles `deny` sur les formes
+  courantes de `gh issue edit`, des `gh api` en `PATCH` et des mutations
+  GraphQL, filtre de motifs en appoint ;
+- copie de Docker Hub au cas par cas, gitleaks d'abord, dans une PR à part ;
+- relecture de la dérogation au plus tard le 2027-02-24, et à la fermeture de
+  chacun des tickets Renovate 38656, 39064 et 38572 ; le risque se ferme avec
+  le dernier registre levé.

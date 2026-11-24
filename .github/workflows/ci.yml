@@ -41,6 +41,18 @@ jobs:
       - name: Run every hook on every file
         run: uvx "pre-commit@${PRE_COMMIT_VERSION}" run --all-files --show-diff-on-failure
 
+      # ADR-016, condition 2: the delay part of S23 also checks the
+      # renovate.json of CELIAN. In this job, because it is a required check.
+      # conftest comes from the installer of the golden repo, each archive
+      # checked against golden/saas-b2b/tests/tools/SHA256SUMS.
+      - name: Install conftest
+        run: |
+          bash golden/saas-b2b/tests/tools/install.sh "$RUNNER_TEMP/tools"
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+
+      - name: Check the delay rules of renovate.json (ADR-016, condition 2)
+        run: bash scripts/renovate/check-delay.sh
+
       # Squash merge turns the PR title into the commit on main.
       - name: Check the PR title with commitlint
         if: github.event_name == 'pull_request'

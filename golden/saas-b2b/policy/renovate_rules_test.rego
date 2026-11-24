@@ -1,4 +1,5 @@
-# Tests of S23 (renovate_rules.rego), run by `conftest verify`.
+# Tests of S23, rules that follow platform.yaml (renovate_rules.rego), run by
+# `conftest verify`. The delay has its tests in renovate_delay_test.rego.
 package renovate_rules
 
 postgres_rule := {
@@ -80,101 +81,8 @@ test_s23_accepts_exact_names_and_case_insensitive_regexes if {
 
 # Shape of the input.
 
-test_s23_rejects_an_input_without_renovate_json if {
-	denied_with([{"path": "platform.yaml", "contents": valid_platform}], "expected one renovate.json among the checked files, found 0")
-}
-
-test_s23_does_not_take_renovate_json5_for_renovate_json if {
-	files := [
-		{"path": "renovate.json5", "contents": valid_config},
-		{"path": "platform.yaml", "contents": valid_platform},
-	]
-	denied_with(files, "expected one renovate.json among the checked files, found 0")
-}
-
 test_s23_rejects_an_input_without_platform_yaml if {
 	denied_with([{"path": "renovate.json", "contents": valid_config}], "expected one platform.yaml among the checked files, found 0")
-}
-
-test_s23_rejects_a_renovate_json_that_is_not_an_object if {
-	denied_with(checked(["7 days"], valid_platform), "renovate.json must hold a JSON object")
-}
-
-test_s23_rejects_package_rules_that_are_not_a_list if {
-	denied_with(checked(config_with({"postgres": postgres_rule}), valid_platform), "packageRules must be a list")
-}
-
-# Delay of 7 days.
-
-test_s23_rejects_a_shorter_delay if {
-	denied_with(checked(with_value(valid_config, "minimumReleaseAge", "3 days"), valid_platform), "minimumReleaseAge must be \"7 days\", found 3 days")
-}
-
-test_s23_rejects_a_missing_delay if {
-	denied_with(checked(without(valid_config, "minimumReleaseAge"), valid_platform), "minimumReleaseAge must be \"7 days\", found null")
-}
-
-test_s23_rejects_a_rule_with_its_own_delay if {
-	rule := {"matchPackageNames": ["react"], "minimumReleaseAge": "0 days"}
-	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "[\"packageRules\", 4, \"minimumReleaseAge\"] sets the delay again")
-}
-
-test_s23_rejects_a_release_without_a_date_taken_as_stable if {
-	renovate := with_value(valid_config, "minimumReleaseAgeBehaviour", "timestamp-optional")
-	denied_with(checked(renovate, valid_platform), "minimumReleaseAgeBehaviour must be written out as \"timestamp-required\"")
-}
-
-test_s23_rejects_a_rule_that_takes_a_release_without_a_date_as_stable if {
-	rule := {"matchDatasources": ["docker"], "minimumReleaseAgeBehaviour": "timestamp-optional"}
-	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "[\"packageRules\", 4, \"minimumReleaseAgeBehaviour\"] sets the delay again")
-}
-
-test_s23_rejects_a_delay_set_for_an_update_type if {
-	renovate := with_value(valid_config, "digest", {"minimumReleaseAge": null})
-	denied_with(checked(renovate, valid_platform), "[\"digest\", \"minimumReleaseAge\"] sets the delay again")
-}
-
-test_s23_rejects_internal_checks_that_open_a_pr_during_the_delay if {
-	renovate := with_value(valid_config, "internalChecksFilter", "none")
-	denied_with(checked(renovate, valid_platform), "internalChecksFilter must be written out as \"strict\"")
-}
-
-test_s23_rejects_a_release_age_behaviour_left_to_the_default if {
-	renovate := without(valid_config, "minimumReleaseAgeBehaviour")
-	denied_with(checked(renovate, valid_platform), "minimumReleaseAgeBehaviour must be written out as \"timestamp-required\"")
-}
-
-test_s23_rejects_a_preset_added_to_extends if {
-	renovate := with_value(valid_config, "extends", array.concat(celian_presets, ["github>example/presets"]))
-	denied_with(checked(renovate, valid_platform), "extends must hold exactly the three presets of CELIAN")
-}
-
-test_s23_rejects_a_preset_extended_inside_a_rule if {
-	rule := {"matchPackageNames": ["react"], "extends": ["github>example/presets"]}
-	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "[\"packageRules\", 4, \"extends\"] extends a preset")
-}
-
-# Security exception.
-
-test_s23_rejects_a_missing_security_exception if {
-	denied_with(checked(without(valid_config, "vulnerabilityAlerts"), valid_platform), "vulnerabilityAlerts.minimumReleaseAge must be written out as null")
-}
-
-test_s23_rejects_a_delay_on_security_fixes if {
-	renovate := with_value(valid_config, "vulnerabilityAlerts", {"minimumReleaseAge": "7 days"})
-	denied_with(checked(renovate, valid_platform), "vulnerabilityAlerts.minimumReleaseAge must be written out as null")
-}
-
-test_s23_rejects_vulnerability_alerts_turned_off if {
-	renovate := with_value(valid_config, "vulnerabilityAlerts", {"minimumReleaseAge": null, "enabled": false})
-	denied_with(checked(renovate, valid_platform), "vulnerabilityAlerts must stay enabled")
-}
-
-test_s23_rejects_osv_alerts_turned_off if {
-	denied_with(checked(without(valid_config, "osvVulnerabilityAlerts"), valid_platform), "osvVulnerabilityAlerts must be true")
 }
 
 # Postgres.
@@ -281,7 +189,7 @@ test_s23_rejects_envoy_gateway_without_a_group if {
 
 test_s23_names_its_requirements_in_each_message if {
 	msgs := deny with input as checked({}, valid_platform)
-	count(msgs) == 10
+	count(msgs) == 4
 	every msg in msgs {
 		startswith(msg, "S23 (FR-013")
 	}

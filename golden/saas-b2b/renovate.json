@@ -51,6 +51,13 @@
       "matchDatasources": ["docker"],
       "matchPackageNames": ["/^(docker\\.io/)?envoyproxy/gateway(-helm|-crds-helm)?$/"],
       "groupName": "Envoy Gateway"
+    },
+    {
+      "description": "Principle VI of CELIAN, ADR-016: these registries give Renovate no release date, so it cannot count the 7 days. Each update waits on the Dependency Dashboard: a person who maintains the project ticks it, never an agent, once the upstream release of the proposed digest is 7 days old, or at once for the fix of a published advisory.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(ghcr\\.io|quay\\.io|mcr\\.microsoft\\.com)/.+$/"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
+      "dependencyDashboardApproval": true
     }
   ]
 }
