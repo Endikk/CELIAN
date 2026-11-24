@@ -594,7 +594,7 @@ Aucun ne demande de modifier spec.md ni plan.md avant de commencer. Chacun est r
 15. Relevé à l'étape 5 : les seuils comparent la mémoire déclarée par le moteur à 2048 et 2560 Mio, alors que RS-08 parle d'une VM de 2,0 et 2,5 Gio. Ce que déclare une VM réglée à 2,0 Gio n'a pas été mesuré. T081 tranche, et change aussi les seuils écrits dans le README.
 16. Relevé à l'étape 5 : Podman, que [OPS] n'a pas encore retenu (R-26), répond derrière `docker` avec sa propre version ; sous Linux, la règle des 28.0.0 de Docker Engine le refuserait. Rien n'est câblé pour lui.
 17. Relevé à l'étape 5 : Renovate ne voit pas `KIND_VERSION` de `local/scripts/preflight.sh`. L'étape 6 lui donne un commentaire `# renovate:` et le range dans le groupe de kind et de son image de nœud.
-18. Relevé à l'étape 5 : `docker info` n'a pas de délai d'attente, un moteur bloqué fait attendre `task up` sans fin ; un bash compilé sans `/dev/tcp` verrait tous les ports libres. P04 remplace la sonde réseau par un faux ; la vraie sonde n'est vérifiée qu'à la main, puis par E03 sur kind.
+18. Relevé à l'étape 5, repris après la relecture [SECU] de la PR #57 : `docker context inspect` et `docker info` sont bornés à 10 s (`DOCKER_TIMEOUT_SECONDS`, RS-08), et P02 le vérifie avec un faux moteur qui ne répond jamais. La sonde d'un port ne conclut « libre » que sur « Connection refused » ; tout autre résultat, un bash compilé sans `/dev/tcp` compris, est refusé comme indécidable. P04 joue la vraie sonde sur le port 1, fermé, et la remplace par un faux pour les ports pris ou indécidables. Un port réellement pris n'est vérifié qu'à la main (RS-08), puis par E03 sur kind.
 
 ## Notes
 
