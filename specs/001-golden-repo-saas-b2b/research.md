@@ -101,6 +101,19 @@ Conclusion pour la parité (R-35). En local, l'utilisateur de `db-auth` a moins 
 | <https://docs.cloud.google.com/sql/docs/postgres/users> | 2026-11-24 | Attributs de `cloudsqlsuperuser`, rôle donné aux utilisateurs intégrés |
 | <https://docs.cloud.google.com/sql/docs/postgres/create-manage-databases> | 2026-11-24 | Propriétaire d'une base créée par l'API non documenté |
 
+### Relecture [SECU] du 2026-11-24 (T016, second porteur)
+
+`CREATE TABLE` devrait passer sur Cloud SQL. Une base créée par la console appartient à `cloudsqlsuperuser` (page « Known issues ») ; rien n'est écrit pour l'API, `gcloud` ni `google_sql_database`, qui n'a pas d'argument `owner`. Une base se crée depuis `template1` par défaut, et le refus documenté sur `public` ne vise que `template0`. Sous PostgreSQL 18, l'appartenance implicite à `pg_database_owner` se propage aux membres du propriétaire (`roles_is_member_of`, `src/backend/utils/adt/acl.c`, REL_18_STABLE, commit `8efeedc7`) : un utilisateur intégré, qui hérite de `cloudsqlsuperuser`, a donc `CREATE` sur `public` si la base appartient à ce rôle. `pg_advisory_xact_lock` reste ouvert à `PUBLIC` (aucun `REVOKE` dans `system_functions.sql`).
+
+Le vrai écart est le privilège. Sur GCP, l'API tourne avec `cloudsqlsuperuser` (`CREATEROLE`, `CREATEDB`, triggers d'événement, réplication logique, `pg_largeobject`) ; en local, le même utilisateur n'est que propriétaire de sa base. Une injection ou une exécution de code dans l'API permettrait sur GCP de créer des rôles ou de lire toute l'instance (R-39). Hypothèse et contrôles à écrire par T107 ; le propriétaire réel ne se lit qu'au premier apply, avec l'accord de Lucas (principe X). Durcissement après le MVP, par un ADR : rôle personnalisé passé dans `database_roles`, puis `ALTER DATABASE app OWNER TO`, étape SQL d'administration hors d'OpenTofu.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://docs.cloud.google.com/sql/docs/postgres/known-issues> | 2026-11-24 | Base créée par la console possédée par `cloudsqlsuperuser` ; refus sur `public` pour `template0` |
+| <https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/utils/adt/acl.c> | 2026-11-24 | `roles_is_member_of` ajoute `pg_database_owner` quand un rôle de la chaîne possède la base |
+| <https://github.com/postgres/postgres/blob/REL_18_STABLE/src/backend/catalog/system_functions.sql> | 2026-11-24 | Aucun `REVOKE` sur `pg_advisory_xact_lock` |
+| <https://github.com/hashicorp/terraform-provider-google/blob/main/website/docs/r/sql_database.html.markdown> | 2026-11-24 | Pas d'argument `owner` |
+
 ## RS-05. Front et image du front
 
 Décision : React et TypeScript, construits par Vite dans une image multi-étapes ; fichiers statiques servis par nginx sur un port non privilégié, comme l'essai de BENCH-005.

@@ -46,6 +46,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-36 | Failles connues sans paquet associé, invisibles aux scanners | Moyenne | Moyen | SECU, OPS | Ouvert |
 | R-37 | Parcours de connexion différent entre le PC et GCP | Moyenne | Moyen | DEV, QA | Ouvert |
 | R-38 | Mise à jour des images sans date suspendue à une personne | Moyenne | Moyen, fort pour l'image d'exécution de l'API | SECU, DSI | Ouvert |
+| R-39 | API sur Cloud SQL avec les privilèges de `cloudsqlsuperuser` | Faible | Fort | OPS, SECU | Ouvert |
 | R-40 | Scanner de secrets du projet généré en maintenance | Forte | Moyen | SECU, DSI | Ouvert |
 | R-41 | Jeton de Memorystore sans ressource publiée dans le provider | Moyenne | Moyen | OPS, SECU | Ouvert |
 
@@ -1053,6 +1054,31 @@ Mitigation :
 - relecture de la dérogation au plus tard le 2027-02-24, et à la fermeture de
   chacun des tickets Renovate 38656, 39064 et 38572 ; le risque se ferme avec
   le dernier registre levé.
+
+### R-39. API sur Cloud SQL avec les privilèges de `cloudsqlsuperuser`
+
+Ouvert le 24/11/2026 par la relecture [SECU] de l'étape 3 du golden repo
+(research, RS-04). Sur Cloud SQL, un utilisateur créé par authentification
+intégrée reçoit `cloudsqlsuperuser` : `CREATEROLE`, `CREATEDB`, triggers
+d'événement, réplication logique, accès à `pg_largeobject`. L'API du projet
+généré se connecte avec cet utilisateur. En local, le même utilisateur n'est
+que propriétaire de sa base (ADR-012, condition 8). L'écart joue contre la
+cible la plus exposée : une injection SQL ou une exécution de code dans l'API
+permettrait sur GCP de créer des rôles pour durer, ou de lire toute
+l'instance.
+
+Probabilité faible : l'API n'utilise que des requêtes paramétrées et valide
+ses entrées côté serveur, et aucun déploiement réel n'a lieu avant la GATE 2.
+Impact fort : toute l'instance, dans chaque projet généré déployé.
+
+Mitigation :
+
+- hypothèse et contrôles écrits par T107, écart listé dans ENF-02 et au
+  modèle de menaces ;
+- lecture du propriétaire de la base, du droit `CREATE` sur `public` et de
+  `inherit_option` par E12, au premier apply autorisé par Lucas ;
+- après le MVP, par un ADR : rôle personnalisé passé dans `database_roles`,
+  puis `ALTER DATABASE app OWNER TO`, par une étape SQL d'administration.
 
 ### R-40. Scanner de secrets du projet généré en maintenance
 
