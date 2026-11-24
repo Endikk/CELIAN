@@ -249,6 +249,16 @@ Fait par [DEV] à la place d'[OPS], porteur désigné, qui relit. Il lève les c
 | <https://github.com/rhysd/actionlint/blob/914e7df21a07ef503a81201c76d2b11c789d3fca/.pre-commit-hooks.yaml> | 2026-11-23 | `files: ^\.github/workflows/` du hook ; tag v1.7.12 égal à ce SHA |
 | <https://github.com/rhysd/actionlint/blob/914e7df21a07ef503a81201c76d2b11c789d3fca/docs/usage.md> | 2026-11-23 | Fichiers passés en argument vérifiés |
 
+### Décision du DSI du 2026-11-24 : le Renovate de CELIAN couvre `golden/`
+
+Le Renovate de CELIAN couvre aussi `golden/`, ses workflows et son `.pre-commit-config.yaml`. Les versions du golden repo montent donc par des PR de CELIAN, passées dans sa CI et sous ses règles (7 jours, exception de sécurité). `golden/saas-b2b/renovate.json` sert au projet généré : CELIAN ne le lit pas (point 2 du relevé du 2026-11-23), et seul S23 le contrôle, statiquement.
+
+Ce que l'étape 2 (T093 à T101) en tire, d'après le relevé de RS-18 du 2026-11-24 :
+
+1. Les motifs par défaut des gestionnaires `github-actions` et `pre-commit`, comme celui du preset `customManagers:githubActionsVersions`, commencent par `(^|/)` : ils trouvent déjà `golden/saas-b2b/.github/workflows/` et `golden/saas-b2b/.pre-commit-config.yaml`. Le gestionnaire maison des variables `_IMAGE` de CELIAN s'arrêtait à `^\.github/workflows/`. Il reçoit un second motif pour les workflows du golden repo, sans quoi l'image de gitleaks de leur `secrets.yml` échapperait à la décision.
+2. Les règles propres au projet généré (majeure de `postgres`, paires kind et Envoy Gateway) vivent dans `golden/saas-b2b/renovate.json`. Elles ne s'appliquent donc pas au golden repo dans CELIAN. C'est sans effet aujourd'hui : le golden repo ne nomme encore aucune de ces images, et le gestionnaire `kubernetes`, sans motif par défaut, reste coupé dans CELIAN. À trancher par le DSI avant l'étape 3 : les Dockerfile du golden repo entreront dans le gestionnaire `dockerfile` de CELIAN, dont les motifs par défaut commencent aussi par `(^|/)`, sous les règles de CELIAN.
+3. S23 lit les règles du fichier. Le validateur de Renovate le lit en plus dans X01, par les hooks de la copie autonome. Les deux contrôles sont statiques : aucun Renovate ne tourne sur ce fichier avant le dépôt miroir.
+
 ## RS-18. Outils de test
 
 Décision : scripts bash pour les tests sur kind et les contrôles préalables, comme les scripts de BENCH ; politiques en Rego exécutées par conftest, outil que nomment les ADR-005 à ADR-011 ; validation de schéma par kubeconform, nommé par US-007, outil à confirmer avec [QA] (ADR-005, condition 5) ; Trivy pour le HCL, le SBOM et le scan des images (RS-22) ; conftest aussi pour la décision du scan (RS-23).
@@ -306,6 +316,84 @@ Effets : les politiques de `golden/saas-b2b/policy/` sont en Rego v1, un paquet 
 | <https://github.com/open-policy-agent/conftest/blob/v0.71.1/runner/test.go> | 2026-11-23 | Paquet nommé lu tel quel, sans contrôle d'existence |
 | <https://github.com/open-policy-agent/conftest/blob/v0.71.1/go.mod> | 2026-11-23 | OPA v1.21.1 |
 | <https://www.openpolicyagent.org/docs/policy-reference/builtins> | 2026-11-23 | Signatures et version d'apparition des fonctions citées |
+
+### Relevé du 2026-11-24 : validateur de Renovate et réglages repris de CELIAN (T093)
+
+Fait par [DEV], lecture le 2026-11-23 à 23 h 44 UTC, soit le 2026-11-24 à 00 h 44 à Paris. Sources : l'API GitHub des dépôts `renovatebot/renovate` et `renovatebot/pre-commit-hooks`, lue par `gh api`, leurs fichiers au tag retenu, et le registre npm.
+
+Version retenue : Renovate 44.247.1, publiée le 2026-11-16 à 20 h 46 UTC, release immuable (`immutable: true`). C'est la plus récente qui avait 7 jours au moment de la lecture (principe VI) : les suivantes, de 44.247.2 (2026-11-17 à 03 h 53 UTC) à 44.258.3 (2026-11-23), ne passaient pas encore le délai. Licence AGPL-3.0 (`"license": "AGPL-3.0-only"` dans `package.json` au tag, et au registre npm). Node.js demandé : `^24.11.0 || ^26.13.0`. Le validateur est le programme `renovate-config-validator` du paquet (`dist/config-validator.js`). La date de publication du paquet sur npm n'a pas été lue ; le registre donne son intégrité, `sha512-DPiKrkkg2vElh2ro+/MVOninY9v0mSgDmTNAfEhB0Zv6y0/fHLs+tfojZe+0lo0In8YcvKcCM9ZVPs1QbhojSA==`.
+
+Moyen retenu : le hook `renovate-config-validator` du dépôt `renovatebot/pre-commit-hooks`, licence MIT, au tag 44.247.1. Ce tag léger pointe sur le commit `7197a54c83a2e365f19561f0cb00dbd1e58018da`, écrit par `renovate[bot]` le 2026-11-16 à 21 h 16 UTC. Au tag, `.pre-commit-hooks.yaml` déclare `language: node`, `language_version: lts`, `additional_dependencies: [renovate@44.247.1]`, `entry: renovate-config-validator`, `files: '(^|/).?renovate(?:rc)?(?:\.json[c5]?)?$'` et `minimum_pre_commit_version: 3.6.0`. Chaque tag du hook embarque la version de Renovate du même numéro : monter son `rev` monte le validateur, sous le même délai.
+
+Comportement lu dans `lib/config-validator.ts` et `lib/config/validation.ts` au tag :
+
+- un fichier passé en argument est validé comme configuration globale d'un Renovate auto-hébergé, sauf avec `--no-global`. pre-commit passe les noms de fichiers : le hook prend donc `--no-global` ;
+- une erreur ou un avertissement fait sortir en 1 ; `--strict` fait échouer en plus une configuration qui demande une migration ;
+- hors ligne : le validateur ne télécharge pas les presets du `extends` de premier niveau, il en vérifie la syntaxe (`parsePreset`). Il résout en revanche un `extends` placé dans une entrée de `packageRules` (`resolveConfigPresets`) ; la configuration du golden repo n'en a aucun. Une fois installé, il valide donc sans réseau. Son installation demande le réseau : pre-commit télécharge Node.js LTS et le paquet `renovate` depuis npm.
+
+Où il tourne : dans `golden/saas-b2b/.pre-commit-config.yaml`, avec `--strict --no-global`, donc dans X01, sur la copie autonome, et dans la CI du projet généré. Il reste hors de `task check`, qui ne demande ni Node.js ni Python sur le poste (RS-06), et hors des hooks de CELIAN, qui ne lit pas ce fichier (RS-17). Les règles propres au projet généré relèvent de S23, une politique Rego lancée par conftest dans `task check`.
+
+Options de Renovate lues pour `renovate.json` (T098), dans `docs/usage/` et `lib/` au tag 44.247.1 :
+
+- `minimumReleaseAge` : l'attente se compte pour chaque version ; tant qu'elle court, la branche porte le contrôle en attente `renovate/stability-days`. Sans date de publication, `minimumReleaseAgeBehaviour`, à `timestamp-required` par défaut, retient la mise à jour ;
+- source `docker` : la date de publication n'existe que pour Docker Hub (champ `tag_last_pushed`), et un condensat reçoit la date de son tag. Une image de `ghcr.io` ou de `mcr.microsoft.com` n'a pas de date : avec le délai et ce réglage par défaut, Renovate ne la propose jamais, hors correctif de sécurité. Sont touchées l'image de gitleaks, celle de zot (ADR-011, condition 8) et les images .NET de l'étape 3. Les sources `github-tags`, `github-digest`, `pypi` et `npm` ont leur date ;
+- exception de sécurité : une mise à jour de sécurité attend le `minimumReleaseAge` de `vulnerabilityAlerts`, « null by default » (`key-concepts/minimum-release-age.md`), et le défaut de `vulnerabilityAlerts` le fixe à `null` (`lib/config/options/index.ts`). Les alertes de GitHub demandent le graphe de dépendances et les alertes Dependabot actifs dans les réglages du dépôt. `osvVulnerabilityAlerts` lit osv.dev pour les dépendances directes des sources `crate`, `go`, `hackage`, `hex`, `maven`, `npm`, `nuget`, `packagist`, `pypi` et `rubygems`, donc ni les images ni les actions ;
+- `packageRules.allowedVersions` borne les versions proposées ; une expression régulière s'écrit entre deux `/`, et l'option ne se combine pas avec `matchUpdateTypes` dans une même règle ;
+- `packageRules.matchPackageNames` accepte un nom exact, un motif glob insensible à la casse, ou une expression régulière re2 entre `/` (`string-pattern-matching.md`) ;
+- `groupName` : les mises à jour d'un même groupe partagent une branche et une PR. `groupSingleUpdates` vaut `false` : un groupe qui ne reçoit qu'une mise à jour n'applique pas ses réglages. Renovate réunit donc les deux membres d'une paire quand les deux montent, mais ne refuse pas une PR qui n'en porte qu'un ;
+- gestionnaires : `kubernetes` n'a aucun motif de fichier par défaut, et ne lit qu'un fichier qui contient `apiVersion:` et `kind:`. `pre-commit` est coupé par défaut, son motif est `(^|/)\.pre-commit-config\.ya?ml$`, et il garde le format `# frozen:`. `github-actions` et le preset `customManagers:githubActionsVersions`, qui suit les variables `_VERSION` précédées d'un commentaire `# renovate:`, lisent `(^|/)(workflow-templates|\.(?:github|gitea|forgejo)/(?:workflows|actions))/.+\.ya?ml$`. `dockerfile` lit `(^|/|\.)([Dd]ocker|[Cc]ontainer)file$` et `(^|/)([Dd]ocker|[Cc]ontainer)file[^/]*$` ;
+- `config:recommended` étend `:ignoreModulesAndTests`, qui ignore entre autres `**/vendor/**` et `**/tests/**`.
+
+Réglages repris de CELIAN, relevés dans `.pre-commit-config.yaml`, `.commitlintrc.yaml`, `renovate.json`, `release-please-config.json`, `.release-please-manifest.json` et `.github/workflows/`. Chaque SHA a été comparé au commit de son tag par `gh api` le 2026-11-24 : tous concordent.
+
+| Élément | Tag | SHA figé |
+| --- | --- | --- |
+| `pre-commit/pre-commit-hooks` | v6.0.0 | `3e8a8703264a2f4a69428a0aa4dcb512790b2c8c` |
+| `gitleaks/gitleaks` | v8.30.1 | `83d9cd684c87d95d656c1458ef04895a7f1cbd8e` |
+| `DavidAnson/markdownlint-cli2` | v0.24.1 | `c01a1853c19b175aee6a09f24e2ad9b748c485ad` |
+| `rhysd/actionlint` | v1.7.12 | `914e7df21a07ef503a81201c76d2b11c789d3fca` |
+| `shellcheck-py/shellcheck-py` | v0.11.0.1 | `745eface02aef23e168a8afb6b5737818efbea95` |
+| `alessandrojcm/commitlint-pre-commit-hook` | v9.27.0 | `1f1ac45c93d1c2ce36b71330252c489a5f4f2724` |
+| `renovatebot/pre-commit-hooks` (nouveau) | 44.247.1 | `7197a54c83a2e365f19561f0cb00dbd1e58018da` |
+| `actions/checkout` | v7.0.1 | `3d3c42e5aac5ba805825da76410c181273ba90b1` |
+| `astral-sh/setup-uv` | v10.3.3 | `68559e99cc807c1eb7e9238fd43a15bba460eec2` |
+| `actions/cache` | v6.1.0 | `55cc8345863c7cc4c66a329aec7e433d2d1c52a9` |
+| `googleapis/release-please-action` | v5.0.0 | `45996ed1f6d02564a971a2fa1b5860e934307cf7` |
+
+Repris tels quels : les hooks de `pre-commit-hooks` et leurs arguments, gitleaks, markdownlint-cli2 et sa configuration, actionlint, shellcheck, commitlint avec `@commitlint/config-conventional@21.2.4`, `no-em-dash` ; `default_install_hook_types: [pre-commit, commit-msg]` ; `PRE_COMMIT_VERSION` 4.7.0 et `UV_PYTHON` 3.12 ; l'image `ghcr.io/gitleaks/gitleaks:v8.30.1` par condensat ; les réglages de `renovate.json` (presets, 7 jours, exception de sécurité, gestionnaire pre-commit, variables `_IMAGE`) ; release-please en `simple`, `bump-minor-pre-major`, sans composant dans le tag, version initiale 0.1.0. Adaptés : `check-yaml` accepte partout plusieurs documents, comme CELIAN le fait pour `golden/` (RS-17, point 4), et actionlint garde son motif amont, puisque les workflows sont à la racine de la copie. Écartés : les hooks du catalogue et le workflow `catalog-freshness`, propres au générateur.
+
+CODEOWNERS et modèle de PR : GitHub ne lit le premier que dans `.github/`, à la racine ou dans `docs/` du dépôt, et le second qu'aux mêmes endroits. Ceux de `golden/saas-b2b/.github/` restent sans effet dans CELIAN, comme ses workflows (RS-17, point 1).
+
+Pour X01 : `pre-commit install` pose les types de hooks de `default_install_hook_types` quand `--hook-type` manque, et pre-commit télécharge Node.js si le poste n'en a pas. Le job `export` installe pre-commit par `uv tool install pre-commit==<version>`. uv place les exécutables dans un dossier qui doit être dans le `PATH` ; `UV_TOOL_BIN_DIR` (depuis uv 0.3.0) le fixe, et setup-uv ne l'ajoute au `PATH` que sous Windows : le job l'ajoute lui-même.
+
+Effets : `golden/saas-b2b/.pre-commit-config.yaml` (T097), `golden/saas-b2b/renovate.json` (T098), la politique de S23 (T095).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://api.github.com/repos/renovatebot/renovate/releases> | 2026-11-24 | 44.247.1 publiée le 2026-11-16 à 20 h 46 UTC, immuable ; versions suivantes de moins de 7 jours |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/package.json> | 2026-11-24 | `AGPL-3.0-only`, `engines`, programme `renovate-config-validator` |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config-validator.ts> | 2026-11-24 | `--no-global`, `--strict`, code de sortie |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/validation.ts> | 2026-11-24 | `extends` de premier niveau vérifié par `parsePreset`, presets des `packageRules` résolus |
+| <https://registry.npmjs.org/renovate/44.247.1> | 2026-11-24 | Licence, `engines`, intégrité du paquet |
+| <https://api.github.com/repos/renovatebot/pre-commit-hooks> | 2026-11-24 | Licence MIT, dépôt non archivé |
+| <https://github.com/renovatebot/pre-commit-hooks/blob/7197a54c83a2e365f19561f0cb00dbd1e58018da/.pre-commit-hooks.yaml> | 2026-11-24 | Définition du hook ; tag 44.247.1 égal à ce SHA |
+| <https://github.com/renovatebot/pre-commit-hooks/blob/7197a54c83a2e365f19561f0cb00dbd1e58018da/README.md> | 2026-11-24 | Usage, mode `--strict` |
+| <https://docs.renovatebot.com/config-validation/> | 2026-11-24 | Commande, fichiers lus par défaut, `--strict`, `--no-global` |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/docs/usage/configuration-options.md> | 2026-11-24 | `minimumReleaseAge`, `minimumReleaseAgeBehaviour`, `vulnerabilityAlerts`, `osvVulnerabilityAlerts`, `allowedVersions`, `matchPackageNames`, `groupName`, `groupSingleUpdates` |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/docs/usage/key-concepts/minimum-release-age.md> | 2026-11-24 | Attente d'une mise à jour de sécurité ; date fournie par la source |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/docs/usage/string-pattern-matching.md> | 2026-11-24 | Expressions régulières entre `/`, syntaxe re2, glob insensible à la casse |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/options/index.ts> | 2026-11-24 | Défauts de `vulnerabilityAlerts`, `minimumReleaseAgeBehaviour` et `groupSingleUpdates` |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/modules/datasource/docker/index.ts> | 2026-11-24 | Date de publication sur Docker Hub seulement |
+| <https://github.com/renovatebot/renovate/tree/44.247.1/lib/modules/manager> | 2026-11-24 | Motifs par défaut de `kubernetes`, `pre-commit`, `github-actions`, `dockerfile` ; lecture des fichiers Kubernetes ; format `# frozen:` |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/presets/internal/custom-managers.preset.ts> | 2026-11-24 | Motif et expression du preset `githubActionsVersions` |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/presets/internal/default.preset.ts> | 2026-11-24 | Chemins ignorés par `:ignoreModulesAndTests` |
+| <https://github.com/DavidAnson/markdownlint-cli2/blob/c01a1853c19b175aee6a09f24e2ad9b748c485ad/README.md> | 2026-11-24 | Un fichier `.markdownlint-cli2.yaml` dans un sous-dossier l'emporte sur celui de la racine |
+| <https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners> | 2026-11-24 | CODEOWNERS lu dans `.github/`, à la racine ou dans `docs/`, le premier trouvé |
+| <https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/creating-a-pull-request-template-for-your-repository> | 2026-11-24 | Modèle de PR lu à la racine, dans `docs/` ou dans `.github/` |
+| <https://pre-commit.com/> | 2026-11-24 | `default_install_hook_types` lu par `pre-commit install` ; options `--hook-stage`, `--all-files`, `--files` ; Node.js téléchargé s'il manque |
+| <https://docs.astral.sh/uv/concepts/tools/> | 2026-11-24 | `uv tool install ruff==0.5.0` ; dossier des exécutables à mettre dans le `PATH` |
+| <https://docs.astral.sh/uv/reference/environment/> | 2026-11-24 | `UV_TOOL_BIN_DIR`, depuis uv 0.3.0 |
+| <https://github.com/astral-sh/setup-uv/blob/68559e99cc807c1eb7e9238fd43a15bba460eec2/docs/environment-and-tools.md> | 2026-11-24 | Dossier des outils ajouté au `PATH` sous Windows seulement ; tag v10.3.3 égal à ce SHA |
 
 ## RS-19. Mesures de la gate
 
