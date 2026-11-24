@@ -30,6 +30,10 @@
 #   - M8, the version served (INFO server).
 # M4 (compressed size per architecture) is read at the registry, no pull.
 # Runs are interleaved (option A, option B, ..., then the next run).
+# On macOS, the script starts, and each run starts, only on AC power with the
+# lid open; a run during which "pmset -g log" shows a Sleep entry, or that
+# ends off AC power or lid closed, is marked invalid (power.tsv) and left out
+# of the summary (rule set after BENCH-012, check taken from BENCH-011).
 #
 # Usage: tests/bench/bench-014-cache.sh [TRIAL_DIR]
 #   TRIAL_DIR, if given, must be missing or empty (default: a new mktemp -d).
@@ -42,12 +46,12 @@
 #                       (exit code 75 if it exists), holds an "owner" file,
 #                       removed by the EXIT trap
 #   Results (TSV) in TRIAL_DIR: versions.tsv, images.tsv, runs.tsv,
-#   idle-pods.tsv, node-images.tsv, auth.tsv, pod-restart.tsv, load.tsv,
-#   summary.tsv; command output in TRIAL_DIR/logs/.
+#   idle-pods.tsv, node-images.tsv, auth.tsv, pod-restart.tsv, power.tsv,
+#   load.tsv, summary.tsv; command output in TRIAL_DIR/logs/.
 # Needs: bash >= 3.2, docker (with buildx), kind v0.33.0, kubectl (1.35 to
 #   1.37), jq, shasum, awk. gdate (GNU coreutils) is used for the clock when
 #   present; without it the clock falls back to `date +%s` (1 s resolution),
-#   recorded in versions.tsv.
+#   recorded in versions.tsv. On macOS, pmset and ioreg for the power checks.
 #
 # Safety:
 #   - the cluster is named celian-bench-014. The script refuses to start if it
@@ -78,6 +82,8 @@
 # Pods are created and deleted only inside the kind node, by kubectl.
 # Every other docker call only reads: ps, stats, manifest inspect,
 # buildx imagetools inspect, network inspect, version, info.
+# Power checks only read: pmset -g ps, pmset -g log, ioreg -r -k
+# AppleClamshellState.
 set -euo pipefail
 umask 077
 
@@ -125,6 +131,8 @@ LOCK_HELD=0
 KIND_NETWORK_EXISTED=0
 CLI=""
 OLD_POD=""
+RUN_POWER_START=""
+RUN_POWER_STATE="n/a"
 
 # --- Helpers ------------------------------------------------------------------
 
@@ -566,12 +574,63 @@ record_images() {
   for ref in $VARIANT_IMAGES; do record_image variant "$ref"; done
 }
 
+# --- Power (macOS) ----------------------------------------------------------------
+
+# Rule set after BENCH-012: a run counts only if the Mac stays on AC power,
+# lid open, and "pmset -g log" shows no Sleep entry during the run. Reads
+# only; skipped where pmset does not exist. Taken from bench-011-postgres.sh
+# (branch docs/bench-011-node-restart).
+has_pmset() { command -v pmset >/dev/null; }
+power_source() { pmset -g ps | sed -n "s/^Now drawing from '\(.*\)'\$/\1/p"; }
+battery_pct() { pmset -g ps | grep -Eo '[0-9]+%' | head -n 1; }
+lid_closed() { ioreg -r -k AppleClamshellState -d 4 | sed -n -E 's/.*"AppleClamshellState" = (Yes|No).*/\1/p' | head -n 1; }
+local_now() { date '+%Y-%m-%d %H:%M:%S'; }
+
+# Sleep entries of "pmset -g log" between two local times (same time zone).
+sleep_entries() {
+  pmset -g log | awk -v s="$1" -v e="$2" \
+    '$4 == "Sleep" { t = $1 " " $2; if (t >= s && t <= e) n++ } END { print n + 0 }'
+}
+
+# Refuse to start a run off AC power or with the lid closed.
+power_gate() {
+  local opt=$1 run=$2 src lid
+  RUN_POWER_START=$(local_now)
+  has_pmset || return 0
+  src=$(power_source)
+  lid=$(lid_closed)
+  RUN_POWER_STATE="$src $(battery_pct) lid-closed=$lid"
+  [ "$src" = "AC Power" ] || die "$opt run $run refused: drawing from '$src', AC power required"
+  [ "$lid" = No ] || die "$opt run $run refused: lid closed"
+}
+
+# Record the power state over the run and print yes if the run is valid.
+power_verdict() {
+  local opt=$1 run=$2 end src lid sleeps valid
+  end=$(local_now)
+  if ! has_pmset; then
+    tsv power.tsv "$opt" "$run" "$RUN_POWER_START" "$end" n/a n/a 0 yes
+    echo yes
+    return 0
+  fi
+  src=$(power_source)
+  lid=$(lid_closed)
+  sleeps=$(sleep_entries "$RUN_POWER_START" "$end")
+  valid=yes
+  if [ "$sleeps" != 0 ] || [ "$src" != "AC Power" ] || [ "$lid" != No ]; then valid=no; fi
+  tsv power.tsv "$opt" "$run" "$RUN_POWER_START" "$end" "$RUN_POWER_STATE" \
+    "$src $(battery_pct) lid-closed=$lid" "$sleeps" "$valid"
+  [ "$valid" = yes ] || log "$opt run $run: INVALID, $sleeps Sleep entries, power '$src', lid closed=$lid"
+  echo "$valid"
+}
+
 # --- One run --------------------------------------------------------------------
 
 timed_run() {
   local opt=$1 run=$2 log_file started t_create t_cluster t0 t_ready ready_s
-  local samples mem cpu node_mem node_cpu info refused set_get count back_s key_after
+  local samples mem cpu node_mem node_cpu info refused set_get count back_s key_after rest_restarts
   log_file="$LOGS/$opt-run-$run.log"
+  power_gate "$opt" "$run"
   record_load "$opt" "run-$run"
   started=$(utc_now)
   log "$opt run $run: create cluster"
@@ -583,10 +642,10 @@ timed_run() {
     samples=$(idle_samples "$opt" "$run")
     node_mem=$(printf '%s\n' "$samples" | column_median 3)
     node_cpu=$(printf '%s\n' "$samples" | column_median 4)
-    tsv runs.tsv "$opt" "$run" "$started" "$(seconds_between "$t_create" "$t_cluster")" \
-      - - - "$node_mem" "$node_cpu" - - 0
     log "$opt run $run: node at rest $node_mem MiB"
     delete_cluster >>"$log_file" 2>&1 || die "$opt run $run: delete failed"
+    tsv runs.tsv "$opt" "$run" "$started" "$(seconds_between "$t_create" "$t_cluster")" \
+      - - - "$node_mem" "$node_cpu" - - 0 "$(power_verdict "$opt" "$run")"
     return 0
   fi
 
@@ -626,8 +685,7 @@ timed_run() {
   cpu=$(printf '%s\n' "$samples" | column_median 2)
   node_mem=$(printf '%s\n' "$samples" | column_median 3)
   node_cpu=$(printf '%s\n' "$samples" | column_median 4)
-  tsv runs.tsv "$opt" "$run" "$started" "$(seconds_between "$t_create" "$t_cluster")" \
-    "$ready_s" "$mem" "$cpu" "$node_mem" "$node_cpu" "$info" "$(restarts)"
+  rest_restarts=$(restarts)
   kube scale deployment cacheclient -n "$NS" --replicas=1 >>"$log_file" 2>&1
   wait_streak 120 client_ready >/dev/null || die "$opt run $run: client pod not back"
 
@@ -651,6 +709,9 @@ timed_run() {
   record_pulls "$opt" "$run"
   log "$opt run $run: delete cluster"
   delete_cluster >>"$log_file" 2>&1 || die "$opt run $run: delete failed"
+  tsv runs.tsv "$opt" "$run" "$started" "$(seconds_between "$t_create" "$t_cluster")" \
+    "$ready_s" "$mem" "$cpu" "$node_mem" "$node_cpu" "$info" "$rest_restarts" \
+    "$(power_verdict "$opt" "$run")"
 }
 
 # --- Start-up checks --------------------------------------------------------------
@@ -691,6 +752,11 @@ check_versions() {
   tsv versions.tsv engine "$(docker info --format '{{.OperatingSystem}} {{.Architecture}} {{.NCPU}} CPU {{.MemTotal}} B cgroup v{{.CgroupVersion}}')" -
   tsv versions.tsv host "$(sysctl -n hw.model 2>/dev/null || uname -m) $(sw_vers -productVersion 2>/dev/null || uname -r)" -
   tsv versions.tsv clock "$CLOCK" -
+  if has_pmset; then
+    tsv versions.tsv power-at-start "$(power_source) $(battery_pct) lid-closed=$(lid_closed)" -
+    [ "$(power_source)" = "AC Power" ] || die "drawing from '$(power_source)': AC power required (rule after BENCH-012)"
+    [ "$(lid_closed)" = No ] || die "lid closed: the Mac must stay open"
+  fi
   for v in $OPTIONS; do
     case $v in
       valkey | redis | none) tsv versions.tsv "$v" "$(option_version "$v")" - ;;
@@ -742,21 +808,29 @@ cleanup() {
 
 # --- Summary ----------------------------------------------------------------------
 
+# Runs marked invalid in power.tsv (Sleep entry, battery, lid) are left out.
+summary_line() {
+  local opt=$1 name=$2 values=$3
+  tsv summary.tsv "$opt" "$name" "$(printf '%s\n' "$values" | grep -c . || true)" \
+    "$(printf '%s\n' "$values" | paste -sd, -)" "$(printf '%s\n' "$values" | grep . | median_range)"
+}
+
 summarize() {
-  local opt column name values
+  local opt column name values invalid
+  invalid=$(awk -F'\t' '$NF == "no" { printf "%s:%s ", $1, $2 }' "$TRIAL_DIR/power.tsv")
   tsv summary.tsv option metric runs values median range
   for opt in $OPTIONS; do
     for column in 4:cluster_s 5:ready_s 6:layer_mem_mib 7:layer_cpu_pct 8:node_mem_mib 9:node_cpu_pct; do
       name=${column#*:}
-      values=$(awk -F'\t' -v o="$opt" -v c="${column%%:*}" \
-        '$1 == o && $2 != "run" && $c ~ /^[0-9.]+$/ { print $c }' "$TRIAL_DIR/runs.tsv")
-      tsv summary.tsv "$opt" "$name" "$(printf '%s\n' "$values" | grep -c . || true)" \
-        "$(printf '%s\n' "$values" | paste -sd, -)" "$(printf '%s\n' "$values" | grep . | median_range)"
+      values=$(awk -F'\t' -v o="$opt" -v c="${column%%:*}" -v bad="$invalid" \
+        '$1 == o && $2 != "run" && index(bad, $1 ":" $2 " ") == 0 && $c ~ /^[0-9.]+$/ { print $c }' "$TRIAL_DIR/runs.tsv")
+      summary_line "$opt" "$name" "$values"
     done
-    values=$(awk -F'\t' -v o="$opt" '$1 == o && $3 ~ /^[0-9.]+$/ { print $3 }' "$TRIAL_DIR/pod-restart.tsv")
-    tsv summary.tsv "$opt" pod_back_s "$(printf '%s\n' "$values" | grep -c . || true)" \
-      "$(printf '%s\n' "$values" | paste -sd, -)" "$(printf '%s\n' "$values" | grep . | median_range)"
+    values=$(awk -F'\t' -v o="$opt" -v bad="$invalid" \
+      '$1 == o && index(bad, $1 ":" $2 " ") == 0 && $3 ~ /^[0-9.]+$/ { print $3 }' "$TRIAL_DIR/pod-restart.tsv")
+    summary_line "$opt" pod_back_s "$values"
   done
+  [ -z "$invalid" ] || log "runs left out of the summary (power): $invalid"
 }
 
 # --- Main -------------------------------------------------------------------------
@@ -783,7 +857,8 @@ main() {
   tsv versions.tsv item version check
   tsv images.tsv option image compressed_bytes
   tsv runs.tsv option run started_utc cluster_s ready_s layer_mem_mib layer_cpu_pct \
-    node_mem_mib node_cpu_pct server_name server_version restarts
+    node_mem_mib node_cpu_pct server_name server_version restarts power_valid
+  tsv power.tsv option run start_local end_local power_start power_end sleep_entries valid
   tsv idle-pods.tsv option run sample namespace pod mem_mib cpu_pct
   tsv node-images.tsv option run status image took
   tsv auth.tsv option run noauth_refused set_get_ok password_in_cmdlines
