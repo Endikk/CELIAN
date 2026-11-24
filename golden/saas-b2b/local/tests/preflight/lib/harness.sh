@@ -15,6 +15,7 @@
 
 PREFLIGHT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 PREFLIGHT="$PREFLIGHT_ROOT/local/scripts/preflight.sh"
+PREFLIGHT_LIB="$PREFLIGHT_ROOT/local/scripts/lib/preflight-checks.sh"
 FAKES_DIR="$PREFLIGHT_ROOT/local/tests/preflight/fakes"
 ALL_FAKES="docker kind kubectl uname"
 
@@ -45,10 +46,10 @@ CASE_SHOWN=""
 OUTPUT=""
 STATUS=0
 
-# Body run by "bash -c" for --taken and --undecidable: sources preflight.sh,
-# which then does not run main, replaces port_in_use, then runs main. A TCP
-# listener cannot be simulated through PATH, and opening one would need a
-# tool that the machine may not have.
+# Body run by "bash -c" for --taken and --undecidable: sources the library
+# of preflight.sh, which defines the checks without running them, replaces
+# port_in_use, then runs main. A TCP listener cannot be simulated through
+# PATH, and opening one would need a tool that the machine may not have.
 # shellcheck disable=SC2016 # expanded by the inner bash, not here
 STUB_RUNNER='source "$1"
 shift
@@ -147,7 +148,7 @@ run_case() {
       OUTPUT="$(cd "$SANDBOX" && env -i HOME="$SANDBOX/home" PATH="$SANDBOX/bin" \
         FAKE_LOG="$CALLS" FAKE_TAKEN_PORTS="$taken" FAKE_UNDECIDABLE_PORTS="$undecidable" \
         ${vars[@]+"${vars[@]}"} \
-        "$BASH" -c "$STUB_RUNNER" preflight "$PREFLIGHT" "$@" 2>&1)" || STATUS=$?
+        "$BASH" -c "$STUB_RUNNER" preflight "$PREFLIGHT_LIB" "$@" 2>&1)" || STATUS=$?
       ;;
     sourced)
       OUTPUT="$(cd "$SANDBOX" && env -i HOME="$SANDBOX/home" PATH="$SANDBOX/bin" \
