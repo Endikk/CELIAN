@@ -2,10 +2,10 @@
 
 | Champ | Valeur |
 | --- | --- |
-| Statut | proposé |
+| Statut | accepté |
 | Date | 2026-11-24 |
 | Auteur | [ARCHI] |
-| Décideur | Lucas : décisions du 2026-11-24 sur BENCH-012 ; validation de cet ADR en attente |
+| Décideur | Lucas, décisions et acceptation du 2026-11-24 sur BENCH-012 |
 | BENCH lié | [BENCH-012](../benchmarks/BENCH-012-fournisseur-identite.md) |
 | Remplace | aucun |
 
@@ -241,6 +241,24 @@ La porte reste ouverte. Le contrat de vérification de l'API ne dépend que d'un
 3. Profil standard sur 8 Gio, pour Lucas et [FINOPS]. Si aucune limite mémoire mesurée ne fait tenir le standard sur 8 Gio avec Mailpit (condition 11), le standard demande plus de 8 Gio. Avis de [ARCHI] : l'accepter, puisque SC-008 ne vise que le lite ; `task up` choisit alors le lite sur 8 Gio et le dit (FR-006). L'autre voie, Zitadel, garderait 580,3 Mio de moins au nœud mais rouvrirait la décision contre 19 points de grille.
 4. Date de relecture de la dérogation, pour Lucas. Proposée au plus tard le 2027-05-23, date de la prochaine vérification de BENCH-012, en plus de la relecture de [SECU] à chaque montée. Avis de [ARCHI] : cette date, sauf si Keycloak annonce une signature avant.
 5. Comptes de l'exemple sur `local`, pour [PO] et [SECU]. Pour se connecter au front, il faut un utilisateur. Le guide d'administration de Keycloak 26.8.2 a une section sur l'inscription d'un nouvel utilisateur (« Registering as a new user »), lue par son titre seulement. Avis de [ARCHI] : inscription ouverte dans le royaume de l'application sur `local`, sans utilisateur créé d'avance, donc aucun identifiant par défaut à tirer ni à afficher ; vérification par mail quand Mailpit sera entré (ADR-014). Le réglage exact se lit sur la documentation de 26.8.2 ([DEV]).
+
+### Réponses de Lucas (2026-11-24)
+
+Lucas accepte cet ADR le 2026-11-24, avec les avis du DSI et de [ARCHI] sur
+les cinq questions :
+
+- Le profil lite n'a pas de fournisseur d'identité : l'API y tourne dans un
+  mode sans vérification, enfermé dans le rendu lite de la cible `local` par
+  un contrôle statique (question 1).
+- La console d'administration de Keycloak sur `local` passe par la gateway,
+  qui n'écoute qu'en boucle locale (question 2).
+- Si aucune limite mémoire ne fait tenir le profil standard sur un portable
+  de 8 Gio avec Mailpit, l'écart est accepté : SC-008 ne vise que le profil
+  lite (question 3).
+- La dérogation à ENF-03 est relue au plus tard le 2027-05-23, et par [SECU]
+  à chaque montée (question 4).
+- En local, l'inscription est ouverte et aucun utilisateur n'est créé
+  d'avance ; les tests créent les leurs (question 5).
 
 ## Conformité à la constitution
 
