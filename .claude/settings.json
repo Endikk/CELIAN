@@ -56,9 +56,7 @@
       "Read(~/.kube/**)",
       "Read(~/.docker/config.json)",
       "Read(~/.netrc)",
-      "Read(~/.git-credentials)"
-    ],
-    "ask": [
+      "Read(~/.git-credentials)",
       "Bash(gh auth *)",
       "Bash(gh gist *)",
       "Bash(security *)",
