@@ -1,0 +1,54 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Update rules of the project, checked by S23 (tests/static/s23-renovate.sh). Same base as CELIAN, the generator of this project.",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigests",
+    "customManagers:githubActionsVersions"
+  ],
+  "minimumReleaseAge": "7 days",
+  "vulnerabilityAlerts": {
+    "minimumReleaseAge": null
+  },
+  "osvVulnerabilityAlerts": true,
+  "pre-commit": {
+    "enabled": true
+  },
+  "customManagers": [
+    {
+      "customType": "regex",
+      "description": "Container images pinned by tag and digest in workflow env vars ending in _IMAGE",
+      "managerFilePatterns": [
+        "/^\\.github/workflows/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_IMAGE\\s*:\\s*\\S+?:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "ADR-012, condition 5: Postgres stays on the major of platform.yaml, the default major of Cloud SQL. Another major goes by hand, in a release that passes the whole matrix.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(docker\\.io/)?(library/)?postgres$/"],
+      "allowedVersions": "/^18\\./"
+    },
+    {
+      "description": "ADR-004, version rule, point 5: the node image stays on the Kubernetes minor of platform.yaml. The minor changes by hand.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(docker\\.io/)?kindest/node$/"],
+      "allowedVersions": "/^v1\\.36\\./"
+    },
+    {
+      "description": "ADR-004, version rule, point 5: kind and its node image move in one PR. Renovate cannot refuse a PR that holds only one of them: complete it by hand before merging.",
+      "matchPackageNames": ["kubernetes-sigs/kind", "/^(docker\\.io/)?kindest/node$/"],
+      "groupName": "kind and its node image"
+    },
+    {
+      "description": "ADR-005, updates, point 2: the charts and the controller image of Envoy Gateway move in one PR. Renovate ignores vendor folders: the vendored render and its sums are redone by hand in the same PR.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(docker\\.io/)?envoyproxy/gateway(-helm|-crds-helm)?$/"],
+      "groupName": "Envoy Gateway"
+    }
+  ]
+}
