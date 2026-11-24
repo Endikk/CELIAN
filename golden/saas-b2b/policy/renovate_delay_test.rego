@@ -140,6 +140,11 @@ test_s23_rejects_master_issue_approval_after_the_entry_of_adr_016 if {
 	denied_with(checked(config_with_rules([undated_rule, rule])), "[\"packageRules\", 1, \"masterIssueApproval\"] is a legacy key")
 }
 
+test_s23_rejects_master_issue_at_the_top if {
+	renovate := with_value(valid_config, "masterIssue", false)
+	denied_with(checked(renovate), "[\"masterIssue\"] is a legacy key")
+}
+
 test_s23_rejects_unpublish_safe_at_the_top if {
 	renovate := with_value(valid_config, "unpublishSafe", true)
 	denied_with(checked(renovate), "[\"unpublishSafe\"] is a legacy key")

@@ -8,8 +8,8 @@
 # The rules that hold for any Renovate configuration of CELIAN live here,
 # apart from the rules that follow platform.yaml, in package renovate_rules.
 # tests/static/s23-renovate.sh runs both packages on renovate.json of the
-# generated project. In CELIAN, scripts/renovate/check-delay.sh runs this
-# package on the renovate.json of CELIAN (ADR-016, condition 2).
+# generated project. In CELIAN, scripts/renovate/check-renovate.sh runs both
+# packages on the renovate.json of CELIAN (ADR-016, condition 2).
 #
 # Input: one renovate.json, given to `conftest test --combine`, a list of
 # objects with a `path` and the parsed `contents` (research RS-18).
@@ -94,17 +94,27 @@ deny contains msg if {
 # - unpublishSafe set to true adds preset security:minimumReleaseAgeNpm to
 #   extends (lib/config/migrations/custom/unpublish-safe-migration.ts, lines
 #   19 to 37).
+# A fourth turns into the Dependency Dashboard, where the updates of ADR-016
+# wait for approval:
+# - masterIssue becomes dependencyDashboard (migrations-service.ts, line
+#   109), then an object whose enabled field takes the old boolean
+#   (lib/config/migrations/custom/dependency-dashboard-migration.ts, lines 36
+#   to 64). Renovate keeps the dashboard and reads its boxes as long as an
+#   entry asks for approval (lib/workers/repository/dependency-dashboard.ts,
+#   lines 194 to 196 and 380 to 383), so the key cannot drop the approval
+#   today. S23 refuses it all the same: the dashboard is set under its
+#   current name only.
 # No other renamed property of migrations-service.ts (lines 93 to 119), and
 # no other custom migration, writes a key of the delay, the approval,
 # internalChecksFilter or extends.
-legacy_keys := {"stabilityDays", "masterIssueApproval", "unpublishSafe"}
+legacy_keys := {"stabilityDays", "masterIssueApproval", "masterIssue", "unpublishSafe"}
 
 deny contains msg if {
 	is_object(config)
 	walk(config, [path, _])
 	count(path) > 0
 	path[count(path) - 1] in legacy_keys
-	msg := sprintf("%s: %v is a legacy key that Renovate turns into the delay, the approval or a preset", [label_delay, path])
+	msg := sprintf("%s: %v is a legacy key that Renovate turns into the delay, the approval, the dashboard or a preset", [label_delay, path])
 }
 
 # Experimental options of the delay (lib/config/options/index.ts, lines 2506

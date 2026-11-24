@@ -10,9 +10,18 @@
 # Versions and sums: research RS-09 (Task) and RS-18 (conftest), read on
 # 2026-11-23 from the checksum files that each release publishes. A new
 # version changes the constant below and its lines in SHA256SUMS together.
+#
+# Renovate proposes the new versions: a custom manager of renovate.json (in
+# CELIAN, the one at the root) reads the "# renovate:" comment above each
+# constant, under the delay of 7 days. It changes the constant only, and no
+# manager updates SHA256SUMS. Its PR fails in CI, this script finding no sum
+# for the new archives, until the lines of the new version are written by
+# hand in SHA256SUMS, from the checksum file of the release, in the same PR.
 set -euo pipefail
 
+# renovate: datasource=github-releases depName=go-task/task
 TASK_VERSION="3.54.0"
+# renovate: datasource=github-releases depName=open-policy-agent/conftest
 CONFTEST_VERSION="0.71.1"
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

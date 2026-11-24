@@ -15,6 +15,18 @@
   "pre-commit": {
     "enabled": true
   },
+  "regex": {
+    "description": "The installer of the golden repo, golden/saas-b2b/tests/tools/install.sh, lives under tests/, which config:recommended hides from every manager (preset :ignoreModulesAndTests, **/tests/**). For the regex managers only, the same list without **/tests/**: Renovate replaces ignorePaths, it does not merge it. None of the files of the other regex managers lives under tests/.",
+    "ignorePaths": [
+      "**/node_modules/**",
+      "**/bower_components/**",
+      "**/vendor/**",
+      "**/examples/**",
+      "**/__tests__/**",
+      "**/test/**",
+      "**/__fixtures__/**"
+    ]
+  },
   "customManagers": [
     {
       "customType": "regex",
@@ -26,9 +38,44 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_IMAGE\\s*:\\s*\\S+?:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "Task and conftest, pinned in the installer of the golden repo, golden/saas-b2b/tests/tools/install.sh, each version under a # renovate: comment. Renovate cannot update SHA256SUMS, next to the script: its lines for the new version are written by hand in the same PR, from the checksum file of the release. Until then install.sh finds no sum for the new archives, and the CI of the PR fails.",
+      "managerFilePatterns": [
+        "/^golden/saas-b2b/tests/tools/install\\.sh$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>github-releases) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_VERSION=\"(?<currentValue>[^\"\\s]+)\""
+      ],
+      "extractVersionTemplate": "^v(?<version>.*)$",
+      "versioningTemplate": "semver"
     }
   ],
   "packageRules": [
+    {
+      "description": "ADR-012, condition 5, for the files of golden/: Postgres stays on the major of golden/saas-b2b/platform.yaml, the default major of Cloud SQL. Another major goes by hand, in a release that passes the whole matrix. Same entry as golden/saas-b2b/renovate.json; scripts/renovate/check-renovate.sh checks both against platform.yaml.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(docker\\.io/)?(library/)?postgres$/"],
+      "allowedVersions": "/^18\\./"
+    },
+    {
+      "description": "ADR-004, version rule, point 5, for the files of golden/: the node image stays on the Kubernetes minor of golden/saas-b2b/platform.yaml. The minor changes by hand.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(docker\\.io/)?kindest/node$/"],
+      "allowedVersions": "/^v1\\.36\\./"
+    },
+    {
+      "description": "ADR-004, version rule, point 5, for the files of golden/: kind and its node image move in one PR. Renovate cannot refuse a PR that holds only one of them: complete it by hand before merging.",
+      "matchPackageNames": ["kubernetes-sigs/kind", "/^(docker\\.io/)?kindest/node$/"],
+      "groupName": "kind and its node image"
+    },
+    {
+      "description": "ADR-005, updates, point 2, for the files of golden/: the charts and the controller image of Envoy Gateway move in one PR. Renovate ignores vendor folders: the vendored render and its sums are redone by hand in the same PR.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(docker\\.io/)?envoyproxy/gateway(-helm|-crds-helm)?$/"],
+      "groupName": "Envoy Gateway"
+    },
     {
       "description": "Principle VI, ADR-016: these registries give Renovate no release date, so it cannot count the 7 days. Each update waits on the Dependency Dashboard: only Lucas ticks it, never an agent, once the upstream release of the proposed digest is 7 days old, or at once for the fix of a published advisory.",
       "matchDatasources": ["docker"],
