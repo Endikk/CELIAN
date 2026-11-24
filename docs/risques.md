@@ -1040,8 +1040,11 @@ Mitigation :
   bloc de l'ADR-016, et tout registre de plus passe par un ADR ;
 - trace de la date lue et de sa source dans chaque PR de ces registres,
   relue par [SECU] à sa lecture mensuelle des avis ;
-- règles `deny` sur `gh issue edit` et les `gh api` en `PATCH` ; le jeton des
-  agents reste à vérifier par [SECU] (condition 5 de l'ADR-016) ;
+- jeton des agents sans droit d'écriture sur les tickets, essayé par Lucas
+  avant l'installation de l'application Renovate, ancien jeton classique
+  révoqué (ADR-016, conditions 3 et 5 ; R-07) ; règles `deny` sur les formes
+  courantes de `gh issue edit`, des `gh api` en `PATCH` et des mutations
+  GraphQL, filtre de motifs en appoint ;
 - copie de Docker Hub au cas par cas, gitleaks d'abord, dans une PR à part ;
 - relecture de la dérogation au plus tard le 2027-02-24, et à la fermeture de
   chacun des tickets Renovate 38656, 39064 et 38572 ; le risque se ferme avec

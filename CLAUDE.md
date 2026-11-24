@@ -132,7 +132,9 @@ Contre la fuite d'identifiants (R-07), le même fichier :
   une URL.
 
 Pour que seul Lucas coche le tableau de bord de Renovate (ADR-016, condition
-5), le même fichier refuse `gh issue edit` et les appels `gh api` en `PATCH`.
+5), le même fichier refuse les formes courantes de `gh issue edit`, des appels
+`gh api` en `PATCH` et des mutations GraphQL. Un POST ou un `curl` avec le
+jeton y échappe : la barrière reste le jeton des agents.
 
 Le fichier ne porte plus aucune règle `ask` depuis le 24/11/2026, décision de
 Lucas : une règle `ask` demande confirmation même en mode bypass, et Lucas ne
