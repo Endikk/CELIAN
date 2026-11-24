@@ -5,9 +5,10 @@
 # The memory that the engine declares picks the profile: from 2560 MiB the
 # standard, from 2048 MiB the lite, announced, and below that a refusal
 # that gives the memory missing (VM of 2.5 and 2.0 GiB, research RS-08).
-# PROFILE forces a profile under the same checks. Until step 12 the standard
-# profile is recognised, then refused with a clear message. Simulated
-# binaries only (lib/harness.sh).
+# PROFILE forces a profile under the same checks, and an invalid PROFILE is
+# shown without control characters. Until step 12 the standard profile is
+# recognised, then refused with a clear message. Simulated binaries only
+# (lib/harness.sh).
 set -uo pipefail
 # shellcheck disable=SC1091 # lib/harness.sh is checked on its own
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
@@ -76,5 +77,20 @@ expect_refused
 expect_output "PROFILE=full is not a profile"
 expect_output "PROFILE=lite or PROFILE=standard"
 expect_not_called docker
+
+# PROFILE comes from outside: shown on one line, without control characters
+# (a line feed, ESC and CR each become "?"), and cut after 200 characters.
+run_case "PROFILE with a line feed and terminal sequences: shown printable" \
+  PROFILE=$'lite\n::error::injected\033[31m\r'
+expect_refused
+expect_no_control_characters
+expect_output "PROFILE=lite?::error::injected?[31m? is not a profile"
+expect_not_called docker
+
+long_value="$(printf '%0300d' 0)"
+run_case "PROFILE of 300 characters: shown cut after 200" PROFILE="$long_value"
+expect_refused
+expect_output "PROFILE=${long_value:0:200}... is not a profile"
+expect_no_output "${long_value:0:201}"
 
 finish

@@ -5,8 +5,8 @@
 # task up refuses, before creating anything, a kind other than 0.33.0, a
 # kubectl outside the minors 1.35 to 1.37 (one minor around the 1.36 of
 # platform.yaml), and a Docker Engine older than 28.0.0 on Linux. The
-# refusal gives the version found, the version expected and the README.
-# Simulated binaries only (lib/harness.sh).
+# refusal gives the version found, shown without control characters, the
+# version expected and the README. Simulated binaries only (lib/harness.sh).
 set -uo pipefail
 # shellcheck disable=SC1091 # lib/harness.sh is checked on its own
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
@@ -82,6 +82,19 @@ expect_ok
 
 run_case "engine 27.5.1 on macOS, where the rule does not apply" FAKE_DOCKER_SERVER_VERSION=27.5.1
 expect_ok
+
+# A version read from a tool is shown without its control characters: ESC
+# and the byte 0x9B (CSI of the C1 controls) each become "?".
+run_case "kind version with terminal sequences, shown printable" FAKE_KIND_VERSION=$'0.33.0\033[2K\x9b1A'
+expect_refused
+expect_no_control_characters
+expect_output "kind 0.33.0?[2K?1A found, 0.33.0 expected"
+
+run_case "Docker Engine version with a terminal sequence, on Linux, shown printable" \
+  FAKE_UNAME_S=Linux FAKE_DOCKER_SERVER_VERSION=$'27.5.1\033]0;title\007'
+expect_refused
+expect_no_control_characters
+expect_output "Docker Engine 27.5.1?]0;title? found"
 
 run_case "kind checked before kubectl" FAKE_KIND_VERSION=0.32.0 FAKE_KUBECTL_GIT_VERSION=v1.34.9
 expect_refused

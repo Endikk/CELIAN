@@ -1,16 +1,32 @@
 #!/usr/bin/env bash
-# Simulated docker CLI of the preflight tests P01 to P05. It answers only
-# "docker info --format <template>", the one call of local/scripts/preflight.sh,
-# the way the docker 29.8.2 CLI does (spec 001, research RS-08): the
-# template is rendered with the values below. Any other call is logged as
-# UNEXPECTED and fails, so a test sees at once a command that would create,
-# change or remove something.
+# Simulated docker CLI of the preflight tests P01 to P05. It answers only the
+# two calls of local/scripts/preflight.sh, the way the docker 29.8.2 CLI does
+# (spec 001, research RS-08):
+#   docker context inspect --format <template>
+#   docker info --format <template>
+# The template is rendered with the values below. Any other call is logged
+# as UNEXPECTED and fails, so a test sees at once a command that would
+# create, change or remove something.
 #
+# Context, as the CLI resolves it: a non-empty DOCKER_HOST selects the
+# context "default", whose host is DOCKER_HOST; otherwise DOCKER_CONTEXT
+# names the context; otherwise the current context of the configuration.
+# FAKE_DOCKER_CONTEXT         current context of the configuration, default
+#                             "default"
+# FAKE_DOCKER_CONTEXT_HOST    host of the docker endpoint of that context,
+#                             default unix:///var/run/docker.sock
+# FAKE_DOCKER_CONTEXT_STATE   ok (default); missing: the context does not
+#                             exist, the CLI prints an empty line, its
+#                             message, and exits 1
+#
+# Engine, for docker info:
 # FAKE_DOCKER_STATE           running (default); stopped: the CLI cannot
 #                             connect, renders the zero values and exits 1;
 #                             server-error: the engine answers with an error,
 #                             the CLI prints it, renders the zero values and
-#                             exits 0
+#                             exits 0; hang: the engine never answers
+# FAKE_DOCKER_MESSAGE         message of server-error, default "Error
+#                             response from daemon: simulated server error"
 # FAKE_DOCKER_SERVER_VERSION  ServerVersion, default 29.8.2
 # FAKE_DOCKER_MEM_TOTAL       MemTotal in bytes, default 2415919104 (2304 MiB,
 #                             between the lite and standard thresholds)
@@ -31,21 +47,18 @@ unexpected() {
 
 log "docker $*"
 
-if [ "$#" -ne 3 ] || [ "$1" != info ]; then
-  unexpected "$@"
-fi
-case "$2" in
-  --format | -f) template="$3" ;;
-  *) unexpected "$@" ;;
-esac
-
+# render FIELD VALUE [FIELD VALUE]...: prints the template with each FIELD
+# replaced by its VALUE, and refuses a template that holds another field.
 render() {
-  local out="$template" field_version='{{.ServerVersion}}' field_memory='{{.MemTotal}}'
-  out="${out//$field_version/$1}"
-  out="${out//$field_memory/$2}"
+  local out="$template" field
+  while [ "$#" -ge 2 ]; do
+    field="$1"
+    out="${out//$field/$2}"
+    shift 2
+  done
   case "$out" in
     *'{{'*)
-      log "UNEXPECTED docker info --format $template"
+      log "UNEXPECTED docker $call --format $template"
       printf 'fake docker: template field not simulated in: %s\n' "$template" >&2
       exit 99
       ;;
@@ -53,21 +66,74 @@ render() {
   printf '%s\n' "$out"
 }
 
-case "${FAKE_DOCKER_STATE:-running}" in
-  running)
-    render "${FAKE_DOCKER_SERVER_VERSION-29.8.2}" "${FAKE_DOCKER_MEM_TOTAL-2415919104}"
-    ;;
-  stopped)
-    render "" 0
-    printf '%s\n' 'failed to connect to the docker API at unix:///var/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /var/run/docker.sock: connect: no such file or directory' >&2
-    exit 1
-    ;;
-  server-error)
-    printf '%s\n' 'Error response from daemon: simulated server error' >&2
-    render "" 0
-    ;;
-  *)
-    printf 'fake docker: unknown FAKE_DOCKER_STATE %s\n' "$FAKE_DOCKER_STATE" >&2
-    exit 98
-    ;;
+context_inspect() {
+  local name host
+  if [ -n "${DOCKER_HOST:-}" ]; then
+    name=default
+    host="$DOCKER_HOST"
+  else
+    name="${DOCKER_CONTEXT:-${FAKE_DOCKER_CONTEXT-default}}"
+    host="${FAKE_DOCKER_CONTEXT_HOST-unix:///var/run/docker.sock}"
+  fi
+  case "${FAKE_DOCKER_CONTEXT_STATE:-ok}" in
+    ok)
+      render '{{.Name}}' "$name" '{{.Endpoints.docker.Host}}' "$host"
+      ;;
+    missing)
+      printf '\n'
+      printf 'context "%s": context not found: open /home/dev/.docker/contexts/meta/0123/meta.json: no such file or directory\n' "$name" >&2
+      exit 1
+      ;;
+    *)
+      printf 'fake docker: unknown FAKE_DOCKER_CONTEXT_STATE %s\n' "$FAKE_DOCKER_CONTEXT_STATE" >&2
+      exit 98
+      ;;
+  esac
+}
+
+info() {
+  local version='{{.ServerVersion}}' memory='{{.MemTotal}}'
+  case "${FAKE_DOCKER_STATE:-running}" in
+    running)
+      render "$version" "${FAKE_DOCKER_SERVER_VERSION-29.8.2}" "$memory" "${FAKE_DOCKER_MEM_TOTAL-2415919104}"
+      ;;
+    stopped)
+      render "$version" "" "$memory" 0
+      printf '%s\n' 'failed to connect to the docker API at unix:///var/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /var/run/docker.sock: connect: no such file or directory' >&2
+      exit 1
+      ;;
+    server-error)
+      printf '%s\n' "${FAKE_DOCKER_MESSAGE-Error response from daemon: simulated server error}" >&2
+      render "$version" "" "$memory" 0
+      ;;
+    hang)
+      # Long enough to outlast the delay of preflight.sh; exec, so that
+      # stopping this process stops the wait.
+      exec sleep 30
+      ;;
+    *)
+      printf 'fake docker: unknown FAKE_DOCKER_STATE %s\n' "$FAKE_DOCKER_STATE" >&2
+      exit 98
+      ;;
+  esac
+}
+
+call="$*"
+if [ "$#" -eq 4 ] && [ "$1" = context ] && [ "$2" = inspect ]; then
+  call="context inspect"
+  shift 2
+elif [ "$#" -eq 3 ] && [ "$1" = info ]; then
+  call="info"
+  shift
+else
+  unexpected "$@"
+fi
+case "$1" in
+  --format | -f) template="$2" ;;
+  *) unexpected "$call" "$@" ;;
+esac
+
+case "$call" in
+  "context inspect") context_inspect ;;
+  info) info ;;
 esac
