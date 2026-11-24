@@ -5,16 +5,19 @@
 # The Renovate configuration of the generated project keeps its update
 # rules: 7 days, the security exception, no other major for postgres, kind
 # and its node image together, the charts and the controller of Envoy
-# Gateway together. Runs the tests of policy package renovate_rules, then
-# the policy on renovate.json and platform.yaml, which holds the majors and
-# minors the rules must follow. Renovate never reads this file in CELIAN
-# (research RS-17); the validator of Renovate reads it in X01.
+# Gateway together. Runs the tests of policy packages renovate_delay (the
+# delay, which holds for every renovate.json of CELIAN) and renovate_rules
+# (the rules that follow platform.yaml, which holds the majors and minors
+# they must follow), then both packages on renovate.json and platform.yaml.
+# Renovate never reads this file in CELIAN (research RS-17); the validator
+# of Renovate reads it in X01.
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$root"
 
 inputs="renovate.json platform.yaml"
+packages="renovate_delay renovate_rules"
 
 if ! command -v conftest >/dev/null 2>&1; then
   echo "conftest is not installed: run tests/tools/install.sh <dir>, then put <dir> on PATH." >&2
@@ -28,6 +31,11 @@ for file in $inputs; do
   fi
 done
 
-conftest verify --no-color --policy policy --namespace renovate_rules
-# shellcheck disable=SC2086 # $inputs is a list of paths without spaces
-conftest test --no-color --combine --policy policy --namespace renovate_rules $inputs
+# One package per run. conftest says nothing about a package it does not
+# find (research RS-18); tests/run-static.sh refuses a policy that no
+# control script names, so a misspelt name here fails there.
+for package in $packages; do
+  conftest verify --no-color --policy policy --namespace "$package"
+  # shellcheck disable=SC2086 # $inputs is a list of paths without spaces
+  conftest test --no-color --combine --policy policy --namespace "$package" $inputs
+done
