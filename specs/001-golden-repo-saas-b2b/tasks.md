@@ -262,10 +262,10 @@ description: "Tâches de la fonctionnalité 001 : golden repo SaaS B2B"
 - [X] T095 [P] [US4] Écrire en rouge `golden/saas-b2b/tests/static/s23-renovate.sh` : délai de 7 jours, exception de sécurité, aucune autre majeure pour `postgres`, paire kind et image de nœud, paire chart et condensat d'Envoy Gateway. Dépend de T093. Trace : FR-013 ; S23.
 - [X] T096 [US4] Écrire en rouge `golden/saas-b2b/tests/export/x01-standalone-copy.sh` : copie du golden repo dans un dépôt Git neuf, hooks qui passent, commitlint qui refuse un message non conforme et accepte un message conforme, actionlint qui passe sur ses workflows, actions figées par SHA, gitleaks qui passe sur son historique. Trace : FR-013 ; X01.
 - [X] T097 [US4] Écrire `golden/saas-b2b/.pre-commit-config.yaml` et `golden/saas-b2b/.commitlintrc.yaml`, hooks et SHA repris de la racine de CELIAN (T093), `no-em-dash`, gitleaks, actionlint et shellcheck compris. Dépend de T093. Trace : FR-013 ; X01.
-- [ ] T098 [US4] Écrire `golden/saas-b2b/renovate.json` : 7 jours, exception de sécurité (principe VI, constitution 1.2.0), règles de S23 ; relecture [SECU] demandée dans la PR ; S23 au vert. Dépend de T095. Trace : FR-013 ; S23.
+- [X] T098 [US4] Écrire `golden/saas-b2b/renovate.json` : 7 jours, exception de sécurité (principe VI, constitution 1.2.0), règles de S23 ; relecture [SECU] demandée dans la PR ; S23 au vert. Dépend de T095. Trace : FR-013 ; S23.
 - [X] T099 [P] [US4] Écrire `golden/saas-b2b/release-please-config.json`, `golden/saas-b2b/.release-please-manifest.json`, `golden/saas-b2b/.github/CODEOWNERS` et `golden/saas-b2b/.github/pull_request_template.md`. Dépend de T093. Trace : FR-013 ; X01.
 - [X] T100 [US4] Écrire les workflows du projet généré dans `golden/saas-b2b/.github/workflows/` : hooks, recherche de secrets sur tout l'historique, titre de PR par commitlint, `task check` et `task test`, release-please ; actions figées par SHA ; S17 au vert. Dépend de T094, T097, T099. Trace : FR-013, FR-014 ; S17, X01.
-- [ ] T101 [US4] Ajouter le job `export` à `.github/workflows/golden-saas-b2b.yml`, qui lance X01 ; X01 au vert. Dépend de T096, T100. Trace : FR-013 ; X01.
+- [X] T101 [US4] Ajouter le job `export` à `.github/workflows/golden-saas-b2b.yml`, qui lance X01 ; X01 au vert. Dépend de T096, T100. Trace : FR-013 ; X01.
 
 **Checkpoint** : US4 testable seul ; X01, S17 et S23 au vert.
 
