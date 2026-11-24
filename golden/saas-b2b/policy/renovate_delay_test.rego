@@ -276,6 +276,7 @@ test_s23_the_pattern_of_adr_016_leaves_other_images_to_the_delay if {
 		"docker.io/library/postgres",
 		"kindest/node",
 		"zricethezav/gitleaks",
+		"docker.io/zricethezav/gitleaks",
 		"ghcr.io",
 		"ghcr.io/",
 		"ghcr.io.example.com/gitleaks/gitleaks",
