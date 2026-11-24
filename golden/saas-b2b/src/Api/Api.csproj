@@ -7,4 +7,11 @@
   <ItemGroup>
     <PackageReference Include="Npgsql" Version="10.0.3" />
   </ItemGroup>
+
+  <!-- openapi.json describes the routes for S20 and the tests; the image does
+       not ship it, and no route serves it (research RS-03). -->
+  <ItemGroup>
+    <Content Remove="openapi.json" />
+    <None Include="openapi.json" />
+  </ItemGroup>
 </Project>

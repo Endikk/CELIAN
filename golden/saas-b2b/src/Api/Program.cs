@@ -4,6 +4,7 @@
 // exception detail (research RS-03).
 using Api;
 using Api.Health;
+using Api.Notes;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddProblemDetails();
@@ -13,6 +14,7 @@ var app = builder.Build();
 app.UseExceptionHandler();
 app.UseStatusCodePages();
 app.MapHealthEndpoints();
+app.MapNotesEndpoints();
 app.Run();
 
 /// <summary>Entry point, public for the tests (WebApplicationFactory).</summary>
