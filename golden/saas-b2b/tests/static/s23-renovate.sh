@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # control: S23
-# carries: FR-013; constitution, principle VI; ADR-004, version rule, point 5; ADR-005, updates, point 2; ADR-012, condition 5
+# carries: FR-013; constitution, principle VI; ADR-004, version rule, point 5; ADR-005, updates, point 2; ADR-012, condition 5; ADR-016, condition 1
 #
 # The Renovate configuration of the generated project keeps its update
-# rules: 7 days, the security exception, no other major for postgres, kind
-# and its node image together, the charts and the controller of Envoy
-# Gateway together. Runs the tests of policy packages renovate_delay (the
+# rules: 7 days, the security exception, the approval on the Dependency
+# Dashboard for the registries that Renovate cannot date (ADR-016), no other
+# major for postgres, kind and its node image together, the charts and the
+# controller of Envoy Gateway together. Runs the tests of policy packages renovate_delay (the
 # delay, which holds for every renovate.json of CELIAN) and renovate_rules
 # (the rules that follow platform.yaml, which holds the majors and minors
 # they must follow), then both packages on renovate.json and platform.yaml.

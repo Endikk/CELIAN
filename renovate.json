@@ -6,6 +6,8 @@
     "customManagers:githubActionsVersions"
   ],
   "minimumReleaseAge": "7 days",
+  "minimumReleaseAgeBehaviour": "timestamp-required",
+  "internalChecksFilter": "strict",
   "vulnerabilityAlerts": {
     "minimumReleaseAge": null
   },
@@ -24,6 +26,15 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_IMAGE\\s*:\\s*\\S+?:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)"
       ]
+    }
+  ],
+  "packageRules": [
+    {
+      "description": "Principle VI, ADR-016: these registries give Renovate no release date, so it cannot count the 7 days. Each update waits on the Dependency Dashboard: only Lucas ticks it, never an agent, once the upstream release of the proposed digest is 7 days old, or at once for the fix of a published advisory.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(ghcr\\.io|quay\\.io|mcr\\.microsoft\\.com)/.+$/"],
+      "minimumReleaseAgeBehaviour": "timestamp-optional",
+      "dependencyDashboardApproval": true
     }
   ]
 }

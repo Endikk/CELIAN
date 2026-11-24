@@ -144,7 +144,7 @@ Restent hors de cette décision :
 - Aucune alerte automatique pour ces images. Un correctif ne se voit que par la lecture des avis de [SECU] ou par le scan des images (FR-021), qui ne voit que ce qu'il sait associer à un paquet (R-36).
 - « Lucas seul » ne tient aujourd'hui que par la règle. Le jeton des agents n'est pas vérifié (condition 5), et le ruleset de `main` demande zéro approbation (`required_approving_review_count: 0`) : rien ne réserve techniquement la fusion à Lucas.
 - S23 se complique, et CELIAN reçoit un contrôle de plus à tenir.
-- Le filtre contient une barre oblique entre ses délimiteurs. La page des motifs de Renovate ne dit pas si elle doit s'échapper : [DEV] le vérifie par un essai avant la fusion.
+- Le filtre contient une barre oblique entre ses délimiteurs. La page des motifs de Renovate ne dit pas si elle doit s'échapper. Vérifié par [DEV] le 2026-11-24 dans le code de Renovate 44.247.1, par lecture et sans essai : Renovate ne retire que la barre de tête et celle de fin, et la barre interne reste un caractère ordinaire du motif (`lib/util/string-match.ts`, lignes 73 à 92).
 - La règle n'est vérifiée qu'à la lecture de la documentation : aucun Renovate n'a encore tourné avec elle.
 
 ### Effet sur les cibles hors MVP
@@ -194,7 +194,7 @@ Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en ve
 | V. Gouvernance ouverte d'abord | sans objet | Aucune techno nouvelle |
 | VI. Récent mais éprouvé | dérogation | Pour les trois registres, Lucas compte les 7 jours à la place de Renovate (section « Dérogations ») ; ailleurs, Renovate les compte toujours |
 | VII. Une commande pour démarrer | sans objet | `task up` ne change pas |
-| VIII. Aucun fait de mémoire | respecté | Les faits renvoient aux pages lues le 2026-11-24. Sont signalés comme non vérifiés : la documentation de l'API de catalogue de mcr.microsoft.com, la barre oblique dans le filtre, la suffisance de « Pull requests » pour modifier un ticket, le nom de Keycloak sur Docker Hub face à son workflow, les condensats de Flux sur Docker Hub, le registre des images de Config Sync du test de l'ADR-010, une source de dates maison |
+| VIII. Aucun fait de mémoire | respecté | Les faits renvoient aux pages lues le 2026-11-24. Sont signalés comme non vérifiés : la documentation de l'API de catalogue de mcr.microsoft.com, la suffisance de « Pull requests » pour modifier un ticket, le nom de Keycloak sur Docker Hub face à son workflow, les condensats de Flux sur Docker Hub, le registre des images de Config Sync du test de l'ADR-010, une source de dates maison |
 | IX. Aucun secret dans le dépôt | respecté | La décision n'ajoute aucun identifiant ; les dates se lisent sur des API publiques, sans jeton |
 | X. Aucune dépense cloud sans accord | sans objet | Rien ne touche au cloud |
 
@@ -232,6 +232,7 @@ La levée, registre par registre, ne rouvre pas la décision : la PR qui retire 
 | <https://docs.renovatebot.com/modules/datasource/docker/> | 2026-11-24 | Date sur Docker Hub seul ; condensat daté comme `tag_last_pushed` |
 | <https://docs.renovatebot.com/modules/manager/dockerfile/> | 2026-11-24 | Le gestionnaire `dockerfile` produit la source `docker` ; ses motifs par défaut trouvent un Dockerfile dans tout dossier |
 | <https://docs.renovatebot.com/string-pattern-matching/> | 2026-11-24 | Motif entre `/` ; casse respectée par défaut ; rien sur une barre oblique interne |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/util/string-match.ts> | 2026-11-24 | Lu par [DEV]. `configValStart` (`/^!?\//`) et `configValEnd` (`/\/i?$/`), lignes 73 et 74 ; `parseRegexMatch` ne retire que ces deux barres avant de construire l'expression, lignes 82 à 92. Fichier identique aux tags 44.261.0 et 44.261.1. `matchPackageNames` passe par `matchRegexOrGlobList` (`lib/util/package-rules/package-names.ts`, ligne 21) |
 | <https://github.com/renovatebot/renovate/issues/38656> | 2026-11-24 | Ouvert depuis le 2025-10-16 ; date d'un condensat par les API du registre ; mcr.microsoft.com sans date exploitable ; Renovate garde l'échec fermé ; contournement par `timestamp-optional` limité à un registre |
 | <https://github.com/renovatebot/renovate/issues/39064> | 2026-11-24 | Ouvert depuis le 2025-11-04 ; date pour ghcr.io par l'API des paquets de GitHub, qui demande un jeton ; date d'image fixée par qui la construit |
 | <https://github.com/renovatebot/renovate/issues/38572> | 2026-11-24 | Ouvert depuis le 2025-10-13 ; l'API de Quay renvoie la date de poussée d'un tag ; lié à la PR 47353 |
