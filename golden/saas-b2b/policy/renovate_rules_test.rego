@@ -26,8 +26,13 @@ envoy_group := {
 
 valid_rules := [postgres_rule, node_rule, kind_group, envoy_group]
 
+celian_presets := ["config:recommended", "helpers:pinGitHubActionDigests", "customManagers:githubActionsVersions"]
+
 config_with(package_rules) := {
+	"extends": celian_presets,
 	"minimumReleaseAge": "7 days",
+	"minimumReleaseAgeBehaviour": "timestamp-required",
+	"internalChecksFilter": "strict",
 	"vulnerabilityAlerts": {"minimumReleaseAge": null},
 	"osvVulnerabilityAlerts": true,
 	"packageRules": package_rules,
@@ -112,18 +117,38 @@ test_s23_rejects_a_missing_delay if {
 test_s23_rejects_a_rule_with_its_own_delay if {
 	rule := {"matchPackageNames": ["react"], "minimumReleaseAge": "0 days"}
 	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "packageRules[4] sets its own minimumReleaseAge (0 days)")
+	denied_with(checked(renovate, valid_platform), "[\"packageRules\", 4, \"minimumReleaseAge\"] sets the delay again")
 }
 
 test_s23_rejects_a_release_without_a_date_taken_as_stable if {
 	renovate := with_value(valid_config, "minimumReleaseAgeBehaviour", "timestamp-optional")
-	denied_with(checked(renovate, valid_platform), "minimumReleaseAgeBehaviour must stay \"timestamp-required\"")
+	denied_with(checked(renovate, valid_platform), "minimumReleaseAgeBehaviour must be written out as \"timestamp-required\"")
 }
 
 test_s23_rejects_a_rule_that_takes_a_release_without_a_date_as_stable if {
 	rule := {"matchDatasources": ["docker"], "minimumReleaseAgeBehaviour": "timestamp-optional"}
 	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "packageRules[4] sets minimumReleaseAgeBehaviour to timestamp-optional")
+	denied_with(checked(renovate, valid_platform), "[\"packageRules\", 4, \"minimumReleaseAgeBehaviour\"] sets the delay again")
+}
+
+test_s23_rejects_a_delay_set_for_an_update_type if {
+	renovate := with_value(valid_config, "digest", {"minimumReleaseAge": null})
+	denied_with(checked(renovate, valid_platform), "[\"digest\", \"minimumReleaseAge\"] sets the delay again")
+}
+
+test_s23_rejects_internal_checks_that_open_a_pr_during_the_delay if {
+	renovate := with_value(valid_config, "internalChecksFilter", "none")
+	denied_with(checked(renovate, valid_platform), "internalChecksFilter must be written out as \"strict\"")
+}
+
+test_s23_rejects_a_release_age_behaviour_left_to_the_default if {
+	renovate := without(valid_config, "minimumReleaseAgeBehaviour")
+	denied_with(checked(renovate, valid_platform), "minimumReleaseAgeBehaviour must be written out as \"timestamp-required\"")
+}
+
+test_s23_rejects_a_preset_added_to_extends if {
+	renovate := with_value(valid_config, "extends", array.concat(celian_presets, ["github>example/presets"]))
+	denied_with(checked(renovate, valid_platform), "extends must hold exactly the three presets of CELIAN")
 }
 
 # Security exception.
@@ -250,7 +275,7 @@ test_s23_rejects_envoy_gateway_without_a_group if {
 
 test_s23_names_its_requirements_in_each_message if {
 	msgs := deny with input as checked({}, valid_platform)
-	count(msgs) == 7
+	count(msgs) == 10
 	every msg in msgs {
 		startswith(msg, "S23 (FR-013")
 	}
