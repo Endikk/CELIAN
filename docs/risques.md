@@ -548,6 +548,12 @@ l'ADR-007 reçoit trois valeurs relevées par [SECU] dans BENCH-012 :
 secrètes d'une couche, secret du client compris, et non les seuls mots de
 passe.
 
+ADR-014 (24/11/2026) : la liste des valeurs connues reçoit `password1` et
+`password2`, exemple de la page de configuration de Mailpit
+(`MP_UI_AUTH="user1:password1 user2:password2"`). Pour une clé de la forme
+`utilisateur:mot de passe`, comme `mp-ui-auth`, le test vise la partie qui
+suit le premier `:`, et le tirage exclut l'espace et le `:`.
+
 ### R-21. Application Design Center couvre le même besoin sur GCP
 
 L'analyse des outils existants
