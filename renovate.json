@@ -15,6 +15,18 @@
   "pre-commit": {
     "enabled": true
   },
+  "regex": {
+    "description": "The installer of the golden repo, golden/saas-b2b/tests/tools/install.sh, lives under tests/, which config:recommended hides from every manager (preset :ignoreModulesAndTests, **/tests/**). For the regex managers only, the same list without **/tests/**: Renovate replaces ignorePaths, it does not merge it. None of the files of the other regex managers lives under tests/.",
+    "ignorePaths": [
+      "**/node_modules/**",
+      "**/bower_components/**",
+      "**/vendor/**",
+      "**/examples/**",
+      "**/__tests__/**",
+      "**/test/**",
+      "**/__fixtures__/**"
+    ]
+  },
   "customManagers": [
     {
       "customType": "regex",
@@ -26,6 +38,18 @@
       "matchStrings": [
         "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_IMAGE\\s*:\\s*\\S+?:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)"
       ]
+    },
+    {
+      "customType": "regex",
+      "description": "Task and conftest, pinned in the installer of the golden repo, golden/saas-b2b/tests/tools/install.sh, each version under a # renovate: comment. Renovate cannot update SHA256SUMS, next to the script: its lines for the new version are written by hand in the same PR, from the checksum file of the release. Until then install.sh finds no sum for the new archives, and the CI of the PR fails.",
+      "managerFilePatterns": [
+        "/^golden/saas-b2b/tests/tools/install\\.sh$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>github-releases) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_VERSION=\"(?<currentValue>[^\"\\s]+)\""
+      ],
+      "extractVersionTemplate": "^v(?<version>.*)$",
+      "versioningTemplate": "semver"
     }
   ],
   "packageRules": [
