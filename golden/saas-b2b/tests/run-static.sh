@@ -27,7 +27,7 @@
 #   because conftest passes without a word on a package that does not exist.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$root"
 
 control_dirs="tests/static local/tests/static gcp/tests/static local/tests/preflight"

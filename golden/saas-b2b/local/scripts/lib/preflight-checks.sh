@@ -69,7 +69,9 @@ case "$preflight_lib_dir" in
   */*) preflight_lib_dir="${preflight_lib_dir%/*}" ;;
   *) preflight_lib_dir="." ;;
 esac
-PLATFORM_FILE="$(cd "$preflight_lib_dir/../../.." && pwd)/platform.yaml"
+# CDPATH='': with a CDPATH exported, cd would also print the directory, and
+# the path would come out on two lines.
+PLATFORM_FILE="$(CDPATH='' cd -- "$preflight_lib_dir/../../.." && pwd)/platform.yaml"
 readonly PLATFORM_FILE
 
 # Set by read_engine, cluster_minor, choose_profile, scan_output and

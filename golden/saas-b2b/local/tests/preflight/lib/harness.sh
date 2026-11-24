@@ -13,7 +13,8 @@
 # UNEXPECTED. Every case checks that none happened, so that a refusal is
 # also proven to come before anything is created.
 
-PREFLIGHT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd)"
+# CDPATH='': with a CDPATH exported, cd would also print the directory.
+PREFLIGHT_ROOT="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../.." && pwd)"
 PREFLIGHT="$PREFLIGHT_ROOT/local/scripts/preflight.sh"
 PREFLIGHT_LIB="$PREFLIGHT_ROOT/local/scripts/lib/preflight-checks.sh"
 FAKES_DIR="$PREFLIGHT_ROOT/local/tests/preflight/fakes"
@@ -34,7 +35,10 @@ SLEEP="$(command -v sleep)" || {
   exit 2
 }
 
-SANDBOX="$(mktemp -d)"
+# The tests run without set -e: a failed mktemp must stop them here, or
+# HOME and the files that P05 writes would land outside the sandbox.
+SANDBOX="$(mktemp -d)" || exit 2
+[ -d "$SANDBOX" ] || exit 2
 trap 'rm -rf "${SANDBOX:?}"' EXIT
 mkdir "$SANDBOX/home"
 CALLS="$SANDBOX/calls.log"
