@@ -6,6 +6,8 @@ la GATE 1 du 2026-11-20 : ADR-001 à ADR-010 acceptés, débit visé et profil l
 (R-04). Complété par le DSI avec les décisions de Lucas du 2026-11-20 pour la
 phase 2 : profil standard et mesure des 15 minutes, benchmark de Postgres local
 avant la couche locale, aucun déploiement réel sur GCP pendant la phase.
+Complété le 2026-11-25 par [ARCHI] avec la décision de Lucas du 2026-11-23 :
+Trivy seul pour le SBOM et le scan des images (US-009).
 
 Sources : brief v1.0 (sections 2 à 4, 6, 8, 9 et 12), constitution 1.0.0
 (branche `chore/speckit`) et `CLAUDE.md`, lus le 15/11/2026. La vision tient en
@@ -292,7 +294,10 @@ partir d'un état sain.
 - Étant donné le dépôt poussé sur GitHub, quand GitHub Actions tourne pour la
   première fois, alors la CI passe.
 - Elle comprend au minimum les linters, les tests, la construction des images,
-  le SBOM (Syft), le scan (Trivy) et la signature (cosign).
+  le SBOM et le scan (Trivy), et la signature (cosign). Trivy fait seul le SBOM
+  et le scan, à la place de Syft que nommaient le brief et ce PRD : décision de
+  Lucas du 2026-11-23, pour un outil de moins à figer et à suivre ([RS-22 de la
+  spec 001](../specs/001-golden-repo-saas-b2b/research.md)).
 - Une étape qui suppose l'infrastructure GCP ne fait pas échouer la CI tant que
   cette infrastructure n'existe pas.
 
