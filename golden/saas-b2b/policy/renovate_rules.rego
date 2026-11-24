@@ -149,6 +149,16 @@ deny contains msg if {
 	msg := sprintf("%s: extends must hold exactly the three presets of CELIAN; another preset can change the delay", [label_delay])
 }
 
+# Renovate reads extends anywhere in a configuration (research RS-18). A
+# preset extended below the top brings settings that S23 does not read.
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, _])
+	count(path) > 1
+	path[count(path) - 1] == "extends"
+	msg := sprintf("%s: %v extends a preset; presets are listed once, in the extends at the top", [label_delay, path])
+}
+
 # Security exception: written out, so that a change of default upstream
 # cannot remove it.
 

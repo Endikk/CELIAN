@@ -151,6 +151,12 @@ test_s23_rejects_a_preset_added_to_extends if {
 	denied_with(checked(renovate, valid_platform), "extends must hold exactly the three presets of CELIAN")
 }
 
+test_s23_rejects_a_preset_extended_inside_a_rule if {
+	rule := {"matchPackageNames": ["react"], "extends": ["github>example/presets"]}
+	renovate := config_with(array.concat(valid_rules, [rule]))
+	denied_with(checked(renovate, valid_platform), "[\"packageRules\", 4, \"extends\"] extends a preset")
+}
+
 # Security exception.
 
 test_s23_rejects_a_missing_security_exception if {
