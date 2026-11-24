@@ -1,0 +1,43 @@
+# maildev 3.0.0, image pinned by its index digest (read on 2026-11-20).
+# Credentials come from the Secret mail-ui-auth created by the script, through
+# MAILDEV_WEB_USER and MAILDEV_WEB_PASS. The image declares the user "node":
+# a name the kubelet cannot check against runAsNonRoot, hence a numeric
+# runAsUser, the same as for the other options.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mail
+  labels: {app: mail}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: mail}
+  template:
+    metadata:
+      labels: {app: mail}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: mail
+          image: maildev/maildev:3.0.0@sha256:6e09695961f4aef9016a390ad391314a078220216601b15a35d389a7df2a3855
+          env:
+            - name: MAILDEV_WEB_USER
+              valueFrom:
+                secretKeyRef: {name: mail-ui-auth, key: username}
+            - name: MAILDEV_WEB_PASS
+              valueFrom:
+                secretKeyRef: {name: mail-ui-auth, key: password}
+          ports:
+            - {name: smtp, containerPort: 1025}
+            - {name: http, containerPort: 1080}
+          readinessProbe:
+            httpGet: {path: /api/healthz, port: http}
+            periodSeconds: 1
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: ["ALL"]}

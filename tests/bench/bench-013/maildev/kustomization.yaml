@@ -1,0 +1,18 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: mail-test
+resources:
+  - deployment.yaml
+  - service.yaml
+# Where the probe Job sends its mail and reads the API (no credential here).
+configMapGenerator:
+  - name: probe-target
+    literals:
+      - MODE=maildev
+      - SMTP_HOST=mail
+      - SMTP_PORT=1025
+      - HTTP_HOST=mail
+      - HTTP_PORT=1080
+      - API_PATH=/api/email
+generatorOptions:
+  disableNameSuffixHash: true
