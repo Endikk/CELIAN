@@ -3,5 +3,6 @@ node_modules/
 dist/
 # Local environment files, which Vite reads from envDir, the root of the
 # front by default: kept out of the context, so out of the cache of the
-# sources stage.
+# sources stage. Matched at any depth, in case envDir moves.
 .env*
+**/.env*
