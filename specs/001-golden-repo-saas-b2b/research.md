@@ -94,6 +94,55 @@ Pourquoi : ADR-004, condition 6 (mémoire déclarée par le moteur, pas mémoire
 
 Sources : ADR-004, condition 6 ; ADR-006, conséquences ; ADR-011 et ADR-012, conséquences.
 
+### Relevé du 2026-11-24 (T033)
+
+Fait par [DEV]. Sources officielles : docs.docker.com, kubernetes.io, gnu.org, docs.podman.io et taskfile.dev, plus le code source de moby, de docker/cli, de kind et de Podman, lu par `gh api` au tag de chaque version citée. Lectures sur le poste de mesure, toutes en lecture seule : `docker info`, `kind version`, `kubectl version --client`.
+
+Mémoire et version sous Docker Engine : une seule commande, `docker info --format '{{.ServerVersion}} {{.MemTotal}}'`. La spécification de l'API du moteur définit `MemTotal` comme « Total amount of physical memory available on the host, in bytes », un entier, et `ServerVersion` comme « Version string of the daemon ». Quand le moteur tourne dans une machine virtuelle, l'hôte de l'API est cette machine : c'est bien la mémoire que vise la condition 6 de l'ADR-004. Les deux noms sont des champs de la structure `system.Info` que rend `--format`. La page de `docker system info` ne montre que le modèle `{{json .}}` et renvoie aux modèles Go : le nom des champs vient du code source.
+
+Moteur qui ne répond pas : le code de `docker info` (docker/cli v29.8.2) distingue deux cas. Un échec de connexion rend le modèle avec des valeurs vides, puis sort en erreur. Sur le poste, avec `DOCKER_HOST` pointé sur un socket absent, le modèle `{{.ServerVersion}}|{{.MemTotal}}` donne `|0`, le message `failed to connect to the docker API at unix://...` et le code 1. Toute autre erreur du moteur est écrite sur la sortie d'erreur, le modèle est rendu avec des valeurs vides, et la commande sort en 0. `preflight.sh` refuse donc aussi une sortie sans version ni mémoire, quel que soit le code de sortie.
+
+Docker Engine 28.0.0 : publiée le 2025-02-19. Ses notes de version disent « Direct routed access to container ports that are not exposed using p/-publish is now blocked ». La dernière 28.x de la page est 28.5.2, du 2025-11-05. `preflight.sh` reconnaît Linux à `uname -s` et compare les trois premiers nombres de `ServerVersion`, si bien qu'un suffixe de paquet comme `+dfsg1` ne compte pas.
+
+kind : `kind version` imprime `kind v<version> <go> <os>/<arch>` (fonction `DisplayVersion`), et `kind version --quiet` (`-q`) la version seule, `0.33.0` sur le poste (code de kind au tag v0.33.0, `pkg/cmd/kind/version/version.go` et `pkg/cmd/kind/root.go`). Une version de développement ajoute `-<pré-version>` ; la comparaison exacte la refuse.
+
+kubectl : `kubectl version --client` « shows client version only (no server required) » ; `-o, --output` accepte `yaml` ou `json`. `preflight.sh` lit `clientVersion.gitVersion` dans la sortie JSON, `v1.37.1` sur le poste. La plage vient de la politique de décalage des versions de Kubernetes, « kubectl is supported within one minor version (older or newer) of kube-apiserver » : 1.35 à 1.37 autour de la mineure 1.36 de `platform.yaml`, que le script lit (ADR-006, condition 5).
+
+Kubeconfig, pour P05 : la page kubeconfig de Kubernetes donne l'ordre `--kubeconfig`, puis `KUBECONFIG`, puis `$HOME/.kube/config`, et le contexte par `--context`, puis par `current-context`. La page de `kubectl version` ne dit pas si `--client` lit le kubeconfig. Sur le poste, `kubectl version --client -o json` sort en 0 avec un `KUBECONFIG` ou un `--kubeconfig` qui désigne un fichier absent ou illisible : il ne le lit pas. `preflight.sh` n'appelle kubectl que pour cette lecture.
+
+Ports, pour P04 : bash ouvre lui-même `/dev/tcp/<hôte>/<port>` (manuel de bash, « Redirections »). Une connexion acceptée en 127.0.0.1 signale un port pris, quel que soit l'utilisateur du processus qui écoute, et sans autre outil. La page des options de compilation de bash n'a pas pu être lue (réponses 429 de gnu.org). La prise en charge est constatée sur `/bin/bash` 3.2.57 du poste, où les ports 7000 et 32222 sortent pris, 1 et 59999 libres, et sur bash 5.2.21 d'Ubuntu 24.04 (image `mcr.microsoft.com/playwright:v1.64.1-noble`, par condensat), où un port fermé répond « Connection refused ». Un bash compilé sans cette redirection verrait tous les ports libres, et la création du cluster échouerait plus tard sur le port pris.
+
+`PROFILE` dans Task : une variable passée en ligne de commande n'est pas exportée aux commandes, et « By default, a variable already present in the process environment takes precedence over Taskfile `env` values ». La tâche passe donc `PROFILE` par `env:`. Constaté avec Task 3.54.0 : `PROFILE=lite task up` et `task up PROFILE=lite` forcent tous deux le lite ; sans `env:`, la seconde forme était ignorée sans un mot ; avec les deux formes à la fois, l'environnement gagne.
+
+Moteur libre, pas encore retenu par [OPS] (R-26) : Podman. `podman info` rend la mémoire sous `host.memTotal` en JSON, champ `Host.MemTotal` en modèle Go, lu dans `/proc/meminfo` de la machine où tourne le service, donc de la VM sous `podman machine` (code de Podman v6.2.1, `libpod/info.go` et `libpod/define/info.go`). La page de `podman info` montre `memTotal: 16401895424` sans donner l'unité ; celle de `podman machine init` donne `--memory` en Mio, sans valeur par défaut. L'API compatible de Podman, « Docker v1.40 API », répond à `docker info` avec un `MemTotal` de même source et un `ServerVersion` égal à la version de Podman (`pkg/api/handlers/compat/info.go`). Rien n'est câblé pour Podman. Écart : sous Linux, un `docker` branché sur Podman rendrait une version 6.x, que la règle des 28.0.0, écrite pour Docker Engine, refuserait. La règle se reprend quand [OPS] retiendra le moteur libre.
+
+OrbStack, moteur du poste : `ServerVersion` 29.8.2, `MemTotal` 12598894592 octets (12015 Mio, soit 11,73 Gio pour 24 Gio physiques), `OperatingSystem` « OrbStack », `OSType` linux, nom de plate-forme du serveur « Docker Engine - Community ». La sortie de `docker info --format` a le même format que sous Docker Engine : même CLI, en 29.8.2, et même API. Deux différences : `OperatingSystem`, que `preflight.sh` ne lit pas, et la valeur de `MemTotal`, qui suit l'allocation d'OrbStack plutôt qu'un réglage fixe de VM. Docker Desktop, lui, se nomme « Docker Desktop » suivi de sa version (exemple de la page `docker version`).
+
+Écart sur les seuils : les seuils de départ parlent d'une VM de 2,0 et de 2,5 Gio, et `preflight.sh` compare la mémoire déclarée à 2048 et à 2560 Mio. Ce que déclare une VM réglée à 2,0 Gio n'est pas mesuré ; si c'est moins de 2048 Mio, cette VM est refusée. À mesurer avec le recalcul de T081.
+
+Effets : `golden/saas-b2b/local/scripts/preflight.sh` (T037), ses binaires simulés `golden/saas-b2b/local/tests/preflight/fakes/` et les contrôles P01 à P05 (T034 à T036), dont les sorties reproduisent celles relevées ici.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://docs.docker.com/reference/cli/docker/system/info/> | 2026-11-24 | `--format` avec un modèle Go ; seul exemple, `{{json .}}` |
+| <https://docs.docker.com/reference/cli/docker/version/> | 2026-11-24 | Exemple `{{.Server.Version}}` ; serveur « Docker Desktop 4.19.0 » ou « Docker Engine - Community » |
+| <https://github.com/moby/moby/blob/docker-v29.8.2/api/swagger.yaml> | 2026-11-24 | `MemTotal` en octets, mémoire de l'hôte ; `ServerVersion`, version du démon |
+| <https://github.com/moby/moby/blob/docker-v29.8.2/api/types/system/info.go> | 2026-11-24 | Champs `MemTotal`, `ServerVersion`, `OperatingSystem`, `OSType` de `system.Info` |
+| <https://github.com/docker/cli/blob/v29.8.2/cli/command/system/info.go> | 2026-11-24 | Échec de connexion : erreur ; autre erreur du moteur : message, modèle rendu, sortie en 0 |
+| <https://docs.docker.com/engine/release-notes/28/> | 2026-11-24 | 28.0.0 du 2025-02-19 ; accès routé aux ports non publiés bloqué ; 28.5.2 du 2025-11-05 |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cmd/kind/version/version.go> | 2026-11-24 | Format de `kind version` et de `kind version --quiet` |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cmd/kind/root.go> | 2026-11-24 | Option globale `--quiet`, `-q` |
+| <https://kubernetes.io/docs/reference/kubectl/generated/kubectl_version/> | 2026-11-24 | `--client` sans serveur ; `--output` en `yaml` ou `json` |
+| <https://kubernetes.io/releases/version-skew-policy/> | 2026-11-24 | kubectl pris en charge à une mineure près du serveur d'API |
+| <https://kubernetes.io/docs/concepts/configuration/organize-cluster-access-kubeconfig/> | 2026-11-24 | Ordre `--kubeconfig`, `KUBECONFIG`, `$HOME/.kube/config` ; choix du contexte |
+| <https://www.gnu.org/software/bash/manual/html_node/Redirections.html> | 2026-11-24 | `/dev/tcp/host/port` ouvert par bash |
+| <https://taskfile.dev/docs/guide/variables> | 2026-11-24 | Ordre de résolution des variables ; `vars` non exportées aux commandes (v3.54.0) |
+| <https://taskfile.dev/docs/guide/environment> | 2026-11-24 | L'environnement du processus l'emporte sur `env` |
+| <https://docs.podman.io/en/latest/markdown/podman-info.1.html> | 2026-11-24 | `--format` en JSON ou modèle Go ; `memTotal` dans l'exemple |
+| <https://docs.podman.io/en/latest/markdown/podman-machine-init.1.html> | 2026-11-24 | `--memory` en Mio, sans valeur par défaut écrite |
+| <https://docs.podman.io/en/latest/markdown/podman-system-service.1.html> | 2026-11-24 | Couche compatible « Docker v1.40 API » |
+| <https://github.com/containers/podman/blob/v6.2.1/libpod/info.go> | 2026-11-24 | `MemTotal` lu dans `/proc/meminfo` ; compat : `pkg/api/handlers/compat/info.go`, `ServerVersion` égal à la version de Podman |
+
 ## RS-09. Taskfile et scripts
 
 Décision : `Taskfile.yml` à la racine expose les commandes publiques et délègue aux Taskfiles inclus de `local/tasks/` et `gcp/tasks/`. La logique vit dans des scripts bash de `local/scripts/`, compatibles avec bash 3.2, sans heredoc, passés à shellcheck. Le Taskfile porte en tête l'inventaire des commandes qui créent, modifient ou suppriment un conteneur, un réseau ou un volume. Construction, chargement et application sont définis une fois et réutilisés par `task up` et `task reload`.
