@@ -11,8 +11,10 @@
 # Stages, all run by tests/unit/u02-front.sh except runtime alone:
 # - deps: npm ci, locked to package-lock.json, no install script (.npmrc);
 # - sources: deps and the sources;
-# - build: type check, then the production build into dist/;
-# - unit: U02 with Vitest, in the build image (research RS-06);
+# - build: type check, then the production build into dist/, without
+#   network;
+# - unit: U02 with Vitest, in the build image (research RS-06), without
+#   network;
 # - runtime: the image of the front;
 # - serve-check: nginx -t under the non-root user, and a built page that
 #   loads its code from files only, as the Content-Security-Policy of
@@ -42,11 +44,18 @@ RUN npm ci
 FROM deps AS sources
 COPY . .
 
+# From here on the code of the packages runs, native binaries included
+# (TypeScript, Vite with Rolldown and lightningcss, Vitest): without network,
+# so that a package turned malicious can neither fetch a second payload nor
+# send anything out. npm ci above keeps the network and runs no package code
+# (ignore-scripts in .npmrc). RUN --network needs Dockerfile syntax 1.3
+# (https://docs.docker.com/reference/dockerfile/, read 2026-11-24); no syntax
+# directive, so BuildKit uses its bundled frontend and pulls no other image.
 FROM sources AS build
-RUN npm run build
+RUN --network=none npm run build
 
 FROM sources AS unit
-RUN npm test
+RUN --network=none npm test
 
 FROM nginx:1.30.7-alpine-slim@sha256:8c950211a641ec5b23f265450517001f6bcca533666120ebe36cb4cff3d00a55 AS runtime
 # No configuration script at start (templates, IPv6 listen, resolvers), no
