@@ -77,6 +77,7 @@ check_pins() {
 
 word_start='(^|[^[:alnum:]_-])'
 word_end='([^[:alnum:]_-]|$)'
+separator='[^[:alnum:]_-]'
 
 for file in "$@"; do
   if [ ! -f "$file" ]; then
@@ -84,8 +85,10 @@ for file in "$@"; do
     continue
   fi
   # Principle X: no plan, apply or destroy, by OpenTofu or Terraform, nor by
-  # a task of the gcp layer (decision of Lucas, 2026-11-20).
-  forbid "$file" "${word_start}(tofu|terraform)${word_end}.*${word_start}(plan|apply|destroy)${word_end}" \
+  # a task of the gcp layer (decision of Lucas, 2026-11-20). One separator
+  # after the tool name is enough: ERE has no lookahead, so the separator
+  # that ends the tool name cannot also start the subcommand.
+  forbid "$file" "${word_start}(tofu|terraform)${separator}(.*${separator})?(plan|apply|destroy)${word_end}" \
     "OpenTofu plan, apply or destroy"
   forbid "$file" "${word_start}gcp:(plan|apply|destroy)${word_end}" "task gcp:plan, gcp:apply or gcp:destroy"
   # No cloud credential: no secret but the workflow token, no OIDC token for
