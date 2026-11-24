@@ -37,7 +37,7 @@ tasks:
       - task: local:reload
 
   check:
-    desc: Run the static checks, without a cluster.
+    desc: Run the static checks and the simulated preflight checks, without a cluster.
     cmds:
       - bash tests/run-static.sh
 

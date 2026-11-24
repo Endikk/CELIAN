@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+# Simulated uname of the preflight tests P01 to P05, so that one machine
+# plays both macOS and Linux. It answers only "uname -s".
+#
+# FAKE_UNAME_S  kernel name, default Darwin; Linux turns on the Docker Engine
+#               version rule (ADR-011, condition 3)
+# FAKE_LOG      file that receives one line per call
+set -euo pipefail
+
+log() {
+  if [ -n "${FAKE_LOG:-}" ]; then
+    printf '%s\n' "$1" >>"$FAKE_LOG"
+  fi
+}
+
+log "uname $*"
+
+if [ "$*" != "-s" ]; then
+  log "UNEXPECTED uname $*"
+  printf 'fake uname: unexpected call: uname %s\n' "$*" >&2
+  exit 99
+fi
+printf '%s\n' "${FAKE_UNAME_S:-Darwin}"

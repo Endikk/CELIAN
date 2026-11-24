@@ -1,0 +1,73 @@
+#!/usr/bin/env bash
+# Simulated docker CLI of the preflight tests P01 to P05. It answers only
+# "docker info --format <template>", the one call of local/scripts/preflight.sh,
+# the way the docker 29.8.2 CLI does (spec 001, research RS-08): the
+# template is rendered with the values below. Any other call is logged as
+# UNEXPECTED and fails, so a test sees at once a command that would create,
+# change or remove something.
+#
+# FAKE_DOCKER_STATE           running (default); stopped: the CLI cannot
+#                             connect, renders the zero values and exits 1;
+#                             server-error: the engine answers with an error,
+#                             the CLI prints it, renders the zero values and
+#                             exits 0
+# FAKE_DOCKER_SERVER_VERSION  ServerVersion, default 29.8.2
+# FAKE_DOCKER_MEM_TOTAL       MemTotal in bytes, default 2415919104 (2304 MiB,
+#                             between the lite and standard thresholds)
+# FAKE_LOG                    file that receives one line per call
+set -euo pipefail
+
+log() {
+  if [ -n "${FAKE_LOG:-}" ]; then
+    printf '%s\n' "$1" >>"$FAKE_LOG"
+  fi
+}
+
+unexpected() {
+  log "UNEXPECTED docker $*"
+  printf 'fake docker: unexpected call: docker %s\n' "$*" >&2
+  exit 99
+}
+
+log "docker $*"
+
+if [ "$#" -ne 3 ] || [ "$1" != info ]; then
+  unexpected "$@"
+fi
+case "$2" in
+  --format | -f) template="$3" ;;
+  *) unexpected "$@" ;;
+esac
+
+render() {
+  local out="$template" field_version='{{.ServerVersion}}' field_memory='{{.MemTotal}}'
+  out="${out//$field_version/$1}"
+  out="${out//$field_memory/$2}"
+  case "$out" in
+    *'{{'*)
+      log "UNEXPECTED docker info --format $template"
+      printf 'fake docker: template field not simulated in: %s\n' "$template" >&2
+      exit 99
+      ;;
+  esac
+  printf '%s\n' "$out"
+}
+
+case "${FAKE_DOCKER_STATE:-running}" in
+  running)
+    render "${FAKE_DOCKER_SERVER_VERSION-29.8.2}" "${FAKE_DOCKER_MEM_TOTAL-2415919104}"
+    ;;
+  stopped)
+    render "" 0
+    printf '%s\n' 'failed to connect to the docker API at unix:///var/run/docker.sock; check if the path is correct and if the daemon is running: dial unix /var/run/docker.sock: connect: no such file or directory' >&2
+    exit 1
+    ;;
+  server-error)
+    printf '%s\n' 'Error response from daemon: simulated server error' >&2
+    render "" 0
+    ;;
+  *)
+    printf 'fake docker: unknown FAKE_DOCKER_STATE %s\n' "$FAKE_DOCKER_STATE" >&2
+    exit 98
+    ;;
+esac

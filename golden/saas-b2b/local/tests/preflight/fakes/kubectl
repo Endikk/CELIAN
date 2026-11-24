@@ -1,0 +1,72 @@
+#!/usr/bin/env bash
+# Simulated kubectl of the preflight tests P01 to P05. It answers only
+# "kubectl version --client" with JSON output, in the format of kubectl
+# 1.37.1 (spec 001, research RS-08); that call reads no kubeconfig and
+# contacts no server. Any other call would read a kubeconfig or reach a
+# cluster: it is logged as UNEXPECTED and fails.
+#
+# FAKE_KUBECTL_GIT_VERSION  clientVersion.gitVersion, default v1.37.1
+# FAKE_LOG                  file that receives one line per call
+set -euo pipefail
+
+log() {
+  if [ -n "${FAKE_LOG:-}" ]; then
+    printf '%s\n' "$1" >>"$FAKE_LOG"
+  fi
+}
+
+unexpected() {
+  log "UNEXPECTED kubectl $*"
+  printf 'fake kubectl: unexpected call: kubectl %s\n' "$*" >&2
+  exit 99
+}
+
+log "kubectl $*"
+
+has_version=0
+has_client=0
+has_json=0
+previous=""
+for arg in "$@"; do
+  case "$arg" in
+    version) has_version=1 ;;
+    --client | --client=true) has_client=1 ;;
+    --output=json | -o=json) has_json=1 ;;
+    -o | --output) ;;
+    json)
+      if [ "$previous" = -o ] || [ "$previous" = --output ]; then
+        has_json=1
+      else
+        unexpected "$@"
+      fi
+      ;;
+    *) unexpected "$@" ;;
+  esac
+  previous="$arg"
+done
+if [ "$has_version" -ne 1 ] || [ "$has_client" -ne 1 ] || [ "$has_json" -ne 1 ]; then
+  unexpected "$@"
+fi
+
+git_version="${FAKE_KUBECTL_GIT_VERSION-v1.37.1}"
+major=""
+minor=""
+pattern='^v([0-9]+)\.([0-9]+)\.'
+if [[ $git_version =~ $pattern ]]; then
+  major="${BASH_REMATCH[1]}"
+  minor="${BASH_REMATCH[2]}"
+fi
+printf '{\n'
+printf '  "clientVersion": {\n'
+printf '    "major": "%s",\n' "$major"
+printf '    "minor": "%s",\n' "$minor"
+printf '    "gitVersion": "%s",\n' "$git_version"
+printf '    "gitCommit": "f78e722310e50bcaca9276be22276d9e91d91308",\n'
+printf '    "gitTreeState": "clean",\n'
+printf '    "buildDate": "2026-09-23T17:06:22Z",\n'
+printf '    "goVersion": "go1.26.8",\n'
+printf '    "compiler": "gc",\n'
+printf '    "platform": "darwin/arm64"\n'
+printf '  },\n'
+printf '  "kustomizeVersion": "v5.8.1"\n'
+printf '}\n'
