@@ -1,5 +1,7 @@
+using System.Globalization;
 using System.Net;
 using System.Text;
+using Api.Notes;
 using static Api.Tests.Http;
 
 namespace Api.Tests;
@@ -7,6 +9,12 @@ namespace Api.Tests;
 /// <summary>POST /api/notes: validation on the server, 201 or 400 (contracts/http-api.md).</summary>
 public sealed class CreateNoteTests
 {
+    /// <summary>
+    /// Largest answer to a request full of unknown fields. Naming each of them
+    /// drew about 145 KB from a 16 KiB request (review [SECU] of step 3).
+    /// </summary>
+    private const int MaxProblemBytes = 1024;
+
     [Fact]
     public async Task Post_writes_the_note_and_answers_201_with_its_location()
     {
@@ -134,6 +142,49 @@ public sealed class CreateNoteTests
     }
 
     [Fact]
+    public async Task Post_answers_a_small_problem_to_a_body_full_of_unknown_fields()
+    {
+        await using var api = new ApiFactory();
+        using var client = api.CreateClient();
+
+        using var response = await PostJson(client, "/api/notes", ManyUnknownFields());
+
+        var errors = await ReadValidationProblem(response);
+        AssertSmall(await response.Content.ReadAsByteArrayAsync(Token));
+        Assert.Contains("f0", PropertyNames(errors));
+        Assert.Empty(api.Store.Inserted);
+    }
+
+    [Fact]
+    public async Task Post_answers_a_small_problem_to_a_long_unknown_field_name()
+    {
+        // 4000 emoji: a name of 16000 bytes, cut on a character boundary if at all.
+        await using var api = new ApiFactory();
+        using var client = api.CreateClient();
+        var name = string.Concat(Enumerable.Repeat("\U0001F600", 4000));
+
+        using var response = await PostJson(client, "/api/notes", $$"""{"body": "x", "{{name}}": 0}""");
+
+        var errors = await ReadValidationProblem(response);
+        AssertSmall(await response.Content.ReadAsByteArrayAsync(Token));
+        Assert.StartsWith("\U0001F600", Assert.Single(PropertyNames(errors)), StringComparison.Ordinal);
+        Assert.Empty(api.Store.Inserted);
+    }
+
+    [Fact]
+    public async Task Post_refuses_a_field_name_that_is_not_valid_Unicode()
+    {
+        await using var api = new ApiFactory();
+        using var client = api.CreateClient();
+
+        using var response = await PostJson(client, "/api/notes", """{"body": "x", "a\ud800b": 0}""");
+
+        var errors = await ReadValidationProblem(response);
+        Assert.NotEmpty(ErrorsFor(errors, Assert.Single(PropertyNames(errors))));
+        Assert.Empty(api.Store.Inserted);
+    }
+
+    [Fact]
     public async Task Post_refuses_body_given_twice()
     {
         await using var api = new ApiFactory();
@@ -206,4 +257,22 @@ public sealed class CreateNoteTests
         Assert.Equal("application/problem+json", ContentType(response)?.MediaType);
         Assert.Empty(api.Store.Inserted);
     }
+
+    /// <summary>{"body":"x","f0":0,"f1":0,...}: as many distinct fields as the 16 KiB limit holds.</summary>
+    private static string ManyUnknownFields()
+    {
+        const int roomForOneMoreField = 16;
+        var json = new StringBuilder("{\"body\":\"x\"");
+        for (var i = 0; json.Length + roomForOneMoreField <= NoteValidation.MaxRequestBytes; i++)
+        {
+            json.Append(",\"f").Append(i.ToString(CultureInfo.InvariantCulture)).Append("\":0");
+        }
+
+        return json.Append('}').ToString();
+    }
+
+    private static void AssertSmall(byte[] answer) =>
+        Assert.True(
+            answer.Length <= MaxProblemBytes,
+            $"The answer holds {answer.Length} bytes; at most {MaxProblemBytes} expected.");
 }
