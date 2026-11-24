@@ -6,13 +6,13 @@
 | Sujet | Moteur du cache du projet généré : image dans le cluster kind de la cible `local`, et variante de Memorystore sur `gcp` |
 | Statut | brouillon |
 | Ouvert le | 2026-11-21 |
-| Mis à jour le | 2026-11-23 |
+| Mis à jour le | 2026-11-24 |
 | Auteur | [BENCH] |
 | Relecteurs | [SECU] pour les licences et les CVE, [FINOPS] pour les coûts |
 | Périmètre | Projet généré sur PC (cluster kind, ADR-004) et projet généré sur GCP (Memorystore, ADR-008) |
 | Choix du PRD | Aucune ligne propre au cache. US-004 : le service de chaque brique vient du catalogue, par cible. Le brief (sections 5 et 6) prévoit Memorystore sur GCP et Valkey sur le PC |
 | ADR lié | À écrire par [ARCHI], après les mesures |
-| Verdict proposé | Provisoire, hors empreinte : O1, Valkey, 78 sur 90, devant Redis 7.2 (64). L'empreinte, notée sur 10 après les mesures, ne peut pas combler 14 points (section 7) |
+| Verdict proposé | Provisoire : O1, Valkey, 78 sur 90 hors empreinte, devant Redis 7.2 (64) ; 86 contre 72 sur 100 avec la lecture provisoire de l'empreinte. La série de mesure, interrompue par une mise en veille le 2026-11-24, est à relancer (section 4.4) |
 
 ## 1. Contexte
 
@@ -233,21 +233,21 @@ de passe dans le Secret par une variable d'environnement, jamais en argument.
 
 ### 4.2 Machine de mesure
 
-[BENCH] À relever au lancement de la série : le script écrit le moteur, ses
-ressources, l'hôte et l'horloge dans `versions.tsv`. Machine prévue : celle de
-BENCH-011, sous le verrou commun, après les séries de BENCH-012, de BENCH-013
-et de BENCH-011 qui passent avant celle-ci.
+[BENCH] Relevé le 2026-11-24 par `sysctl`, `sw_vers` et `docker info`, et par
+le script dans `versions.tsv`. C'est la machine de BENCH-011.
 
 | Élément | Valeur |
 | --- | --- |
-| Modèle | À relever |
-| Processeur | À relever |
-| Mémoire | À relever |
-| Système | À relever |
-| Moteur de conteneurs | À relever (`docker version`, `docker info`) |
-| Ressources allouées | À relever |
-| Versions mesurées | kind 0.33.0, `kindest/node:v1.36.4` figée par condensat ; O1 `valkey/valkey:9.1.4-alpine` ; O2 `redis:7.2.17-alpine`. Toutes figées par condensat dans le script |
-| Charge parasite | À relever ; le script note la charge et les clusters kind présents dans `load.tsv` |
+| Modèle | Apple Mac16,7 |
+| Processeur | Apple M4 Pro, 14 cœurs |
+| Mémoire | 24 Gio |
+| Système | macOS 27.2.1 (build 26B131) |
+| Moteur de conteneurs | OrbStack, Docker Engine 29.8.2, buildx 0.37.2, cgroup v2 (non libre, R-26) |
+| Ressources allouées | Machine virtuelle d'OrbStack : 14 CPU, 11,73 Gio (`docker info`) |
+| Versions mesurées | kind 0.33.0, `kindest/node:v1.36.4` figée par condensat, kubectl 1.37.1 ; O1 `valkey/valkey:9.1.4-alpine` ; O2 `redis:7.2.17-alpine`. Toutes figées par condensat dans le script ; au démarrage, chaque tag désignait encore le condensat figé (`tag-matches`) |
+| Alimentation | Secteur, capot ouvert, vérifiés au démarrage et avant chaque exécution ; `pmset -g log` relu à la fin de chaque exécution (`power.tsv`) |
+| Horloge | `gdate`, à la nanoseconde affichée |
+| Charge parasite | Applications de bureau ouvertes, sessions Claude Code. Le verrou `bench-lock-s4` empêche deux séries simultanées ; le script note la charge et les clusters kind présents dans `load.tsv` |
 
 [BENCH] Mise en œuvre, identique pour les deux options. Un Service `cache` et
 un Deployment d'une réplique, sans persistance (RS-11), écrits dans le script.
@@ -299,6 +299,14 @@ mot de passe par la variable `REDISCLI_AUTH`, que `redis-cli` lit et que
 8. Trois exécutions par option, entrelacées dans l'ordre nœud de base, O1,
    O2, avec 15 s de pause entre deux. Le script prend le verrou commun au
    démarrage et le rend à la fin, erreur comprise.
+9. Alimentation (règle posée après BENCH-012, contrôle repris du script de
+   BENCH-011) : le script refuse de démarrer, et refuse chaque exécution,
+   hors secteur ou capot fermé. Une exécution pendant laquelle
+   `pmset -g log` montre une entrée `Sleep`, ou qui finit hors secteur ou
+   capot fermé, est marquée invalide dans `power.tsv` et sort du résumé.
+   Pendant la série, le script tient `caffeinate -i -s`, qui empêche la
+   veille sur inactivité et, sur secteur, la veille du système ; fermer le
+   capot endort quand même le Mac.
 
 [BENCH] Pour refaire la mesure :
 
@@ -314,7 +322,11 @@ depuis est seulement noté. Il refuse de démarrer si le cluster
 `celian-bench-014` existe, et son `trap` n'est posé qu'après ces contrôles et
 le verrou : un refus ne supprime rien. Il passe shellcheck 0.11.0 et
 `bash -n` sous le bash 3.2 de macOS, et ses manifests rendus passent le hook
-`check-yaml` du dépôt, vérifiés le 2026-11-23. Il n'a jamais tourné.
+`check-yaml` du dépôt, vérifiés le 2026-11-23. Le test de fumée et la série 1
+ont tourné avec le commit `14a4384` (SHA-256
+`1426ddca5ecd877cfb0190ce3b1525d643b9d2307702c8ea86cdf1a5c1a8d1cb`), qui
+ajoute au commit d'ouverture le contrôle d'alimentation du point 9. La série
+suivante tournera avec le commit `1bcf41d` (section 4.4).
 
 [BENCH] Inventaire des commandes qui créent, modifient ou suppriment un
 conteneur ou un réseau, en tête du script pour la relecture [SECU] :
@@ -324,16 +336,76 @@ kind`, seulement si le script a créé ce réseau et qu'il est vide. Aucun
 `docker run`, `start`, `stop`, `restart`, `exec`, `cp` ni `create` : le
 redémarrage du nœud de BENCH-011 n'existe pas ici. Les autres appels à Docker
 lisent seulement : `ps`, `stats`, `manifest inspect`,
-`buildx imagetools inspect`, `network inspect`, `version`, `info`. Ni curl,
+`buildx imagetools inspect`, `network inspect`, `version`, `info`. Le
+contrôle d'alimentation ne fait que lire : `pmset -g ps`, `pmset -g log`,
+`ioreg -r -k AppleClamshellState`. Ni curl,
 ni wget, ni python, ni node, ni perl : l'horloge vient de `gdate` s'il est
 installé, sinon de `date +%s`, à la seconde, et le choix est noté dans
 `versions.tsv`.
 
 ### 4.4 Résultats
 
-[BENCH] Aucune mesure dans cette passe : le verrou de mesure est pris par
-BENCH-012, puis BENCH-013 et une série de BENCH-011 passent avant. Aucun test
-de fumée n'a tourné.
+[BENCH] État au 2026-11-24 : test de fumée réussi, série interrompue par une
+mise en veille, série à relancer. Le SHA-256 de la section 4.1 a été vérifié
+le 2026-11-24 à 00:42:48 UTC, avant la première mesure : il vaut toujours
+`67a35b6b…96f6`.
+
+[BENCH] Volumes au registre (M4), lus par le script le 2026-11-24, sans
+tirage, en Mo compressés de 10⁶ octets. Cette lecture ne dépend ni de la
+machine ni de l'alimentation : elle compte pour la note.
+
+| Image | amd64 (noté) | arm64 | À 10 Mbit/s, amd64 |
+| --- | --- | --- | --- |
+| O1 `valkey/valkey:9.1.4-alpine` | 18,8 | 19,3 | 15,1 s |
+| O2 `redis:7.2.17-alpine` | 16,0 | 16,5 | 12,8 s |
+| Variante `valkey/valkey:9.1.4-trixie` (sensibilité) | 44,8 | 45,2 | 35,9 s |
+| Variante `redis:7.2.17-bookworm` (sensibilité) | 43,2 | 43,1 | 34,6 s |
+
+[BENCH] Test de fumée, le 2026-11-24 de 00:44:48 à 00:50:59 UTC, verrou
+`bench-lock-s4` pris, une exécution par option, `IDLE_WAIT=30` au lieu de 120
+(dossier `smoke-1` du dossier de travail de [BENCH]). Les trois exécutions sont
+valides : secteur, capot ouvert, aucune entrée `Sleep`. Résultats indicatifs,
+non retenus pour la note (une exécution, repos raccourci) :
+
+| Mesure | O1. Valkey | O2. Redis 7.2 | Nœud de base |
+| --- | --- | --- | --- |
+| M1, « prêt » | 5,7 s | 4,5 s | sans objet |
+| Nœud au repos | 544,3 Mio | 576,4 Mio | 577,8 Mio |
+| Somme des pods de la couche | 4,4 Mio | 4,2 Mio | sans objet |
+| M3, CPU des pods | 0,3 % | 0,2 % | sans objet |
+| M5, image tirée à la création | oui | oui | sans objet |
+| M6, sans mot de passe refusé ; `SET` et `GET` ; mot de passe dans une ligne de commande | oui ; oui ; 0 | oui ; oui ; 0 | sans objet |
+| M7, retour à « prêt » | 2,2 s | 2,3 s | sans objet |
+| M8, version servie | valkey 9.1.4 | redis 7.2.17 | sans objet |
+
+[BENCH] Le nœud avec Valkey pèse moins que le nœud de base dans ce test :
+c'est le bruit du nœud, que BENCH-011 a mesuré jusqu'à 58 Mio d'une
+exécution à l'autre, alors que la couche ne pèse que 4 Mio par ses pods. M2
+n'aura de sens qu'en médiane sur trois exécutions, et restera loin du seuil
+de 512 Mio.
+
+[BENCH] Série 1, lancée le 2026-11-24 à 00:51:53 UTC avec le script du commit
+`14a4384`, verrou pris (dossier `series-1`). Le nœud de base, exécution 1, est
+valide : 620,9 Mio au repos. L'exécution 1 de Valkey atteint « prêt » en
+4,6 s, et M6 passe (refus sans mot de passe, `SET` et `GET`, 0 ligne de
+commande). À 00:57:58 UTC, pendant le repos, `pmset -g log` note « Entering
+Sleep state due to 'Clamshell Sleep' […] Using Batt (Charge:80%) » : le capot
+est fermé et le Mac sur batterie. La machine alterne ensuite veille et
+réveils de maintenance. Le script reprend pendant ces réveils, échoue sur
+« Unable to connect to the server: net/http: TLS handshake timeout », puis
+supprime le cluster et rend le verrou à 06:47:40 UTC. L'exécution de Valkey
+est invalide, et la série n'a pas atteint Redis. Aucun résultat de cette
+série n'est retenu, sauf M4, qui ne dépend pas de la machine.
+
+[BENCH] Suite donnée. Le script du commit `1bcf41d` (SHA-256
+`16daad12e24371de41ffdeff19cf518cc0200820045f1f945486939ee79bc62f`) garde le
+Mac éveillé sur secteur pendant la série (`caffeinate -i -s`), et écrit la
+ligne de `power.tsv` d'une exécution interrompue. Le réglage `sleep` du Mac
+sur secteur vaut 1 minute (`pmset -g custom`) : sans cette assertion, une
+veille sur inactivité restait possible. Elle n'empêche pas la veille capot
+fermé [S46]. Le 2026-11-24 à 19:19:02 UTC, le Mac était sur batterie à 80 %, et le
+script a refusé de démarrer, sans prendre le verrou ni créer de cluster. La
+série se relance une fois le Mac sur secteur, capot ouvert.
 
 [BENCH] Relevés du SHA-256 de la section 4.1, faits dans le dossier de
 travail de [BENCH] et déclarés ici, faute de témoin tiers :
@@ -417,14 +489,19 @@ option ferait baisser sa note.
 
 ### 5.6 Empreinte sur PC (RAM, CPU, démarrage), poids 10
 
-[BENCH] Non notée : les mesures M1 à M9 n'ont pas tourné. La règle est celle
-de `TEMPLATE.md`, avec les seuils de la section 4.1, hachés avant toute
-lecture de taille d'image.
+[BENCH] Pas encore notée : seul M4 est acquis, et la série de trois
+exécutions doit encore tourner (section 4.4). La règle est celle de
+`TEMPLATE.md`, avec les seuils de la section 4.1, hachés avant toute lecture
+de taille d'image. Lecture provisoire, à confirmer par la série :
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| O1. Valkey | en attente | en attente | Mesures à lancer après BENCH-012, BENCH-013 et la série de BENCH-011 | [M1], [M2], [M4], [M5] à venir |
-| O2. Redis 7.2 | en attente | en attente | Idem | Idem |
+| O1. Valkey | provisoire 4/5 | provisoire 8 | Seuil 1 tenu : 18,8 Mo en amd64, 16,7 % du seuil de 112,5 Mo (mesuré). Seuil 2 franchi au test de fumée : l'image est tirée à chaque création. Seuils 3 et 4 loin au test de fumée : 5,7 s, et 4,4 Mio pour les pods de la couche | [M4] ; test de fumée pour M1, M2 et M5 |
+| O2. Redis 7.2 | provisoire 4/5 | provisoire 8 | Seuil 1 tenu : 16,0 Mo en amd64, 14,2 % du seuil (mesuré). Seuil 2 franchi au test de fumée. Seuils 3 et 4 loin : 4,5 s et 4,2 Mio | [M4] ; test de fumée pour M1, M2 et M5 |
+
+[BENCH] Si la série confirme le test de fumée, le critère ne départage pas
+les options : chacune perd le seul cran du retéléchargement, commun à toute
+image que tire un nœud neuf sans miroir.
 
 ### 5.7 Portabilité multi-cloud, poids 10
 
@@ -468,8 +545,9 @@ le coût de sortie de la ligne 7.2 est déjà compté en licence (5.1).
 
 ## 6. Grille pondérée
 
-[BENCH] Grille provisoire du 2026-11-23, sur 90 ; l'empreinte complètera le
-total sur 100.
+[BENCH] Grille provisoire du 2026-11-24, sur 90 ; l'empreinte complètera le
+total sur 100 après la série. Avec la lecture provisoire de la section 5.6,
+4/5 pour chaque option, les totaux seraient 86 et 72 sur 100.
 
 | Critère | Poids | O1. Valkey | O2. Redis 7.2 |
 | --- | --- | --- | --- |
@@ -489,7 +567,8 @@ total sur 100.
 
 [BENCH] Proposition provisoire : O1, Valkey, à 78 sur 90, devant Redis 7.2 à
 64. L'écart de 14 points ne peut pas s'inverser par l'empreinte, qui vaut au
-plus 10 points.
+plus 10 points, et M4 en fixe déjà un cran pour chaque option : seuil 1 tenu
+par les deux. Avec la lecture provisoire de l'empreinte, 86 contre 72 sur 100.
 
 [BENCH] Pourquoi. L'écart vient de la licence (6 points) et de la gouvernance
 (9 points), moins la maturité (3 points rendus à Redis), plus l'activité
@@ -508,7 +587,15 @@ dans le même sens que la grille.
 | Gouvernance de O2 à 3 (127 auteurs) | 78 | 67 | O1 | Aucune contredite : jugement |
 | Les deux à la fois, et maturité de O1 à 3 | 75 | 70 | O1 | Aucune contredite : trois jugements |
 | O2 en Redis 8.12 sous AGPLv3 | 78 | parité perdue face à Memorystore (7.2) | O1 | Contredit la condition 3 de la section 2 |
-| Empreinte : O1 à 0/5, O2 à 5/5 | 78 | 74 | O1 | Cas extrême, sans mesure |
+| Empreinte provisoire, 4/5 pour chacune (section 5.6) | 86 sur 100 | 72 sur 100 | O1 | Aucune contredite ; série à faire |
+| Empreinte au pire pour O1 : seuil 1 tenu (mesuré), seuils 2 à 4 franchis, 2/5 ; O2 à 5/5 | 82 sur 100 | 74 sur 100 | O1 | Cas extrême, contraire au test de fumée |
+| Miroir zot de l'ADR-011 : seuil 2 lu comme un retéléchargement depuis Internet ; docker.io servi pour les deux | 88 sur 100 | 74 sur 100 | O1 | Contredit la lettre du seuil 2, mesuré sans miroir |
+| Volume cumulé avec la plate-forme de base (505,8 Mo, BENCH-011) contre 500 Mo : 524,6 et 521,8 Mo | 86 sur 100 | 72 sur 100 | O1 | Contredit la deuxième règle de la GATE 1 ; les deux sont au-dessus, même effet |
+
+[BENCH] Cumul avec le premier `task up` (R-04), pour [FINOPS]. La stack de
+BENCH-005, comptée dans R-04, contient déjà `valkey/valkey:9.1.4-alpine`
+(18,8 Mo en amd64) : O1 ne change rien au volume du premier lancement, et O2
+le réduirait de 2,8 Mo (16,0 au lieu de 18,8).
 
 [BENCH] Gouvernance : l'option proposée ne dépend pas d'un éditeur unique.
 Sur `gcp`, Memorystore reste un service de Google seul, comme toute cible
@@ -557,8 +644,9 @@ sources [S1], [S3], [S6] ; ligne `gcp` en `managed`, Memorystore for Valkey
 
 | Limite | Effet possible sur le verdict | Ce qui la lèverait |
 | --- | --- | --- |
-| Aucune mesure : empreinte non notée, notes de M6 et M7 non confirmées | Total sur 90 seulement ; l'empreinte ne peut pas inverser l'ordre (section 7) | La série du script, après BENCH-012, BENCH-013 et BENCH-011 |
-| Script jamais lancé | Une hypothèse fausse (droits sur `/etc/cache`, `tr` de busybox, lecture du Secret par le GID 1000) arrêterait la série | Un test de fumée avant la série, seuils déjà hachés |
+| Série interrompue le 2026-11-24 par une veille capot fermé, sur batterie ; seuls M4 et un test de fumée d'une exécution sont acquis | Empreinte notée provisoirement ; elle ne peut pas inverser l'ordre (section 7) | Relancer la série, Mac sur secteur et capot ouvert, script du commit `1bcf41d` |
+| Test de fumée à repos raccourci (30 s au lieu de 120) | Mémoire et CPU au repos relevés plus tôt que le protocole | La série, au protocole de la section 4.3 |
+| Bruit du nœud plus grand que la couche (4 Mio par les pods) | M2 au nœud peut sortir négatif ou au hasard ; aucune incidence sur la note tant qu'il reste loin de 512 Mio | Médianes de trois exécutions ; somme des pods en sensibilité |
 | Condensat de O1 lu par un outil qui résume les pages | Une erreur de recopie | Recoupé avec le condensat de BENCH-005 ; le script refuse un condensat absent du registre |
 | Seuils écrits le 2026-11-21, relevés le 2026-11-22 puis le 2026-11-23, après une coupure | L'antériorité des seuils repose sur la déclaration de [BENCH] | Pousser la branche, qui date le texte chez GitHub |
 | Volumes de Valkey connus avant les seuils (BENCH-005, ADR-011) | Seuils taillés sur mesure | Seuils repris de BENCH-011 sans changement (section 4.1) |
@@ -622,6 +710,7 @@ exclus.
 | S43 | [ADR-008](../adr/ADR-008-modules-opentofu-gcp.md), conditions 2, 3 et 6, portée | 2026-11-21 | Socle avec accès privé aux services et Memorystore for Redis en tier basique ; chaîne AUTH en clair dans l'état ; moteur du cache hors décision | Oui, interne |
 | S44 | Branche `docs/plan-golden-repo`, commit `13be333d` : `specs/001-golden-repo-saas-b2b/research.md` (RS-10, RS-11), `contracts/secrets.md` | 2026-11-21 | Valkey en Deployment sans persistance, image de BENCH-005 ; `cache-auth`, `Opaque`, clé `password` ; producteur `gcp` en attente de ce benchmark | Oui, interne, non fusionné |
 | S45 | `specs/001-golden-repo-saas-b2b/spec.md` | 2026-11-21 | FR-001 et FR-009 : la base et le cache démarrent par une commande ; l'exemple lit et écrit dans le cache | Oui, interne |
+| S46 | `man caffeinate` et `pmset -g custom`, sur la machine de mesure | 2026-11-24 | `-i` empêche la veille sur inactivité, `-s` la veille du système sur secteur seulement, `-w` libère l'assertion à la fin du processus ; réglage `sleep` à 1 minute sur secteur | Oui, documentation du système |
 
 ## 10. Relectures
 
