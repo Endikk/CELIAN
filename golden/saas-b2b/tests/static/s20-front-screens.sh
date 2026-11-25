@@ -16,10 +16,26 @@
 # a literal fails the check. Comment lines are skipped.
 set -euo pipefail
 
-root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+if [ "$#" -gt 1 ]; then
+  echo "usage: s20-front-screens.sh [front folder]" >&2
+  exit 2
+fi
+
+here="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+root="$(CDPATH='' cd -- "$here/../.." && pwd)"
 CDPATH='' cd -- "$root"
 
-front="src/front"
+# Without an argument the control reads the front of the golden repo, runs
+# the test cases of tests/static/s20-front-cases/ and the tests of its policy.
+# With one, it reads that front folder only: the test cases use it.
+if [ "$#" -eq 1 ]; then
+  front="$(CDPATH='' cd -- "$1" && pwd)"
+  run_tests=0
+else
+  front="src/front"
+  run_tests=1
+  bash "$here/s20-front-cases/cases.sh"
+fi
 sources="$front/src"
 routes_file="tests/static/s20-contract-routes.yaml"
 client="$sources/api.ts"
@@ -124,5 +140,7 @@ for list in screens html_entries calls stray_api forbidden; do
   fi
 done
 
-conftest verify --no-color --policy policy --namespace front_screens
+if [ "$run_tests" -eq 1 ]; then
+  conftest verify --no-color --policy policy --namespace front_screens
+fi
 conftest test --no-color --combine --policy policy --namespace front_screens "$front/package.json" "$routes_file" "$facts"

@@ -23,6 +23,7 @@ good_facts := {
 	"calls": ["GET /api/notes", "GET /api/notes/{id}", "POST /api/notes"],
 	"stray_api": [],
 	"forbidden": [],
+	"imports": ["react src/main.tsx:2", "react-dom/client src/main.tsx:3", "react/jsx-runtime src/a.tsx:1"],
 }
 
 facts_file(facts) := {"path": "/tmp/s20.abc/s20-front-facts.yaml", "contents": facts}
@@ -98,6 +99,26 @@ test_s20_rejects_a_router_dependency if {
 
 test_s20_rejects_a_front_without_react_dom if {
 	denied_with(files(good_facts, {"react": "19.3.1"}), "the front needs [\"react\", \"react-dom\"] only")
+}
+
+test_s20_rejects_an_import_of_a_dev_dependency if {
+	facts := object.union(good_facts, {"imports": array.concat(good_facts.imports, ["vite src/main.tsx:9"])})
+	denied_with(files(facts, react), "src/main.tsx:9 imports vite, which is not in the closed list")
+}
+
+test_s20_rejects_an_import_of_a_scoped_package if {
+	facts := object.union(good_facts, {"imports": ["@testing-library/react src/api.ts:1"]})
+	denied_with(files(facts, react), "src/api.ts:1 imports @testing-library/react")
+}
+
+test_s20_rejects_a_react_subpath_outside_the_list if {
+	facts := object.union(good_facts, {"imports": ["react-dom/server src/api.ts:1"]})
+	denied_with(files(facts, react), "imports react-dom/server")
+}
+
+test_s20_accepts_facts_without_imports if {
+	facts := object.remove(good_facts, ["imports"])
+	accepted(files(facts, react))
 }
 
 test_s20_rejects_missing_inputs if {
