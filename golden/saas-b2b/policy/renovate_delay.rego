@@ -5,7 +5,8 @@
 # - an update from a registry that Renovate cannot date waits on the
 #   Dependency Dashboard until a person ticks it (ADR-016);
 # - nothing turns updates off, security fixes included (principle VI,
-#   ADR-016);
+#   ADR-016), and nothing changes what Renovate reads or where it looks a
+#   package up;
 # - entries are written in packageRules at the top only, where the checks
 #   of both packages read them.
 #
@@ -167,6 +168,56 @@ deny contains msg if {
 	count(path) > 0
 	path[count(path) - 1] in legacy_container_keys
 	msg := sprintf("%s: %v is a legacy key that Renovate moves into packageRules, out of reach of the checks of the entries; entries are written in packageRules only", [label, path])
+}
+
+# Keys that change what Renovate reads, or where it looks a package up. Any
+# entry, manager or the top can set them, and each can stop an update,
+# security fixes included, without a word in the file:
+# - overridePackageName, overrideDatasource and overrideDepName make an entry
+#   look up another package (lib/util/package-rules/index.ts, lines 104 to
+#   130, Renovate 44.247.1);
+# - registryUrls and defaultRegistryUrls name the registries of the lookup
+#   (lib/config/options/index.ts, lines 1636 to 1670);
+# - followTag keeps only the version under a tag, and no update at all when
+#   the datasource gives no such tag
+#   (lib/workers/repository/process/lookup/index.ts, lines 249 to 267), as
+#   for Docker images, whose result holds no tags
+#   (lib/modules/datasource/docker/index.ts, lines 1282 to 1316);
+# - ignoreDeps skips the names it lists
+#   (lib/workers/repository/process/fetch.ts, line 127);
+# - enabledManagers turns off every manager it does not list, includePaths
+#   skips the files outside its paths, and ignorePaths the files inside them
+#   (lib/config/options/index.ts, lines 1534 to 1570); ignoreNodeModules
+#   becomes ignorePaths
+#   (lib/config/migrations/custom/ignore-node-modules-migration.ts, line 8).
+# Neither renovate.json sets them, apart from the ignorePaths of the regex
+# object, which package renovate_rules fixes to the letter. Of the presets of
+# extends, only :ignoreModulesAndTests sets one, ignorePaths at the top and
+# for nuget (lib/config/presets/internal/default.preset.ts, lines 303 to
+# 325); S23 reads the file, not the presets.
+lookup_keys := {
+	"overridePackageName",
+	"overrideDatasource",
+	"overrideDepName",
+	"registryUrls",
+	"defaultRegistryUrls",
+	"followTag",
+	"ignoreDeps",
+	"enabledManagers",
+	"includePaths",
+	"ignorePaths",
+	"ignoreNodeModules",
+}
+
+allowed_lookup_path(path) if path == ["regex", "ignorePaths"]
+
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, _])
+	count(path) > 0
+	path[count(path) - 1] in lookup_keys
+	not allowed_lookup_path(path)
+	msg := sprintf("%s: %v changes what Renovate reads, or where it looks a package up; S23 refuses the key everywhere, apart from the ignorePaths of the regex object, because it can stop an update, security fixes included", [label_undated, path])
 }
 
 # Renovate merges each entry of a nested packageRules into its parent, and
