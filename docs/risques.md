@@ -1,6 +1,6 @@
 # Registre des risques
 
-Tenu par le DSI. Mis à jour le 24/11/2026. Probabilité et impact sont notés
+Tenu par le DSI. Mis à jour le 25/11/2026. Probabilité et impact sont notés
 faible, moyen ou fort : ce sont des jugements, pas des mesures. Un risque se
 ferme quand sa mitigation est en place et vérifiée.
 
@@ -46,6 +46,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-36 | Failles connues sans paquet associé, invisibles aux scanners | Moyenne | Moyen | SECU, OPS | Ouvert |
 | R-37 | Parcours de connexion différent entre le PC et GCP | Moyenne | Moyen | DEV, QA | Ouvert |
 | R-38 | Mise à jour des images sans date suspendue à une personne | Moyenne | Moyen, fort pour l'image d'exécution de l'API | SECU, DSI | Ouvert |
+| R-40 | Scanner de secrets du projet généré en maintenance | Forte | Moyen | SECU, DSI | Ouvert |
 
 ## Détail
 
@@ -1020,17 +1021,18 @@ Ouvert le 24/11/2026 avec l'ADR-016, sur proposition d'[ARCHI]. Renovate ne
 connaît la date de publication d'une image que sur Docker Hub. Pour ghcr.io,
 quay.io et mcr.microsoft.com, Lucas a choisi l'approbation manuelle : chaque
 mise à jour attend qu'il coche sa case sur le tableau de bord de Renovate,
-après avoir lu la date amont du condensat. Cinq images sont concernées :
-gitleaks, zot, les contrôleurs de Flux, Keycloak et les images .NET de l'API.
-Une absence retarde un correctif. Une date mal lue fait entrer un condensat de
-moins de 7 jours. Aucune alerte automatique ne couvre ces images : ni
-`osvVulnerabilityAlerts` ni la base d'avis de GitHub ne connaissent les
-images.
+après avoir lu la date amont du condensat. Quatre images sont concernées :
+zot, les contrôleurs de Flux, Keycloak et les images .NET de l'API. gitleaks
+en est sorti le 25/11/2026 : Renovate le date sur Docker Hub, et l'image se tire de ghcr.io par le même condensat
+(ADR-016, question 3). Une absence retarde un correctif. Une date mal lue
+fait entrer un condensat de moins de 7 jours. Aucune alerte automatique ne
+couvre ces images : ni `osvVulnerabilityAlerts` ni la base d'avis de GitHub
+ne connaissent les images.
 
 Probabilité moyenne : Keycloak a publié trois condensats de 26.8.2 en dix
 jours, et mcr.microsoft.com modifie ses tags après leur création. Impact
-moyen, fort pour l'image d'exécution de l'API, la seule des cinq qui part sur
-GKE.
+moyen, fort pour l'image d'exécution de l'API, la seule des quatre qui part
+sur GKE.
 
 Mitigation :
 
@@ -1045,7 +1047,38 @@ Mitigation :
   révoqué (ADR-016, conditions 3 et 5 ; R-07) ; règles `deny` sur les formes
   courantes de `gh issue edit`, des `gh api` en `PATCH` et des mutations
   GraphQL, filtre de motifs en appoint ;
-- copie de Docker Hub au cas par cas, gitleaks d'abord, dans une PR à part ;
+- copie de Docker Hub au cas par cas : faite pour gitleaks le 25/11/2026,
+  Keycloak attend l'étape 15 (ADR-016, question 3) ;
 - relecture de la dérogation au plus tard le 2027-02-24, et à la fermeture de
   chacun des tickets Renovate 38656, 39064 et 38572 ; le risque se ferme avec
   le dernier registre levé.
+
+### R-40. Scanner de secrets du projet généré en maintenance
+
+Ouvert le 25/11/2026 par [OPS], en préparant le passage de gitleaks à Docker
+Hub (ADR-016, question 3). Depuis le 21/05/2026, le README de gitleaks
+annonce : « Gitleaks is feature complete… Future releases will be security
+patches only », et son auteur passe à Betterleaks. Le principe VI range
+« projet archivé ou en maintenance » parmi les critères éliminatoires.
+gitleaks n'a jamais été comparé : il est entré à la phase 0 pour la CI de
+CELIAN, puis a été recopié dans le golden repo (workflow `secrets.yml` et hook
+pre-commit). Chaque projet généré en hérite. Relevé par [SECU] le
+25/11/2026 : aucune release depuis v8.30.1, publiée le 21/03/2026 ; aucun
+avis de sécurité publié ; depuis mai, `master` ne reçoit que des montées
+d'actions. Le critère « aucune release depuis 12 mois » du principe VI tombe
+le 21/03/2027 si rien ne sort d'ici là.
+
+Probabilité forte : le statut est annoncé par l'auteur. Impact moyen : les
+correctifs de sécurité sont promis, mais aucun n'est sorti depuis
+l'annonce ; les nouveaux formats de secrets ne seront plus détectés, et le
+principe IX repose sur ce scanner.
+
+Mitigation : gitleaks garde son rôle tant qu'un benchmark n'a pas tranché ;
+daté par Renovate sur Docker Hub et tiré de ghcr.io par le même condensat
+(ADR-016, question 3), il reçoit ses correctifs avec le délai de 7 jours ;
+à la lecture mensuelle des avis, [SECU] compare la dernière release GitHub au
+dernier tag de Docker Hub, pour voir une release que Renovate ne verrait
+pas ; un benchmark des scanners de secrets (gitleaks, Betterleaks,
+TruffleHog, Kingfisher au moins), ouvert après le golden repo et avant la
+mise en template de la phase 3 (décision de Lucas du 25/11/2026), et au plus
+tard avant le 21/03/2027.
