@@ -53,7 +53,7 @@ targets:
       body: Google
       detail: Implémentation de Gateway API par Google pour Cloud Load Balancing, fournie par GKE.
     status: active
-    verified_on: "2026-11-20"
+    verified_on: "2026-11-25"
     standards: [gateway-api]
     decisions:
       adr: [ADR-005]
@@ -61,13 +61,15 @@ targets:
       - url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/gateway-api
         read_on: "2026-11-20"
         establishes: Contrôleur Gateway de GKE, « Google's implementation of the Gateway API for Cloud Load Balancing » ; les deux contrôleurs, mono et multi-cluster, en GA.
+      - url: https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/container_cluster.html.markdown
+        read_on: "2026-11-25"
+        establishes: Bloc gateway_api_config de google_container_cluster, argument channel obligatoire, valeurs CHANNEL_DISABLED, CHANNEL_EXPERIMENTAL ou CHANNEL_STANDARD (provider google 8.12.0).
     pending:
       - topic: gateway-class
         owner: OPS
-        note: Classe GKE à fixer avec FINOPS ; gke-l7-global-external-managed a servi dans BENCH-004.
-      - topic: gateway-api-activation
-        owner: OPS
-        note: Activation de Gateway API sur le cluster dans la couche OpenTofu de l'ADR-008 ; l'équivalent de --gateway-api=standard n'est pas vérifié.
+        note: Classe GKE à fixer avec FINOPS ; gke-l7-global-external-managed a servi dans BENCH-004. La couche gcp du golden repo la laisse aux manifests de l'étape 14.
     notes: >-
-      Chaque Gateway crée sur GKE un équilibreur de charge facturé, hors de
-      l'état OpenTofu : son application relève du principe X (ADR-005).
+      Activation dans la couche OpenTofu : gateway_api_config avec channel =
+      CHANNEL_STANDARD (RS-16). Chaque Gateway crée sur GKE un équilibreur de
+      charge facturé, hors de l'état OpenTofu : son application relève du
+      principe X (ADR-005).

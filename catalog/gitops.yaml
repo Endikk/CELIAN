@@ -54,12 +54,18 @@ targets:
       body: Google
       detail: Service GitOps inclus dans GKE, sans GKE Enterprise depuis la version 1.22.0 du 2025-09-02.
     status: active
-    verified_on: "2026-11-20"
+    verified_on: "2026-11-25"
     standards: [kubernetes-api]
     decisions:
       adr: [ADR-010]
       bench: [BENCH-009]
     sources:
+      - url: https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/container_cluster.html.markdown
+        read_on: "2026-11-25"
+        establishes: Bloc fleet de google_container_cluster (project) ; attributs fleet.0.membership_id et fleet.0.membership_location pour google_gke_hub_feature_membership (provider google 8.12.0).
+      - url: https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/gke_hub_feature_membership.html.markdown
+        read_on: "2026-11-25"
+        establishes: Bloc configmanagement avec version, management et config_sync ; MANAGEMENT_MANUAL ou MANAGEMENT_UNSPECIFIED coupent les mises à jour automatiques ; config_sync.enabled à true pour installer Config Sync (provider google 8.12.0).
       - url: https://docs.cloud.google.com/kubernetes-engine/config-sync/docs/overview
         read_on: "2026-11-20"
         establishes: « Config Sync is a GitOps service included with Google Kubernetes Engine (GKE) » ; prix renvoyé à la grille de GKE.
@@ -70,12 +76,12 @@ targets:
         read_on: "2026-11-20"
         establishes: 1.25.2 le 2026-11-09 ; 1.22.0 du 2025-09-02, plus besoin de GKE Enterprise ; 1.21.0 du 2025-05-01, mises à jour automatiques retirées.
     pending:
-      - topic: fleet-opentofu
+      - topic: configmanagement-api
         owner: OPS
-        note: Inscription du cluster dans la flotte et activation de Config Sync dans la couche OpenTofu, ressources non vérifiées.
-      - topic: version-pinning
+        note: API de service de la fonction de flotte configmanagement, qu'aucune page lue ne nomme ; la fonction l'active seule (RS-16).
+      - topic: metrics-export
         owner: OPS
-        note: Mécanisme qui fige la version de Config Sync dans la couche gcp, non lu (R-32).
+        note: Coupure de l'export des métriques de Config Sync (ADR-010, condition 7), aucun attribut de config_sync ne la porte en 8.12.0, à lire sur GKE.
       - topic: x86-nodes
         owner: OPS
         note: Garantie de nœuds x86 pour Config Sync en Autopilot, non vérifiée.
@@ -83,7 +89,8 @@ targets:
         owner: FINOPS
         note: Facturation des pods de Config Sync en Autopilot (ADR-010, question 5).
     notes: >-
-      La version de Config Sync se fige dans la couche gcp du blueprint et
-      monte par une PR qui passe la matrice (ADR-010, R-32) ; elle n'est pas
-      tenue ici. Les pending restent ouverts jusqu'à l'essai sur GKE de la
-      condition 7 de l'ADR-010.
+      Flotte : bloc fleet du cluster, puis google_gke_hub_feature et
+      google_gke_hub_feature_membership. Version figée par configmanagement
+      version avec management = MANAGEMENT_MANUAL, montée par une PR qui passe
+      la matrice (ADR-010, R-32) : elle n'est pas tenue ici. Les pending
+      restent ouverts jusqu'à l'essai sur GKE (condition 7).
