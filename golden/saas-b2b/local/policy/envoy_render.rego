@@ -12,16 +12,22 @@
 #   controller included;
 # - the ratelimit image, which the chart names by tag, never runs: the
 #   configuration has no rateLimit, or the image is pinned by digest;
-# - the render of gateway-helm holds the 17 objects of the frozen list, by
-#   kind and name, and no more; no binding goes to the ClusterRole
+# - the render of gateway-helm holds the 21 objects of the frozen list, by
+#   kind, namespace and name, and no more; no binding goes to the ClusterRole
 #   cluster-admin, and no Role nor ClusterRole of the render grants the
 #   verb *: a new release that adds an object or a right shows in the review;
+# - the controller watches the namespaces of the project alone, its own and
+#   the one of the application (provider.kubernetes.watch, type Namespaces;
+#   ADR-005, complement of 2026-11-25): no ClusterRole of the render grants
+#   a right on Secrets or pods, and every namespaced object of the render
+#   lives in one of these two namespaces;
 # - the namespace envoy-gateway-system enforces Pod Security, at baseline or
 #   restricted;
 # - the controller image and both charts come from one release, the one
 #   local/tasks/local.yml names, and the render says the same chart.
 #
-# Input: the three vendored files and local/platform/namespace.yaml given to
+# Input: the three vendored files, local/platform/namespace.yaml and the
+# namespace of the application, k8s/base/namespace.yaml, given to
 # `conftest test --combine`, one entry per YAML document with its `path` and
 # parsed `contents` (research RS-18). Data: `envoy_gateway`, the three
 # references of local/tasks/local.yml
@@ -38,6 +44,10 @@ crds_render_file := `(^|/)local/vendor/envoy-gateway/gateway-crds-helm\.yaml$`
 helm_render_file := `(^|/)local/vendor/envoy-gateway/gateway-helm\.yaml$`
 
 namespace_file := `(^|/)local/platform/namespace\.yaml$`
+
+app_namespace_file := `(^|/)k8s/base/namespace\.yaml$`
+
+controller_namespace := "envoy-gateway-system"
 
 gateway_api_groups := {"gateway.networking.k8s.io", "gateway.networking.x-k8s.io"}
 
@@ -81,7 +91,7 @@ documents(pattern) := [doc |
 ]
 
 deny contains msg if {
-	some pattern in [gateway_api_file, crds_render_file, helm_render_file, namespace_file]
+	some pattern in [gateway_api_file, crds_render_file, helm_render_file, namespace_file, app_namespace_file]
 	count(documents(pattern)) == 0
 	msg := sprintf("%s: no document of a file matching %s among the checked files", [label, pattern])
 }
@@ -224,49 +234,138 @@ deny contains msg if {
 	msg := sprintf("%s: no object of the render of gateway-helm carries the label helm.sh/chart", [label])
 }
 
-# The objects of the render of gateway-helm of release v1.10.0, by kind and
-# name: 17 documents. A new release that adds, drops or renames one fails
-# here until the list is read again (SECU review of step 7).
+# The objects of the render of gateway-helm of release v1.10.0, rendered
+# with the watch of the controller (ADR-005, complement of 2026-11-25), by
+# kind, namespace and name: 21 documents. A new release that adds, drops,
+# renames or moves one fails here until the list is read again (SECU review
+# of step 7). The watch adds a Role and a RoleBinding in each namespace it
+# names, and leaves the ClusterRole with the cluster-scoped rights alone.
 frozen_objects := {
 	"ClusterRole/eg-gateway-helm-certgen:envoy-gateway-system",
 	"ClusterRole/eg-gateway-helm-envoy-gateway-role",
 	"ClusterRoleBinding/eg-gateway-helm-certgen:envoy-gateway-system",
 	"ClusterRoleBinding/eg-gateway-helm-envoy-gateway-rolebinding",
-	"ConfigMap/envoy-gateway-config",
-	"Deployment/envoy-gateway",
-	"Job/eg-gateway-helm-certgen",
+	"ConfigMap/envoy-gateway-system/envoy-gateway-config",
+	"Deployment/envoy-gateway-system/envoy-gateway",
+	"Job/envoy-gateway-system/eg-gateway-helm-certgen",
 	"MutatingWebhookConfiguration/envoy-gateway-topology-injector.envoy-gateway-system",
-	"Role/eg-gateway-helm-certgen",
-	"Role/eg-gateway-helm-infra-manager",
-	"Role/eg-gateway-helm-leader-election-role",
-	"RoleBinding/eg-gateway-helm-certgen",
-	"RoleBinding/eg-gateway-helm-infra-manager",
-	"RoleBinding/eg-gateway-helm-leader-election-rolebinding",
-	"Service/envoy-gateway",
-	"ServiceAccount/eg-gateway-helm-certgen",
-	"ServiceAccount/envoy-gateway",
+	"Role/envoy-gateway-system/eg-gateway-helm-certgen",
+	"Role/envoy-gateway-system/eg-gateway-helm-envoy-gateway-role",
+	"Role/envoy-gateway-system/eg-gateway-helm-infra-manager",
+	"Role/envoy-gateway-system/eg-gateway-helm-leader-election-role",
+	"Role/saas-b2b/eg-gateway-helm-envoy-gateway-role",
+	"RoleBinding/envoy-gateway-system/eg-gateway-helm-certgen",
+	"RoleBinding/envoy-gateway-system/eg-gateway-helm-envoy-gateway-rolebinding",
+	"RoleBinding/envoy-gateway-system/eg-gateway-helm-infra-manager",
+	"RoleBinding/envoy-gateway-system/eg-gateway-helm-leader-election-rolebinding",
+	"RoleBinding/saas-b2b/eg-gateway-helm-envoy-gateway-rolebinding",
+	"Service/envoy-gateway-system/envoy-gateway",
+	"ServiceAccount/envoy-gateway-system/eg-gateway-helm-certgen",
+	"ServiceAccount/envoy-gateway-system/envoy-gateway",
 }
 
-object_id(doc) := sprintf("%v/%v", [object.get(doc, "kind", null), object.get(object.get(doc, "metadata", {}), "name", null)])
+object_namespace(doc) := object.get(object.get(doc, "metadata", {}), "namespace", "")
 
-describe(doc) := sprintf("%v %v", [object.get(doc, "kind", null), object.get(object.get(doc, "metadata", {}), "name", null)])
+object_name(doc) := object.get(object.get(doc, "metadata", {}), "name", null)
+
+# Kind/namespace/name for a namespaced object, Kind/name for the others.
+object_id(doc) := sprintf("%v/%v/%v", [object.get(doc, "kind", null), object_namespace(doc), object_name(doc)]) if {
+	object_namespace(doc) != ""
+} else := sprintf("%v/%v", [object.get(doc, "kind", null), object_name(doc)])
+
+# "Kind namespace/name" or "Kind name", for the messages.
+describe(doc) := sprintf("%v %v/%v", [object.get(doc, "kind", null), object_namespace(doc), object_name(doc)]) if {
+	object_namespace(doc) != ""
+} else := sprintf("%v %v", [object.get(doc, "kind", null), object_name(doc)])
+
+describe_id(id) := sprintf("%s %s/%s", [parts[0], parts[1], parts[2]]) if {
+	parts := split(id, "/")
+	count(parts) == 3
+} else := concat(" ", split(id, "/"))
 
 deny contains msg if {
 	some doc in documents(helm_render_file)
 	not object_id(doc) in frozen_objects
-	msg := sprintf("%s: the render of gateway-helm holds %s, which the frozen list of 17 objects of envoy_render.rego does not name; read the new object, then change the list", [label, describe(doc)])
+	msg := sprintf("%s: the render of gateway-helm holds %s, which the frozen list of %d objects of envoy_render.rego does not name; read the new object, then change the list", [label, describe(doc), count(frozen_objects)])
 }
 
 deny contains msg if {
 	count(documents(helm_render_file)) > 0
 	some id in frozen_objects
 	not id in {object_id(doc) | some doc in documents(helm_render_file)}
-	msg := sprintf("%s: the render of gateway-helm lacks %s, which the frozen list of 17 objects names", [label, concat(" ", split(id, "/"))])
+	msg := sprintf("%s: the render of gateway-helm lacks %s, which the frozen list of %d objects names", [label, describe_id(id), count(frozen_objects)])
 }
 
 deny contains msg if {
 	count(documents(helm_render_file)) > count(frozen_objects)
 	msg := sprintf("%s: the render of gateway-helm holds %d documents, the frozen list names %d objects", [label, count(documents(helm_render_file)), count(frozen_objects)])
+}
+
+# The namespaces of the project: the one of the controller, and the one of
+# the application, declared by k8s/base/namespace.yaml.
+app_namespaces contains name if {
+	some doc in documents(app_namespace_file)
+	doc.kind == "Namespace"
+	name := object_name(doc)
+	is_string(name)
+}
+
+project_namespaces := {controller_namespace} | app_namespaces
+
+deny contains msg if {
+	count(documents(app_namespace_file)) > 0
+	count(app_namespaces) != 1
+	msg := sprintf("%s: k8s/base/namespace.yaml declares the namespaces %v of the application, one expected", [label, app_namespaces])
+}
+
+# The watch of the controller (ADR-005, complement of 2026-11-25): without
+# it, the controller reconciles every namespace, and the chart gives it the
+# right to read the Secrets and to patch the pods of the whole cluster.
+watch_path := ["provider", "kubernetes", "watch"]
+
+controller_watch := object.get(controller_config, watch_path, null)
+
+watched_namespaces := {name | is_object(controller_watch); some name in object.get(controller_watch, "namespaces", [])}
+
+deny contains msg if {
+	controller_config
+	not is_object(controller_watch)
+	msg := sprintf("%s: the configuration of the controller has no provider.kubernetes.watch; it would watch every namespace, and the chart would let it read the Secrets and patch the pods of the whole cluster (ADR-005, complement of 2026-11-25)", [label])
+}
+
+deny contains msg if {
+	is_object(controller_watch)
+	object.get(controller_watch, "type", null) != "Namespaces"
+	msg := sprintf("%s: provider.kubernetes.watch.type of the configuration of the controller is %v; Namespaces expected, with the namespaces of the project (ADR-005, complement of 2026-11-25)", [label, object.get(controller_watch, "type", null)])
+}
+
+deny contains msg if {
+	is_object(controller_watch)
+	count(app_namespaces) == 1
+	watched_namespaces != project_namespaces
+	msg := sprintf("%s: the controller watches the namespaces %v; the namespaces of the project, %v, are expected, and no other (ADR-005, complement of 2026-11-25)", [label, watched_namespaces, project_namespaces])
+}
+
+# What the watch leaves cluster-wide: no right on the Secrets nor on the
+# pods, and no wildcard resource, in any ClusterRole of the render.
+cluster_sensitive_resources := {"secrets", "pods", "pods/binding", "*"}
+
+deny contains msg if {
+	some doc in documents(helm_render_file)
+	doc.kind == "ClusterRole"
+	some rule in object.get(doc, "rules", [])
+	some resource in object.get(rule, "resources", [])
+	resource in cluster_sensitive_resources
+	msg := sprintf("%s: %s in the render of gateway-helm grants %v on %s across the cluster; the watch of the controller keeps these rights in the namespaces of the project (ADR-005, complement of 2026-11-25)", [label, describe(doc), object.get(rule, "verbs", []), resource])
+}
+
+deny contains msg if {
+	count(app_namespaces) == 1
+	some doc in documents(helm_render_file)
+	namespace := object_namespace(doc)
+	namespace != ""
+	not namespace in project_namespaces
+	msg := sprintf("%s: %s of the render of gateway-helm lives outside the namespaces of the project, %v", [label, describe(doc), project_namespaces])
 }
 
 # No binding to cluster-admin, no verb * in a Role or a ClusterRole of the

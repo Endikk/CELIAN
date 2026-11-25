@@ -197,3 +197,47 @@ test_s21_rejects_a_layer_that_sets_no_postgres_major if {
 	root := {"locals": [reads_platform], "resource": {"a_cluster": {"main": [{"min_master_version": "${local.platform.kubernetes_minor}"}]}}}
 	denied_with(with_tofu(root), "no resource of the OpenTofu layer sets database_version")
 }
+
+# The Postgres image of the local layer (T065).
+postgres_statefulset(image) := {
+	"apiVersion": "apps/v1",
+	"kind": "StatefulSet",
+	"metadata": {"name": "postgres"},
+	"spec": {"template": {"spec": {"containers": [{"name": "postgres", "image": image}]}}},
+}
+
+pg18 := "docker.io/library/postgres:18.7-trixie@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"
+
+with_postgres(image) := [
+	{"path": "platform.yaml", "contents": valid_values},
+	{"path": "local/data/statefulset.yaml", "contents": postgres_statefulset(image)},
+]
+
+test_s21_accepts_a_postgres_image_on_the_platform_major if {
+	accepted(with_postgres(pg18))
+}
+
+test_s21_rejects_a_postgres_image_on_another_major if {
+	pg19 := "docker.io/library/postgres:19.1-trixie@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"
+	denied_with(with_postgres(pg19), "runs the major 19, platform.yaml says postgres_major 18")
+}
+
+test_s21_rejects_a_postgres_image_by_tag if {
+	denied_with(with_postgres("postgres:18.7-trixie"), "has no <major>.<minor> tag and digest")
+}
+
+test_s21_rejects_a_postgres_image_on_a_major_tag if {
+	denied_with(with_postgres("docker.io/library/postgres:18-trixie@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"), "has no <major>.<minor> tag and digest")
+}
+
+test_s21_rejects_a_statefulset_without_postgres_image if {
+	denied_with(with_postgres("docker.io/library/busybox:1.37.0"), "names no Postgres image")
+}
+
+test_s21_reads_the_postgres_image_under_the_golden_repo_of_celian if {
+	files := [
+		{"path": "golden/saas-b2b/platform.yaml", "contents": {"kubernetes_minor": "1.36", "postgres_major": "17"}},
+		{"path": "golden/saas-b2b/local/data/statefulset.yaml", "contents": postgres_statefulset(pg18)},
+	]
+	denied_with(files, "platform.yaml says postgres_major 17")
+}
