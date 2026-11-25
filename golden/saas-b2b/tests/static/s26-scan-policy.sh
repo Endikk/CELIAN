@@ -183,7 +183,7 @@ while IFS= read -r line; do
     '|--offline-scan|' '|--scanners|vuln|' '|--image-src|remote|' '|--exit-code|0|' '|--format|json|' '|--cache-dir|'; do
     case "$args" in
       *"$needed"*) ;;
-      *) report "$scan passes no ${needed//|/ } to Trivy: ${line#ARGS }" ;;
+      *) report "$scan does not pass $needed to Trivy (arguments joined by |): ${line#ARGS }" ;;
     esac
   done
   case "$args" in

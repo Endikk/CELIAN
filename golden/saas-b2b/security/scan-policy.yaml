@@ -1,0 +1,14 @@
+# Policy of the image scan (spec 001, FR-022; research RS-23). The only place
+# where the threshold is written: the decision policy reads it as
+# data.scan_policy (policy/scan_decision.rego), and Trivy filters nothing.
+# S26 refuses a second threshold anywhere else, and a threshold above HIGH.
+scan_policy:
+  # A finding at or above this level fails the scan, unless an exception
+  # holds. Levels of Trivy: UNKNOWN, LOW, MEDIUM, HIGH, CRITICAL. UNKNOWN
+  # findings are listed and never block (research RS-23, to be confirmed by
+  # [SECU]).
+  severity_threshold: HIGH
+  # Longest life of an exception, in days from the date it was written:
+  # proposed in research RS-23, to be confirmed by [SECU]. S27 refuses a
+  # longer one.
+  max_exception_days: 90

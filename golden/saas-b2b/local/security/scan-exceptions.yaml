@@ -1,0 +1,19 @@
+# Exceptions to the scan of the images of the local layer: node of the
+# cluster, mirror, Envoy Gateway and its proxy, Postgres, and the images that
+# the next layers add (spec 001, FR-022; research RS-23). The images that the
+# project builds have theirs in security/scan-exceptions.yaml.
+#
+# One entry per vulnerability and image, written and renewed by [SECU]:
+#   - vulnerability: CVE-2099-0001        # VulnerabilityID in the Trivy report
+#     image: docker.io/example/app        # repository in full, no tag or digest
+#     justification: why it cannot reach the users, and what lifts it
+#     written: "2026-11-25"               # YYYY-MM-DD
+#     expires: "2027-02-23"               # at most max_exception_days later
+# S27 refuses an incomplete or expired entry; the decision of the scan
+# ignores it (policy/scan_exceptions.rego).
+#
+# Empty on purpose. The first pass of 2026-11-25 (research RS-23) finds 99
+# identifiers at the threshold in the node image and 2 in zot: more than
+# [SECU] can justify one by one. T118 sends the threshold or the spec back to
+# Lucas, through the DSI, before any entry is written here.
+exceptions: []
