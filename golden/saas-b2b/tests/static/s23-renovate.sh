@@ -10,7 +10,8 @@
 # delay, which holds for every renovate.json of CELIAN) and renovate_rules
 # (the rules that follow platform.yaml, which holds the majors and minors
 # they must follow), then both packages on renovate.json and platform.yaml.
-# Last, the versions of tests/tools/install.sh and of
+# Last, the "# renovate:" comments of the workflows are checked (tests/tools/
+# check-renovate-workflow-comments.sh), and the versions of tests/tools/install.sh and of
 # local/scripts/lib/preflight-checks.sh keep the comments that let
 # Renovate find them (tests/tools/check-renovate-comments.sh).
 # Renovate never reads this file in CELIAN (research RS-17); the validator

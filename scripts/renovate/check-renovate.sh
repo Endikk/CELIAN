@@ -15,7 +15,8 @@
 #   checked against the same platform.yaml, so they cannot drift apart.
 # Runs the tests of each package, then the package on renovate.json and
 # golden/saas-b2b/platform.yaml, then checks the "# renovate:" comments of
-# the installer. Called by the pre-commit job of .github/workflows/ci.yml.
+# the installer and the "# renovate:" comments of the workflows. Called by the
+# pre-commit job of .github/workflows/ci.yml.
 #
 # Needs conftest on PATH: golden/saas-b2b/tests/tools/install.sh <dir>
 # installs it, its archive checked against a SHA-256, then put <dir> on PATH.
@@ -58,3 +59,12 @@ done
 # renovate.json reads.
 bash golden/saas-b2b/tests/tools/check-renovate-comments.sh golden/saas-b2b/tests/tools/install.sh
 bash golden/saas-b2b/tests/tools/check-renovate-comments.sh golden/saas-b2b/local/scripts/lib/preflight-checks.sh
+
+# The "# renovate:" comments of the workflows of CELIAN and of the golden
+# repo: the preset customManagers:githubActionsVersions, which both
+# renovate.json extend, reads packageName, lookupName and registryUrl there,
+# and the policy packages above do not see presets. Then the failing cases.
+bash golden/saas-b2b/tests/tools/check-renovate-workflow-comments.sh \
+  .github/workflows/*.yml golden/saas-b2b/.github/workflows/*.yml
+bash golden/saas-b2b/tests/tools/check-renovate-workflow-comments.sh \
+  --cases golden/saas-b2b/tests/static/s23-cases
