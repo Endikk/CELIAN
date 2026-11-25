@@ -1,0 +1,14 @@
+# The common layer of the application (contracts/layers.md, "Composition
+# Kustomize"): the same objects on every target, with no tool and no
+# provider in them (S06). The target layers add theirs through a component
+# (research RS-01); the environments, through k8s/overlays/.
+#
+# Step 7 writes the namespace and the routing; the Deployments and the
+# Services of the API and the front arrive with step 9 (T087).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: saas-b2b
+resources:
+  - namespace.yaml
+  - gateway.yaml
+  - httproutes.yaml

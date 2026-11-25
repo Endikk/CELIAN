@@ -54,7 +54,7 @@
     },
     {
       "customType": "regex",
-      "description": "Images of the local layer, by tag and digest under a # renovate: comment: the node image of local/kind/cluster.yaml, under the key image, and the zot mirror of local/tasks/local.yml, under MIRROR_IMAGE (ADR-004, version rule; ADR-011, condition 8; ADR-016).",
+      "description": "Images of the local layer, by tag and digest under a # renovate: comment: the node image of local/kind/cluster.yaml, under the key image, and in local/tasks/local.yml the zot mirror, under MIRROR_IMAGE, and the controller of Envoy Gateway and the OCI artifacts of its two charts, under ENVOY_GATEWAY_*_IMAGE (ADR-004, version rule; ADR-005, updates; ADR-011, condition 8; ADR-016).",
       "managerFilePatterns": [
         "/^local/kind/cluster\\.yaml$/",
         "/^local/tasks/.+\\.ya?ml$/"

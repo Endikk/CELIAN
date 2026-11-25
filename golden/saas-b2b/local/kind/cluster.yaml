@@ -4,9 +4,10 @@
 # Checked by S05 (loopback, node image by digest), S21 (Kubernetes minor of
 # platform.yaml) and S13 (registry hosts of the node).
 #
-# The host ports of the gateway join extraPortMappings with step 7 (T059),
-# each with listenAddress: "127.0.0.1"; kind publishes a mapping without
-# one on 0.0.0.0 (ADR-004, condition 1).
+# The host ports of the gateway are fixed here, at creation (research
+# RS-20): each extraPortMappings writes listenAddress "127.0.0.1", since
+# kind publishes a mapping without one on 0.0.0.0 (ADR-004, condition 1).
+# S05 keeps them equal to the ports of local/tasks/local.yml.
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 networking:
@@ -35,3 +36,13 @@ nodes:
       - hostPath: local/mirror/certs.d
         containerPath: /etc/containerd/certs.d
         readOnly: true
+    # The proxy of Envoy Gateway listens on these node ports, which the
+    # EnvoyProxy of local/platform/envoy-proxy.yaml fixes (ADR-005):
+    # GATEWAY_HTTP_PORT, then GATEWAY_HTTPS_PORT, of local/tasks/local.yml.
+    extraPortMappings:
+      - containerPort: 30080
+        hostPort: 18080
+        listenAddress: "127.0.0.1"
+      - containerPort: 30443
+        hostPort: 18443
+        listenAddress: "127.0.0.1"

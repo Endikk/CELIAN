@@ -19,11 +19,15 @@ repos:
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
         # Third-party files copied byte for byte (Apache-2.0 section 4(b)):
-        # fixing them would turn them into modified files.
-        exclude: ^tests/bench/[^/]+/vendor/
+        # fixing them would turn them into modified files. The vendored
+        # manifests of the golden repo are also checked against their
+        # SHA256SUMS, which a fix would break (spec 001, T057).
+        exclude: ^(tests/bench/[^/]+/vendor/|golden/saas-b2b/local/vendor/)
       - id: end-of-file-fixer
+        exclude: ^golden/saas-b2b/local/vendor/
       - id: mixed-line-ending
         args: [--fix=lf]
+        exclude: ^golden/saas-b2b/local/vendor/
       - id: check-yaml
         exclude: ^golden/
       # The golden repo keeps Kubernetes manifests with several documents per
@@ -37,6 +41,9 @@ repos:
       - id: check-merge-conflict
       - id: check-added-large-files
         args: [--maxkb=500]
+        # The CRDs of Envoy Gateway, rendered from their chart, weigh 2.8 MB
+        # (spec 001, research RS-02); SHA256SUMS pins every vendored file.
+        exclude: ^golden/saas-b2b/local/vendor/
       - id: detect-private-key
 
   # Secret detection on staged changes. CI also scans the full history.
@@ -127,3 +134,6 @@ repos:
         language: pygrep
         entry: '\xe2\x80\x94'  # UTF-8 bytes of U+2014, keeps this file free of it
         types: [text]
+        # Third-party bytes, pinned by SHA256SUMS: a CRD description of Envoy
+        # Gateway 1.10.0 holds the character (spec 001, research RS-02, T057).
+        exclude: ^golden/saas-b2b/local/vendor/

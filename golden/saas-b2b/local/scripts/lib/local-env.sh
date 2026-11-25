@@ -1,7 +1,8 @@
 # shellcheck shell=bash
 # Names of what task up creates on the machine, and the kubeconfig of the
-# project (spec 001, step 6). Sourced by local/scripts/cluster.sh and
-# local/scripts/mirror.sh; S13 and S19 read it too. Needs HOME.
+# project (spec 001, steps 6 and 7). Sourced by local/scripts/cluster.sh,
+# mirror.sh and platform.sh, and by lib/preflight-checks.sh; S13 and S19
+# read it too. Needs HOME.
 #
 # kind holds one cluster of a name per engine, and the engine one container
 # and one volume of a name: these names are the project's on the machine.
@@ -12,6 +13,10 @@
   readonly CLUSTER_NAME="saas-b2b"
   # kind names the context of a cluster kind-<cluster>.
   readonly KUBE_CONTEXT="kind-$CLUSTER_NAME"
+  # The label that kind puts on each node container of the cluster (kind
+  # v0.33.0, pkg/cluster/internal/providers/docker/constants.go, line 21;
+  # research RS-13): the preflight checks find the nodes by it.
+  readonly NODE_LABEL="io.x-k8s.kind.cluster=$CLUSTER_NAME"
   # The network that kind creates for its nodes (kind v0.33.0,
   # pkg/cluster/internal/providers/docker/network.go, line 47); the mirror
   # joins it alone (ADR-011, condition 2).

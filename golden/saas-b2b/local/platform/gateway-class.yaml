@@ -1,0 +1,16 @@
+# The GatewayClass of the local layer. It takes the name that the Gateway of
+# the common layer asks for (k8s/base/gateway.yaml), so nothing corrects
+# gatewayClassName on local; the gcp layer will set the class of GKE
+# (tasks.md, gap 31). Its controller is the one of the vendored
+# configuration of Envoy Gateway, and it reads the EnvoyProxy of this layer.
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: saas-b2b
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: saas-b2b
+    namespace: envoy-gateway-system
