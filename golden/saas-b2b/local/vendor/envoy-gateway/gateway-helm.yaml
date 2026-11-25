@@ -55,6 +55,11 @@ data:
                       name: envoy-ratelimit
         shutdownManager:
           image: docker.io/envoyproxy/gateway:v1.10.0@sha256:c2243d43518bed91d3ed8c2db849a4b7a14ac9b96eb019f2ab104bb1ca8572b1
+        watch:
+          namespaces:
+          - envoy-gateway-system
+          - saas-b2b
+          type: Namespaces
       type: Kubernetes
 
 ---
@@ -104,6 +109,44 @@ rules:
   - get
   - list
   - watch
+
+---
+# Source: gateway-helm/templates/envoy-gateway-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: eg-gateway-helm-envoy-gateway-rolebinding
+  labels:
+    helm.sh/chart: gateway-helm-v1.10.0
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/instance: eg
+    app.kubernetes.io/version: "v1.10.0"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: eg-gateway-helm-envoy-gateway-role
+subjects:
+- kind: ServiceAccount
+  name: 'envoy-gateway'
+  namespace: envoy-gateway-system
+
+
+---
+# Source: gateway-helm/templates/envoy-gateway-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  creationTimestamp: null
+  name: eg-gateway-helm-envoy-gateway-role
+  namespace: "envoy-gateway-system"
+  labels:
+    helm.sh/chart: gateway-helm-v1.10.0
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/instance: eg
+    app.kubernetes.io/version: "v1.10.0"
+    app.kubernetes.io/managed-by: Helm
+rules:
 - apiGroups:
   - ""
   resources:
@@ -202,24 +245,112 @@ rules:
 ---
 # Source: gateway-helm/templates/envoy-gateway-rbac.yaml
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: Role
 metadata:
-  name: eg-gateway-helm-envoy-gateway-rolebinding
+  creationTimestamp: null
+  name: eg-gateway-helm-envoy-gateway-role
+  namespace: "saas-b2b"
   labels:
     helm.sh/chart: gateway-helm-v1.10.0
     app.kubernetes.io/name: gateway-helm
     app.kubernetes.io/instance: eg
     app.kubernetes.io/version: "v1.10.0"
     app.kubernetes.io/managed-by: Helm
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: eg-gateway-helm-envoy-gateway-role
-subjects:
-- kind: ServiceAccount
-  name: 'envoy-gateway'
-  namespace: envoy-gateway-system
-
+rules:
+- apiGroups:
+  - ""
+  resources:
+  - configmaps
+  - secrets
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  resources:
+  - deployments
+  - daemonsets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.envoyproxy.io
+  resources:
+  - envoyproxies
+  - envoypatchpolicies
+  - clienttrafficpolicies
+  - backendtrafficpolicies
+  - securitypolicies
+  - envoyextensionpolicies
+  - backends
+  - httproutefilters
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.envoyproxy.io
+  resources:
+  - envoyproxies/status
+  - envoypatchpolicies/status
+  - clienttrafficpolicies/status
+  - backendtrafficpolicies/status
+  - securitypolicies/status
+  - envoyextensionpolicies/status
+  - backends/status
+  verbs:
+  - update
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways
+  - listenersets
+  - grpcroutes
+  - httproutes
+  - referencegrants
+  - tcproutes
+  - tlsroutes
+  - udproutes
+  - backendtlspolicies
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - gateway.networking.k8s.io
+  resources:
+  - gateways/status
+  - listenersets/status
+  - grpcroutes/status
+  - httproutes/status
+  - tcproutes/status
+  - tlsroutes/status
+  - udproutes/status
+  - backendtlspolicies/status
+  verbs:
+  - update
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  - pods/binding
+  verbs:
+  - get
+  - list
+  - patch
+  - update
+  - watch
 
 ---
 # Source: gateway-helm/templates/infra-manager-rbac.yaml
@@ -295,6 +426,22 @@ rules:
   - get
   - watch
 
+- apiGroups:
+  - ""
+  resources:
+  - secrets
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - discovery.k8s.io
+  resources:
+  - endpointslices
+  verbs:
+  - get
+  - list
+  - watch
 
 ---
 # Source: gateway-helm/templates/leader-election-rbac.yaml
@@ -341,6 +488,52 @@ rules:
   verbs:
   - create
   - patch
+
+---
+# Source: gateway-helm/templates/envoy-gateway-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eg-gateway-helm-envoy-gateway-rolebinding
+  namespace: "envoy-gateway-system"
+  labels:
+    helm.sh/chart: gateway-helm-v1.10.0
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/instance: eg
+    app.kubernetes.io/version: "v1.10.0"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eg-gateway-helm-envoy-gateway-role
+subjects:
+- kind: ServiceAccount
+  name: 'envoy-gateway'
+  namespace: envoy-gateway-system
+
+
+---
+# Source: gateway-helm/templates/envoy-gateway-rbac.yaml
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: eg-gateway-helm-envoy-gateway-rolebinding
+  namespace: "saas-b2b"
+  labels:
+    helm.sh/chart: gateway-helm-v1.10.0
+    app.kubernetes.io/name: gateway-helm
+    app.kubernetes.io/instance: eg
+    app.kubernetes.io/version: "v1.10.0"
+    app.kubernetes.io/managed-by: Helm
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: eg-gateway-helm-envoy-gateway-role
+subjects:
+- kind: ServiceAccount
+  name: 'envoy-gateway'
+  namespace: envoy-gateway-system
+
 
 ---
 # Source: gateway-helm/templates/infra-manager-rbac.yaml
