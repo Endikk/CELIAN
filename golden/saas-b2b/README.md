@@ -38,3 +38,15 @@ Une couche de cible tient dans un seul dossier. Tout ce qui est hors de `local/`
 | tout le reste | commune | code de l'application, base et overlays Kustomize, conventions Git, README, tests et politiques communs |
 
 La couche commune ne nomme aucun outil ni aucun fournisseur. Seule `local/` nomme kind, Envoy Gateway, zot ou Flux, et seule `gcp/` nomme un service de Google.
+
+## Couche GCP
+
+`gcp/tofu/` décrit la cible GCP en OpenTofu : réseau privé, GKE Autopilot, Cloud SQL, Artifact Registry, Secret Manager, Config Sync et identité de la CI par fédération. Rien dans ce dépôt ne la déploie. `task gcp:validate`, `task gcp:policy` et `task gcp:scan` la vérifient sans identifiant cloud, et `task check` les lance aussi. Le premier déploiement attend l'accord de Lucas et un budget validé.
+
+## Écarts entre les cibles
+
+Liste tenue au fil des étapes (ENF-02) ; le README complet de l'étape 11 la reprend.
+
+| Écart | Sur le poste | Sur GCP | Suivi |
+| --- | --- | --- | --- |
+| Privilèges de l'utilisateur de `db-auth` | propriétaire de la base `app`, sans autre attribut | membre de `cloudsqlsuperuser` : `CREATEROLE`, `CREATEDB`, triggers d'événement, réplication logique | R-39 ; vérifié au premier déploiement, durci après le MVP par un ADR |

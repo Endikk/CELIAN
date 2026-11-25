@@ -507,6 +507,30 @@ Autres faits lus :
 | <https://docs.renovatebot.com/modules/manager/terraform/> | 2026-11-25 | Fichiers lus, registre par défaut, verrou |
 | <https://kubernetes.io/docs/concepts/overview/working-with-objects/names/> | 2026-11-25 | Règles de nom des variables `app_namespace` et `app_service_account` |
 
+### Utilisateur de `db-auth` sur Cloud SQL (T107, 2026-11-25)
+
+Écrit par [OPS] d'après la relecture [SECU] de l'étape 3 (RS-04, PR #54), à relire par [SECU]. La racine crée la base `app` par `google_sql_database`, qui n'a pas d'argument `owner`, et l'utilisateur `app` par `google_sql_user`, en authentification intégrée, mot de passe par `password_wo`.
+
+Hypothèse retenue, écrite aussi en tête de `google_sql_user.app` dans `gcp/tofu/database.tf` : la base `app` appartient à `cloudsqlsuperuser`, comme une base créée par la console ; l'utilisateur `app` reçoit `cloudsqlsuperuser`, hérite donc de l'appartenance implicite à `pg_database_owner`, et peut créer dans `public` : le script de schéma de l'API passe. Le prix est l'écart de privilèges : sur GCP, l'API tourne avec `cloudsqlsuperuser` (`CREATEROLE`, `CREATEDB`, triggers d'événement, réplication logique, `pg_largeobject`), quand en local le même utilisateur n'est que propriétaire de sa base. L'écart est listé au README du golden repo (ENF-02) et suivi par R-39. Le dépôt n'a pas encore de modèle de menaces : l'écart y entrera quand [SECU] l'ouvrira.
+
+À lire au premier apply autorisé par Lucas, pour E12 (fonctions et catalogues lus dans la documentation de PostgreSQL 18, sources ci-dessous) :
+
+```sql
+SELECT pg_get_userbyid(datdba) AS owner FROM pg_database WHERE datname = 'app';
+SELECT has_schema_privilege('app', 'public', 'CREATE');
+SELECT roleid::regrole, admin_option, inherit_option, set_option
+  FROM pg_auth_members WHERE member = 'app'::regrole;
+```
+
+Si le propriétaire n'est pas `cloudsqlsuperuser`, ou si `inherit_option` est faux, l'hypothèse tombe et le script de schéma échoue sur `CREATE TABLE` : la couche `gcp` passe alors au durcissement prévu par R-39 avant tout déploiement.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://www.postgresql.org/docs/18/catalog-pg-auth-members.html> | 2026-11-25 | Colonnes `roleid`, `member`, `admin_option`, `inherit_option`, `set_option` |
+| <https://www.postgresql.org/docs/18/catalog-pg-database.html> | 2026-11-25 | `datdba`, propriétaire de la base |
+| <https://www.postgresql.org/docs/18/functions-info.html> | 2026-11-25 | `has_schema_privilege` (`CREATE`, `USAGE`), `pg_get_userbyid` |
+| <https://www.postgresql.org/docs/18/datatype-oid.html> | 2026-11-25 | Type `regrole` |
+
 ## RS-17. CI du golden repo dans CELIAN
 
 Décision : un workflow racine de CELIAN, `golden-saas-b2b.yml`, appelle les tâches du golden repo ; les workflows du golden repo appellent les mêmes tâches. Le contrôle X01 copie le golden repo dans un dépôt Git neuf pour exercer ses propres hooks et sa configuration.
@@ -981,6 +1005,8 @@ Scan du HCL, d'après la documentation de 0.76.2 (`trivy config`, et la page de 
 - `--include-non-failures` liste aussi les règles passées.
 
 Essai sur le socle écrit à la main de BENCH-008, avec cette version : les cinq échecs que relevait [SECU] reviennent, AVD-GCP-0029 et AVD-GCP-0076 (journaux de flux du sous-réseau), AVD-GCP-0050 (compte des nœuds), AVD-GCP-0051 (étiquettes du cluster), AVD-GCP-0061 (réseaux autorisés du plan de contrôle). La racine de l'étape 13 en corrige quatre et justifie le dernier par écrit (T109).
+
+Résultat sur la racine de l'étape 13, le 2026-11-25 (T109) : 91 règles passées, aucun échec. AVD-GCP-0061 est justifié au-dessus de `google_container_cluster.main` : le point d'accès IP du plan de contrôle est désactivé, il n'y a donc aucune plage à restreindre, et l'accès passe par le point d'accès DNS, sous IAM. Sans ce commentaire, Trivy échoue sur cette seule règle. [SECU] relit la justification. Les journaux de flux du sous-réseau partent vers Cloud Logging, dont le prix n'a pas été lu : [FINOPS] en fixe l'échantillonnage avec le budget.
 
 Sur le poste, Trivy 0.76.2 vient de Homebrew : même version, binaire non comparé à la release. La CI installe celui de la release, par sa somme.
 
