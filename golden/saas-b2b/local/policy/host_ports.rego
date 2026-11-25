@@ -4,7 +4,10 @@
 # - the hostPort values of the extraPortMappings are exactly the ports that
 #   the tasks give to the preflight checks;
 # - each nodePort that the EnvoyProxy of the local layer fixes on the
-#   Service of the proxy is the containerPort of an extraPortMappings.
+#   Service of the proxy is the containerPort of an extraPortMappings;
+# - the EnvoyProxy keeps to what ADR-005 writes: envoyService.type NodePort,
+#   a StrategicMerge patch reduced to spec.ports[] with port and nodePort,
+#   and no other key under spec, provider.kubernetes or envoyService.
 #
 # Input: local/kind/cluster.yaml and local/platform/envoy-proxy.yaml, given
 # to `conftest test --combine` (research RS-18). Data: task_host_ports, the
@@ -74,4 +77,84 @@ deny contains msg if {
 	some port in node_ports
 	not port in container_ports
 	msg := sprintf("%s: the EnvoyProxy fixes the nodePort %v, which no extraPortMappings of local/kind/cluster.yaml publishes (containerPort)", [label, port])
+}
+
+# The EnvoyProxy is what ADR-005 writes and nothing more (SECU review of the
+# PR of step 7): a NodePort Service patched by strategic merge on spec.ports,
+# each port with a port and a nodePort, and no other key where a key would
+# reach another object (externalIPs, a Deployment patch, a bootstrap).
+keys_beyond(value, allowed) := {key | some key, _ in value; not key in allowed} if is_object(value)
+
+keys_beyond(value, _) := set() if not is_object(value)
+
+proxy_spec(proxy) := object.get(proxy, "spec", {})
+
+kubernetes_of(proxy) := object.get(object.get(proxy_spec(proxy), "provider", {}), "kubernetes", {})
+
+service_of(proxy) := object.get(kubernetes_of(proxy), "envoyService", {})
+
+patch_of(proxy) := object.get(service_of(proxy), "patch", {})
+
+value_of(proxy) := object.get(patch_of(proxy), "value", {})
+
+deny contains msg if {
+	some proxy in proxies
+	object.get(service_of(proxy), "type", null) != "NodePort"
+	msg := sprintf("%s: provider.kubernetes.envoyService.type must be NodePort, found %v", [label, object.get(service_of(proxy), "type", null)])
+}
+
+deny contains msg if {
+	some proxy in proxies
+	object.get(patch_of(proxy), "type", null) != "StrategicMerge"
+	msg := sprintf("%s: provider.kubernetes.envoyService.patch.type must be StrategicMerge, found %v", [label, object.get(patch_of(proxy), "type", null)])
+}
+
+deny contains msg if {
+	some proxy in proxies
+	extra := keys_beyond(proxy_spec(proxy), {"provider"})
+	count(extra) > 0
+	msg := sprintf("%s: the spec of the EnvoyProxy holds provider only, found also %v", [label, sort([k | some k in extra])])
+}
+
+deny contains msg if {
+	some proxy in proxies
+	extra := keys_beyond(kubernetes_of(proxy), {"envoyService"})
+	count(extra) > 0
+	msg := sprintf("%s: provider.kubernetes holds envoyService only, found also %v", [label, sort([k | some k in extra])])
+}
+
+deny contains msg if {
+	some proxy in proxies
+	extra := keys_beyond(service_of(proxy), {"type", "patch"})
+	count(extra) > 0
+	msg := sprintf("%s: provider.kubernetes.envoyService holds type and patch only, found also %v", [label, sort([k | some k in extra])])
+}
+
+deny contains msg if {
+	some proxy in proxies
+	extra := keys_beyond(patch_of(proxy), {"type", "value"})
+	count(extra) > 0
+	msg := sprintf("%s: provider.kubernetes.envoyService.patch holds type and value only, found also %v", [label, sort([k | some k in extra])])
+}
+
+deny contains msg if {
+	some proxy in proxies
+	extra := keys_beyond(value_of(proxy), {"spec"})
+	count(extra) > 0
+	msg := sprintf("%s: the envoyService.patch.value holds spec only, found also %v", [label, sort([k | some k in extra])])
+}
+
+deny contains msg if {
+	some proxy in proxies
+	extra := keys_beyond(object.get(value_of(proxy), "spec", {}), {"ports"})
+	count(extra) > 0
+	msg := sprintf("%s: the envoyService.patch.value.spec holds ports only, found also %v", [label, sort([k | some k in extra])])
+}
+
+deny contains msg if {
+	some proxy in proxies
+	some entry in service_ports(proxy)
+	extra := keys_beyond(entry, {"port", "nodePort"})
+	count(extra) > 0
+	msg := sprintf("%s: each port of the envoyService patch carries port and nodePort only, found also %v", [label, sort([k | some k in extra])])
 }

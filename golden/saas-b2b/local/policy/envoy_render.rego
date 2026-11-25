@@ -12,12 +12,19 @@
 #   controller included;
 # - the ratelimit image, which the chart names by tag, never runs: the
 #   configuration has no rateLimit, or the image is pinned by digest;
+# - the render of gateway-helm holds the 17 objects of the frozen list, by
+#   kind and name, and no more; no binding goes to the ClusterRole
+#   cluster-admin, and no Role nor ClusterRole of the render grants the
+#   verb *: a new release that adds an object or a right shows in the review;
+# - the namespace envoy-gateway-system enforces Pod Security, at baseline or
+#   restricted;
 # - the controller image and both charts come from one release, the one
 #   local/tasks/local.yml names, and the render says the same chart.
 #
-# Input: the three vendored files given to `conftest test --combine`, one
-# entry per YAML document with its `path` and parsed `contents` (research
-# RS-18). Data: `envoy_gateway`, the three references of local/tasks/local.yml
+# Input: the three vendored files and local/platform/namespace.yaml given to
+# `conftest test --combine`, one entry per YAML document with its `path` and
+# parsed `contents` (research RS-18). Data: `envoy_gateway`, the three
+# references of local/tasks/local.yml
 # (controller, gateway-helm, gateway-crds-helm), written by
 # local/tests/static/s22-envoy-charts.sh.
 package envoy_render
@@ -29,6 +36,8 @@ gateway_api_file := `(^|/)local/vendor/gateway-api/standard-install\.yaml$`
 crds_render_file := `(^|/)local/vendor/envoy-gateway/gateway-crds-helm\.yaml$`
 
 helm_render_file := `(^|/)local/vendor/envoy-gateway/gateway-helm\.yaml$`
+
+namespace_file := `(^|/)local/platform/namespace\.yaml$`
 
 gateway_api_groups := {"gateway.networking.k8s.io", "gateway.networking.x-k8s.io"}
 
@@ -72,7 +81,7 @@ documents(pattern) := [doc |
 ]
 
 deny contains msg if {
-	some pattern in [gateway_api_file, crds_render_file, helm_render_file]
+	some pattern in [gateway_api_file, crds_render_file, helm_render_file, namespace_file]
 	count(documents(pattern)) == 0
 	msg := sprintf("%s: no document of a file matching %s among the checked files", [label, pattern])
 }
@@ -213,4 +222,91 @@ deny contains msg if {
 	charts := {chart | some doc in documents(helm_render_file); chart := doc.metadata.labels["helm.sh/chart"]}
 	count(charts) == 0
 	msg := sprintf("%s: no object of the render of gateway-helm carries the label helm.sh/chart", [label])
+}
+
+# The objects of the render of gateway-helm of release v1.10.0, by kind and
+# name: 17 documents. A new release that adds, drops or renames one fails
+# here until the list is read again (SECU review of step 7).
+frozen_objects := {
+	"ClusterRole/eg-gateway-helm-certgen:envoy-gateway-system",
+	"ClusterRole/eg-gateway-helm-envoy-gateway-role",
+	"ClusterRoleBinding/eg-gateway-helm-certgen:envoy-gateway-system",
+	"ClusterRoleBinding/eg-gateway-helm-envoy-gateway-rolebinding",
+	"ConfigMap/envoy-gateway-config",
+	"Deployment/envoy-gateway",
+	"Job/eg-gateway-helm-certgen",
+	"MutatingWebhookConfiguration/envoy-gateway-topology-injector.envoy-gateway-system",
+	"Role/eg-gateway-helm-certgen",
+	"Role/eg-gateway-helm-infra-manager",
+	"Role/eg-gateway-helm-leader-election-role",
+	"RoleBinding/eg-gateway-helm-certgen",
+	"RoleBinding/eg-gateway-helm-infra-manager",
+	"RoleBinding/eg-gateway-helm-leader-election-rolebinding",
+	"Service/envoy-gateway",
+	"ServiceAccount/eg-gateway-helm-certgen",
+	"ServiceAccount/envoy-gateway",
+}
+
+object_id(doc) := sprintf("%v/%v", [object.get(doc, "kind", null), object.get(object.get(doc, "metadata", {}), "name", null)])
+
+describe(doc) := sprintf("%v %v", [object.get(doc, "kind", null), object.get(object.get(doc, "metadata", {}), "name", null)])
+
+deny contains msg if {
+	some doc in documents(helm_render_file)
+	not object_id(doc) in frozen_objects
+	msg := sprintf("%s: the render of gateway-helm holds %s, which the frozen list of 17 objects of envoy_render.rego does not name; read the new object, then change the list", [label, describe(doc)])
+}
+
+deny contains msg if {
+	count(documents(helm_render_file)) > 0
+	some id in frozen_objects
+	not id in {object_id(doc) | some doc in documents(helm_render_file)}
+	msg := sprintf("%s: the render of gateway-helm lacks %s, which the frozen list of 17 objects names", [label, concat(" ", split(id, "/"))])
+}
+
+deny contains msg if {
+	count(documents(helm_render_file)) > count(frozen_objects)
+	msg := sprintf("%s: the render of gateway-helm holds %d documents, the frozen list names %d objects", [label, count(documents(helm_render_file)), count(frozen_objects)])
+}
+
+# No binding to cluster-admin, no verb * in a Role or a ClusterRole of the
+# render: the rights of the controller are the ones the chart writes, none
+# is the wildcard.
+deny contains msg if {
+	some doc in documents(helm_render_file)
+	doc.kind in {"ClusterRoleBinding", "RoleBinding"}
+	object.get(object.get(doc, "roleRef", {}), "name", null) == "cluster-admin"
+	msg := sprintf("%s: %s in the render of gateway-helm binds to cluster-admin", [label, describe(doc)])
+}
+
+deny contains msg if {
+	some doc in documents(helm_render_file)
+	doc.kind in {"ClusterRole", "Role"}
+	some rule in object.get(doc, "rules", [])
+	"*" in object.get(rule, "verbs", [])
+	msg := sprintf("%s: %s in the render of gateway-helm grants the verb *", [label, describe(doc)])
+}
+
+# Pod Security on the namespace of Envoy Gateway.
+pod_security_label := "pod-security.kubernetes.io/enforce"
+
+pod_security_levels := {"baseline", "restricted"}
+
+namespace_docs := [doc |
+	some doc in documents(namespace_file)
+	doc.kind == "Namespace"
+	object.get(object.get(doc, "metadata", {}), "name", null) == "envoy-gateway-system"
+]
+
+deny contains msg if {
+	count(documents(namespace_file)) > 0
+	count(namespace_docs) == 0
+	msg := sprintf("%s: local/platform/namespace.yaml declares no Namespace envoy-gateway-system", [label])
+}
+
+deny contains msg if {
+	some doc in namespace_docs
+	level := object.get(object.get(object.get(doc, "metadata", {}), "labels", {}), pod_security_label, null)
+	not level in pod_security_levels
+	msg := sprintf("%s: the namespace envoy-gateway-system needs %s at baseline or restricted, found %v", [label, pod_security_label, level])
 }

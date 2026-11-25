@@ -4,7 +4,8 @@
 # fait task up", point 4; ADR-005; contracts/task-cli.md).
 #
 # Usage: bash local/scripts/platform.sh check IMAGE | up IMAGE
-#   check  checks each file of local/vendor/ against local/vendor/SHA256SUMS
+#   check  checks local/vendor/: ordinary files at (gateway-api|envoy-gateway)/<name>.yaml
+#          under MAX_VENDOR_FILE_BYTES, each against local/vendor/SHA256SUMS
 #          (every file listed, every listed file there, every sum equal),
 #          then that the vendored render runs IMAGE. It calls no kubectl and
 #          creates nothing: task up runs it before it creates the cluster
@@ -53,6 +54,10 @@ readonly CONTROLLER_REPOSITORY="docker.io/envoyproxy/gateway"
 readonly CRD_WAIT="60s"
 readonly CONTROLLER_WAIT="300s"
 readonly CLASS_WAIT="60s"
+# The size cap of a vendored file, in bytes: a little above the largest render
+# of today, gateway-crds-helm.yaml (2.86 MB). A bigger file is refused, so
+# that a vendored file cannot swell unseen (S02).
+readonly MAX_VENDOR_FILE_BYTES=3145728
 
 die() {
   printf 'platform: %s\n' "$1" >&2
@@ -67,22 +72,26 @@ sha256_of() {
   fi
 }
 
-# verify_sums: every file of local/vendor/ but SHA256SUMS has one line in
-# it, and every line names a file whose SHA-256 it gives (S02).
+# verify_sums: local/vendor/ holds ordinary files only, each at a path of the
+# form (gateway-api|envoy-gateway)/<name>.yaml and under the size cap; every
+# one of them but SHA256SUMS has one line in it, and every line names a file
+# whose SHA-256 it gives (S02). A symbolic link, a special file, another
+# folder or another extension is refused even when its sum is listed.
 verify_sums() {
-  local line number=0 sum file listed=$'\n' found
+  local line number=0 sum file listed=$'\n' found size
   [ -f "$SUMS" ] || die "local/vendor/SHA256SUMS is missing: the vendored manifests cannot be checked. Restore it from the repository. Nothing was applied."
+  [ ! -L "$SUMS" ] || die "local/vendor/SHA256SUMS is a symbolic link. Restore it from the repository. Nothing was applied."
   while IFS= read -r line || [ -n "$line" ]; do
     number=$((number + 1))
-    if ! [[ $line =~ ^([0-9a-f]{64})\ \ ([A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*)$ ]]; then
-      die "local/vendor/SHA256SUMS, line $number, is not \"<sha256>  <path>\". Restore it from the repository. Nothing was applied."
+    if ! [[ $line =~ ^([0-9a-f]{64})\ \ ((gateway-api|envoy-gateway)/[A-Za-z0-9._-]+\.yaml)$ ]]; then
+      die "local/vendor/SHA256SUMS, line $number (\"${line//[![:print:]]/?}\"), is not \"<sha256>  (gateway-api|envoy-gateway)/<name>.yaml\". Restore it from the repository. Nothing was applied."
     fi
     sum="${BASH_REMATCH[1]}"
     file="${BASH_REMATCH[2]}"
-    case "/$file/" in
-      */../* | */./*) die "local/vendor/SHA256SUMS, line $number, names $file, outside local/vendor/. Nothing was applied." ;;
-    esac
     [ -f "$VENDOR/$file" ] || die "local/vendor/$file is listed in SHA256SUMS but missing. Restore it from the repository. Nothing was applied."
+    [ ! -L "$VENDOR/$file" ] || die "local/vendor/$file is a symbolic link: ordinary files only. Restore it from the repository. Nothing was applied."
+    size="$(wc -c <"$VENDOR/$file" | tr -d ' ')"
+    [ "$size" -le "$MAX_VENDOR_FILE_BYTES" ] || die "local/vendor/$file is $size bytes, above the cap of $MAX_VENDOR_FILE_BYTES. Restore it from the repository. Nothing was applied."
     if [ "$(sha256_of "$VENDOR/$file")" != "$sum" ]; then
       die "local/vendor/$file differs from its SHA-256 in SHA256SUMS: it was changed. Restore it from the repository. Nothing was applied."
     fi
@@ -93,9 +102,9 @@ verify_sums() {
     [ "$found" = SHA256SUMS ] && continue
     case "$listed" in
       *$'\n'"$found"$'\n'*) ;;
-      *) die "local/vendor/$found has no SHA-256 in SHA256SUMS: nothing unchecked is applied. Remove it, or add its sum. Nothing was applied." ;;
+      *) die "local/vendor/$found has no SHA-256 in SHA256SUMS, or is not of the form (gateway-api|envoy-gateway)/<name>.yaml: nothing unchecked is applied. Remove it, or add its sum. Nothing was applied." ;;
     esac
-  done < <(find "$VENDOR" -type f)
+  done < <(find "$VENDOR" ! -type d)
 }
 
 # verify_render IMAGE: the render of the controller names the controller
