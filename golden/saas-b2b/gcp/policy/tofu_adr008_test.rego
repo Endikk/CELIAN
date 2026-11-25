@@ -13,7 +13,7 @@ cluster := {
 	"enable_autopilot": true,
 	"private_cluster_config": [{"enable_private_nodes": true}],
 	"control_plane_endpoints_config": [{
-		"dns_endpoint_config": [{"allow_external_traffic": true}],
+		"dns_endpoint_config": [{"allow_external_traffic": true, "enable_k8s_tokens_via_dns": false, "enable_k8s_certs_via_dns": false}],
 		"ip_endpoints_config": [{"enabled": false}],
 	}],
 	"cluster_autoscaling": [{"auto_provisioning_defaults": [{"service_account": "${google_service_account.nodes.email}"}]}],
@@ -26,7 +26,7 @@ valid := {
 	"variable": {"repo_id": validated, "owner_id": validated, "ref": validated},
 	"ephemeral": {"random_password": {"db": [{"length": 40}]}},
 	"resource": {
-		"google_iam_workload_identity_pool_provider": {"github": [{"attribute_condition": "assertion.repository_id == '${var.repo_id}' && assertion.repository_owner_id == '${var.owner_id}' && assertion.ref == '${var.ref}'"}]},
+		"google_iam_workload_identity_pool_provider": {"github": [{"attribute_condition": "assertion.repository_id == '${var.repo_id}' && assertion.repository_owner_id == '${var.owner_id}' && assertion.ref == '${var.ref}' && assertion.event_name == 'push'"}]},
 		"google_service_account_iam_member": {"ci": [{"role": "roles/iam.workloadIdentityUser", "member": "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.ci.name}/attribute.repository_id/${var.repo_id}"}]},
 		"google_project_iam_member": {"nodes": [{"role": "roles/container.defaultNodeServiceAccount", "member": "serviceAccount:${google_service_account.nodes.email}"}]},
 		"google_container_cluster": {"main": [cluster]},
@@ -95,6 +95,18 @@ test_s15_rejects_a_condition_on_the_repository_name if {
 
 test_s15_rejects_a_condition_on_the_owner_name if {
 	denied_with(patched(set(provider_path, "assertion.repository_owner=='org' && assertion.repository_id == '1' && assertion.repository_owner_id == '2' && assertion.ref == 'x'")), "filters on a name")
+}
+
+test_s15_rejects_a_condition_without_the_event_name if {
+	denied_with(patched(set(provider_path, "assertion.repository_id == '1' && assertion.repository_owner_id == '2' && assertion.ref == 'refs/heads/main'")), "does not check assertion.event_name")
+}
+
+test_s15_rejects_an_event_other_than_push if {
+	denied_with(patched(set(provider_path, "assertion.repository_id == '1' && assertion.repository_owner_id == '2' && assertion.ref == 'refs/heads/main' && assertion.event_name == 'workflow_dispatch'")), "must be 'push'")
+}
+
+test_s15_rejects_an_event_name_that_is_only_excluded if {
+	denied_with(patched(set(provider_path, "assertion.repository_id == '1' && assertion.repository_owner_id == '2' && assertion.ref == 'refs/heads/main' && assertion.event_name != 'pull_request_target'")), "does not check assertion.event_name")
 }
 
 test_s15_rejects_a_variable_without_validation if {
@@ -197,6 +209,26 @@ test_s15_rejects_an_unwritten_allow_external_traffic if {
 test_s15_accepts_external_traffic_refused if {
 	path := sprintf("%s/control_plane_endpoints_config/0/dns_endpoint_config/0/allow_external_traffic", [cluster_path])
 	accepted(patched(set(path, false)))
+}
+
+test_s15_rejects_k8s_tokens_via_dns_on if {
+	path := sprintf("%s/control_plane_endpoints_config/0/dns_endpoint_config/0/enable_k8s_tokens_via_dns", [cluster_path])
+	denied_with(patched(set(path, true)), "enable_k8s_tokens_via_dns must be written false")
+}
+
+test_s15_rejects_k8s_tokens_via_dns_unwritten if {
+	path := sprintf("%s/control_plane_endpoints_config/0/dns_endpoint_config/0/enable_k8s_tokens_via_dns", [cluster_path])
+	denied_with(patched(drop(path)), "enable_k8s_tokens_via_dns must be written false")
+}
+
+test_s15_rejects_k8s_certs_via_dns_on if {
+	path := sprintf("%s/control_plane_endpoints_config/0/dns_endpoint_config/0/enable_k8s_certs_via_dns", [cluster_path])
+	denied_with(patched(set(path, true)), "enable_k8s_certs_via_dns must be written false")
+}
+
+test_s15_rejects_k8s_certs_via_dns_unwritten if {
+	path := sprintf("%s/control_plane_endpoints_config/0/dns_endpoint_config/0/enable_k8s_certs_via_dns", [cluster_path])
+	denied_with(patched(drop(path)), "enable_k8s_certs_via_dns must be written false")
 }
 
 test_s15_rejects_the_ip_endpoint_on if {

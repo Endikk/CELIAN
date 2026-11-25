@@ -19,6 +19,7 @@ set -euo pipefail
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 problems=0
+default_run=0
 
 report() {
   problems=$((problems + 1))
@@ -26,6 +27,7 @@ report() {
 }
 
 if [ "$#" -eq 0 ]; then
+  default_run=1
   for file in "$root"/.github/workflows/*.yml "$root"/.github/workflows/*.yaml; do
     if [ -f "$file" ]; then
       set -- "$@" "$file"
@@ -118,6 +120,33 @@ for file in "$@"; do
       ;;
   esac
 done
+
+# Each failing case of the gcp layer, in gcp/tests/static/s17-cases/, is run
+# through this script alone: it must fail, and its output must hold the text
+# of the case's "# expect:" line. Without that folder (a project rendered for
+# the local target alone), there is nothing to run.
+check_cases() {
+  local case_file expect out found=0
+  for case_file in "$root"/gcp/tests/static/s17-cases/*.txt; do
+    [ -f "$case_file" ] || continue
+    found=$((found + 1))
+    expect="$(awk -v key='# expect: ' 'NR > 10 { exit } index($0, key) == 1 { print substr($0, length(key) + 1); exit }' "$case_file")"
+    if [ -z "$expect" ]; then
+      report "$case_file" 0 "no '# expect:' line"
+    elif out="$(bash "${BASH_SOURCE[0]}" "$case_file" 2>&1)"; then
+      report "$case_file" 0 "accepted, yet it is a failing case: $expect"
+    elif ! printf '%s\n' "$out" | grep -F -q -e "$expect"; then
+      report "$case_file" 0 "refused, but no message holds: $expect"
+    fi
+  done
+  if [ "$found" -eq 0 ]; then
+    report "$root/gcp/tests/static/s17-cases" 0 "holds no failing case"
+  fi
+}
+
+if [ "$default_run" -eq 1 ] && [ -d "$root/gcp/tests/static/s17-cases" ]; then
+  check_cases
+fi
 
 if [ "$problems" -gt 0 ]; then
   exit 1

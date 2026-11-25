@@ -1,0 +1,4 @@
+# Failing case of S17: a state import.
+# expect: OpenTofu command outside the allowlist of the gcp layer
+
+  sandboxed tofu -chdir="$dir" import google_x.y z

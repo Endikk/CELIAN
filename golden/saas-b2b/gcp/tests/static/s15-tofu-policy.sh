@@ -101,18 +101,89 @@ run_policy() {
   done
 }
 
-# Trivy in an emptied environment, with its cache in a temporary directory:
-# the checks bundle is fetched again at each run, so that a new rule shows.
+# Trivy in an emptied environment, with its cache in a temporary directory.
+# $1 is the scratch directory, $2 the directory to scan.
+trivy_scan() {
+  env -i PATH="$PATH" HOME="$1/home" trivy config --quiet \
+    --cache-dir "$1/cache" --disable-telemetry --ignorefile '' \
+    --misconfig-scanners terraform --exit-code 1 "$2"
+}
+
+# Findings of the "#trivy:ignore" comments of the files given as arguments,
+# one "<file>:<line>: <comment>|<resource>" per comment that is not in the
+# closed list. Filled by the next commit.
+ignore_findings() {
+  return 0
+}
+
+# Each failing case of testdata/ignores/ must be refused, with the message
+# its "# expect:" line gives.
+check_ignore_cases() {
+  local case_file expect out found=0
+  for case_file in "$policies"/testdata/ignores/*.tf; do
+    [ -f "$case_file" ] || continue
+    found=$((found + 1))
+    expect="$(header_value expect "$case_file")"
+    out="$(ignore_findings "$case_file")"
+    if [ -z "$out" ]; then
+      echo "$case_file: its ignore comment is accepted, yet it is a failing case: $expect" >&2
+      problems=$((problems + 1))
+    elif ! printf '%s\n' "$out" | grep -F -q -e "$expect"; then
+      echo "$case_file: refused, but no message holds: $expect" >&2
+      printf '%s\n' "$out" >&2
+      problems=$((problems + 1))
+    fi
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "$policies/testdata/ignores holds no failing case." >&2
+    problems=$((problems + 1))
+  fi
+}
+
+# Proof that Trivy applies the Cloud SQL logging checks to the root: in a
+# copy where each flag is turned off, it must fail on all five. A value that
+# Trivy cannot resolve (a computed database_version) makes it pass in silence.
+check_scan_applies_checks() {
+  local work="$1" copy out id
+  copy="$work/copy"
+  mkdir -p "$copy/gcp/tofu"
+  cp "$dir"/*.tf "$copy/gcp/tofu/"
+  cp platform.yaml "$copy/platform.yaml"
+  awk '
+    /^[ \t]*name[ \t]*=[ \t]*"log_(connections|disconnections|checkpoints|lock_waits)"/ { off = "\"off\""; armed = 1 }
+    /^[ \t]*name[ \t]*=[ \t]*"log_temp_files"/ { off = "\"-1\""; armed = 1 }
+    armed && /^[ \t]*value[ \t]*=/ { sub(/"[^"]*"/, off); armed = 0 }
+    { print }
+  ' "$dir/database.tf" >"$copy/gcp/tofu/database.tf"
+  if out="$(trivy_scan "$work" "$copy/gcp/tofu" 2>&1)"; then
+    echo "Trivy accepted a copy of $dir with its Cloud SQL logging flags off: it does not apply those checks." >&2
+    problems=$((problems + 1))
+    return 0
+  fi
+  for id in AVD-GCP-0014 AVD-GCP-0016 AVD-GCP-0020 AVD-GCP-0022 AVD-GCP-0025; do
+    if ! printf '%s\n' "$out" | grep -F -q -e "$id"; then
+      echo "Trivy did not report $id on a copy of $dir with its Cloud SQL logging flags off: it does not apply that check." >&2
+      problems=$((problems + 1))
+    fi
+  done
+}
+
+# Trivy in an emptied environment. Its cache is a temporary directory.
 run_scan() {
-  local work
+  local work out
   need trivy
   root_present || return 0
   work="$(mktemp -d)"
   mkdir -p "$work/home"
-  if ! env -i PATH="$PATH" HOME="$work/home" trivy config --quiet \
-    --cache-dir "$work/cache" --disable-telemetry --ignorefile '' \
-    --misconfig-scanners terraform --exit-code 1 "$dir"; then
+  if ! trivy_scan "$work" "$dir"; then
     echo "Trivy refuses $dir: fix each finding, or justify it right above its resource (T109)." >&2
+    problems=$((problems + 1))
+  fi
+  check_scan_applies_checks "$work"
+  check_ignore_cases
+  out="$(ignore_findings "$dir"/*.tf "$dir"/*.tf.json "$dir"/*.tfvars "$dir"/*.tfvars.json)"
+  if [ -n "$out" ]; then
+    printf '%s\n' "$out" >&2
     problems=$((problems + 1))
   fi
   rm -rf "$work"
