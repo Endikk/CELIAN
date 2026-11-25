@@ -73,6 +73,10 @@ Fait par [OPS]. API des releases et code d'`envoyproxy/gateway` et de `kubernete
 
 Versions. Les valeurs du tableau « Versions et condensats » de l'ADR-005 tiennent. Envoy Gateway n'a publié aucune release 1.10.x après 1.10.0 (2026-11-06) ; la plus récente reste 1.9.4 (2026-11-17), d'une mineure antérieure. Gateway API v1.7.0 (2026-10-29, release immuable) reste la dernière. Sur Docker Hub, `tag_last_pushed` donne 2026-11-06 pour `envoyproxy/gateway:v1.10.0`, `envoyproxy/gateway-helm:v1.10.0` et `envoyproxy/gateway-crds-helm:v1.10.0`, et 2026-10-27 pour `envoyproxy/envoy:distroless-v1.40.2` : plus de 7 jours le 2026-11-25 (principe VI). CVE-2026-97054 reste sans release corrigée.
 
+CVE-2026-97054, relevé de [SECU] du 2026-11-25 : la base de Trivy la classe désormais MEDIUM (Red Hat, CVSS 5,9), et non plus HIGH comme à la rédaction de l'ADR-005. Au seuil `HIGH` de RS-23, le scan ne la relève donc plus, et l'exception que l'ADR-005 attendait n'a plus lieu d'être tant que la classe ne remonte pas. Ni l'ADR-005 ni RS-23 ne sont modifiés ici : [SECU] relit la classe au premier passage du scan (T118).
+
+Relecture [SECU] de la PR de l'étape 7, relevé du 2026-11-25 : l'étiquette `pod-security.kubernetes.io/enforce: restricted` sur `envoy-gateway-system` tient. `PROFILE=lite task test:e2e` sur kind (Docker 29.8.2, nœud v1.36.4) passe avec elle : le contrôleur, certgen et le proxy sont admis, la Gateway devient `Programmed` et E03 ne relève aucun événement `FailedCreate` « violates PodSecurity ». `baseline` n'est donc pas retenu. Les champs du réglage `watch` du contrôleur (écart 43) viennent de <https://raw.githubusercontent.com/envoyproxy/gateway/v1.10.0/api/v1alpha1/envoygateway_types.go>, lu le 2026-11-25.
+
 Sommes et condensats, relus le 2026-11-25 :
 
 | Élément | Lu | Égal à l'ADR-005 |
