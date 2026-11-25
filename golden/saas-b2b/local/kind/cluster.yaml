@@ -1,0 +1,37 @@
+# Configuration of the local cluster, passed to kind by
+# local/scripts/cluster.sh (spec 001, plan, "Ce que fait task up", point 2).
+# Field names: kind.x-k8s.io/v1alpha4 at kind 0.33.0 (research RS-13).
+# Checked by S05 (loopback, node image by digest), S21 (Kubernetes minor of
+# platform.yaml) and S13 (registry hosts of the node).
+#
+# The host ports of the gateway join extraPortMappings with step 7 (T059),
+# each with listenAddress: "127.0.0.1"; kind publishes a mapping without
+# one on 0.0.0.0 (ADR-004, condition 1).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+networking:
+  # The default of kind, written so that a change of default cannot move the
+  # API server off the loopback (ADR-004, condition 1).
+  apiServerAddress: "127.0.0.1"
+# containerd reads the registry hosts of the node in /etc/containerd/certs.d,
+# a folder of this layer mounted read-only below: each registry of
+# local/mirror/registries goes to the zot mirror first (ADR-011). The node
+# images of kind v0.27.0 and later set this path already; the patch stays,
+# as in the configuration that BENCH-010 measured.
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry]
+      config_path = "/etc/containerd/certs.d"
+nodes:
+  - role: control-plane
+    # ADR-004, version rule: the node image of kind 0.33.0 for the minor of
+    # platform.yaml, by digest. It moves with KIND_VERSION of
+    # local/scripts/lib/preflight-checks.sh, in one PR.
+    # renovate: datasource=docker depName=docker.io/kindest/node
+    image: kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed
+    extraMounts:
+      # Relative to the folder where kind runs: local/scripts/cluster.sh
+      # runs it from the root of the golden repo (research RS-13).
+      - hostPath: local/mirror/certs.d
+        containerPath: /etc/containerd/certs.d
+        readOnly: true

@@ -41,15 +41,27 @@
     },
     {
       "customType": "regex",
-      "description": "Task and conftest, pinned in tests/tools/install.sh, each version under a # renovate: comment. Renovate cannot update tests/tools/SHA256SUMS: its lines for the new version are written by hand in the same PR, from the checksum file of the release. Until then install.sh finds no sum for the new archives, and the CI of the PR fails.",
+      "description": "Task and conftest, pinned in tests/tools/install.sh, and kind, pinned in local/scripts/lib/preflight-checks.sh, each version under a # renovate: comment. kind moves with its node image, in the group of the packageRules below. Renovate cannot update tests/tools/SHA256SUMS: its lines for the new version are written by hand in the same PR, from the checksum file of the release. Until then install.sh finds no sum for the new archives, and the CI of the PR fails.",
       "managerFilePatterns": [
-        "/^tests/tools/install\\.sh$/"
+        "/^tests/tools/install\\.sh$/",
+        "/^local/scripts/lib/preflight-checks\\.sh$/"
       ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>github-releases) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_VERSION=\"(?<currentValue>[^\"\\s]+)\""
       ],
       "extractVersionTemplate": "^v(?<version>.*)$",
       "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "description": "Images of the local layer, by tag and digest under a # renovate: comment: the node image of local/kind/cluster.yaml, under the key image, and the zot mirror of local/tasks/local.yml, under MIRROR_IMAGE (ADR-004, version rule; ADR-011, condition 8; ADR-016).",
+      "managerFilePatterns": [
+        "/^local/kind/cluster\\.yaml$/",
+        "/^local/tasks/.+\\.ya?ml$/"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+(?:image|[A-Z0-9_]+_IMAGE)\\s*:\\s*\\S+?:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)"
+      ]
     }
   ],
   "packageRules": [

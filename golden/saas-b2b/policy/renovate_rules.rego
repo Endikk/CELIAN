@@ -11,9 +11,12 @@
 # - no other entry, manager or top setting decides the branch of an update,
 #   so that nothing splits those two pairs;
 # - Task and conftest, pinned in tests/tools/install.sh next to
-#   platform.yaml, keep their custom manager, customManagers holds only that
-#   one and the one of the _IMAGE variables, and the regex managers see
-#   tests/, which config:recommended hides (research RS-17).
+#   platform.yaml, and kind, pinned in local/scripts/lib/preflight-checks.sh,
+#   keep their custom manager; the node image of local/kind/cluster.yaml
+#   and the zot image of local/tasks/ keep theirs; customManagers holds only
+#   those two and the one of the _IMAGE variables of the workflows, and the
+#   regex managers see tests/, which config:recommended hides (research
+#   RS-17).
 #
 # Input: renovate.json and platform.yaml, given to `conftest test --combine`,
 # a list of objects with a `path` and the parsed `contents` (research RS-18).
@@ -377,19 +380,26 @@ deny contains msg if {
 	msg := sprintf("%s: no packageRules entry puts the charts and the controller image of Envoy Gateway (%s) in one groupName, with no other key than %s, and only regexes or these names as patterns", [label_envoy, concat(", ", envoy_names), concat(", ", group_keys)])
 }
 
-# Task and conftest. tests/tools/install.sh pins their versions, each under
-# a "# renovate:" comment that tests/tools/check-renovate-comments.sh checks.
-# Its custom manager is written once, to the letter apart from its
-# description; its path follows the one of platform.yaml, so that the
-# renovate.json of CELIAN names golden/saas-b2b/tests/tools/install.sh.
+# Task and conftest, then kind. tests/tools/install.sh and
+# local/scripts/lib/preflight-checks.sh pin their versions, each under a
+# "# renovate:" comment that tests/tools/check-renovate-comments.sh checks;
+# kind moves with its node image, in the group above. Their custom manager
+# is written once, to the letter apart from its description; its paths
+# follow the one of platform.yaml, so that the renovate.json of CELIAN names
+# the files under golden/saas-b2b/.
 tools_prefix := trim_suffix(file.path, "platform.yaml") if {
 	count(platform_files) == 1
 	some file in platform_files
 }
 
+escaped_prefix := replace(tools_prefix, ".", "\\.")
+
 tools_manager := {
 	"customType": "regex",
-	"managerFilePatterns": [sprintf("/^%stests/tools/install\\.sh$/", [replace(tools_prefix, ".", "\\.")])],
+	"managerFilePatterns": [
+		sprintf("/^%stests/tools/install\\.sh$/", [escaped_prefix]),
+		sprintf("/^%slocal/scripts/lib/preflight-checks\\.sh$/", [escaped_prefix]),
+	],
 	"matchStrings": [`# renovate: datasource=(?<datasource>github-releases) depName=(?<depName>\S+)\s+[A-Z0-9_]+_VERSION="(?<currentValue>[^"\s]+)"`],
 	"extractVersionTemplate": "^v(?<version>.*)$",
 	"versioningTemplate": "semver",
@@ -417,6 +427,32 @@ images_manager := {
 	"matchStrings": [`# renovate: datasource=(?<datasource>docker) depName=(?<depName>\S+)\s+[A-Z0-9_]+_IMAGE\s*:\s*\S+?:(?<currentValue>[^\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)`],
 }
 
+# The manager of the images of the local layer, written once as well: the
+# node image of local/kind/cluster.yaml, under the key image, and the zot
+# image of the Taskfile of the layer, under MIRROR_IMAGE (ADR-004, version
+# rule, point 5; ADR-011, condition 8; ADR-016). Both are pinned by tag and
+# digest, so the expression is the one of the _IMAGE variables, with the key
+# image as well.
+local_manager := {
+	"customType": "regex",
+	"managerFilePatterns": [
+		sprintf("/^%slocal/kind/cluster\\.yaml$/", [escaped_prefix]),
+		sprintf("/^%slocal/tasks/.+\\.ya?ml$/", [escaped_prefix]),
+	],
+	"matchStrings": [`# renovate: datasource=(?<datasource>docker) depName=(?<depName>\S+)\s+(?:image|[A-Z0-9_]+_IMAGE)\s*:\s*\S+?:(?<currentValue>[^\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)`],
+}
+
+local_manager_found if {
+	some manager in object.get(config, "customManagers", [])
+	is_object(manager)
+	object.remove(manager, {"description"}) == local_manager
+}
+
+known_manager(manager) if {
+	is_object(manager)
+	object.remove(manager, {"description"}) == local_manager
+}
+
 known_manager(manager) if {
 	is_object(manager)
 	object.remove(manager, {"description"}) == images_manager
@@ -430,7 +466,7 @@ known_manager(manager) if {
 # A template of an entry of customManagers wins over what its expression
 # captures, and picks the datasource, the package name and the registry
 # (lib/modules/manager/custom/regex/utils.ts, lines 55 to 74, Renovate
-# 44.247.1), hence who dates a release. Only the two known managers stay.
+# 44.247.1), hence who dates a release. Only the three known managers stay.
 deny contains msg if {
 	is_object(config)
 	is_string(tools_prefix)
@@ -446,14 +482,14 @@ deny contains msg if {
 	is_array(managers)
 	some i, manager in managers
 	not known_manager(manager)
-	msg := sprintf("%s: customManagers[%v] is not one of the two known managers, to the letter apart from the description: the _IMAGE variables of the workflows and %stests/tools/install.sh; a template of another entry picks the datasource, the package and the registry, hence who dates the release", [label_tools, i, tools_prefix])
+	msg := sprintf("%s: customManagers[%v] is not one of the three known managers, to the letter apart from the description: the _IMAGE variables of the workflows, %stests/tools/install.sh with %slocal/scripts/lib/preflight-checks.sh, and the images of %slocal/kind/cluster.yaml and %slocal/tasks/; a template of another entry picks the datasource, the package and the registry, hence who dates the release", [label_tools, i, tools_prefix, tools_prefix, tools_prefix, tools_prefix])
 }
 
 deny contains msg if {
 	is_object(config)
 	is_string(tools_prefix)
 	not tools_manager_found
-	msg := sprintf("%s: no customManagers entry is the manager of %stests/tools/install.sh, to the letter apart from its description (regex, github-releases, extractVersion ^v, semver); without it, Renovate never updates Task and conftest", [label_tools, tools_prefix])
+	msg := sprintf("%s: no customManagers entry is the manager of %stests/tools/install.sh and %slocal/scripts/lib/preflight-checks.sh, to the letter apart from its description (regex, github-releases, extractVersion ^v, semver); without it, Renovate never updates Task, conftest and kind", [label_tools, tools_prefix, tools_prefix])
 }
 
 # config:recommended extends :ignoreModulesAndTests, whose ignorePaths hide
@@ -480,4 +516,11 @@ deny contains msg if {
 	is_object(config)
 	not regex_object_found
 	msg := sprintf("%s: regex must hold ignorePaths and nothing else, description aside: %v, the list of preset :ignoreModulesAndTests without **/tests/**, so that Renovate sees tests/tools/install.sh", [label_tools, regex_ignore_paths])
+}
+
+deny contains msg if {
+	is_object(config)
+	is_string(tools_prefix)
+	not local_manager_found
+	msg := sprintf("%s: no customManagers entry is the manager of the images of %slocal/kind/cluster.yaml and %slocal/tasks/, to the letter apart from its description (regex, docker, key image or <NAME>_IMAGE, tag and digest); without it, Renovate never updates the node image of kind and the zot image", [label_kind, tools_prefix, tools_prefix])
 }

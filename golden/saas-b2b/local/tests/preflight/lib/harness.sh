@@ -88,7 +88,9 @@ source "$script"'
 #                        free nor in use
 #   --sourced            sources preflight.sh instead of running it
 #   VAR=value            environment of preflight.sh: FAKE_*, PROFILE,
-#                        KUBECONFIG, DOCKER_HOST, DOCKER_CONTEXT
+#                        KUBECONFIG, DOCKER_HOST, DOCKER_CONTEXT,
+#                        KIND_EXPERIMENTAL_PROVIDER,
+#                        KIND_EXPERIMENTAL_DOCKER_NETWORK
 #   ARG                  arguments of preflight.sh, the host ports to check
 # Without --taken or --undecidable, the TCP probe of preflight.sh is the real
 # one. Sets OUTPUT (stdout and stderr) and STATUS, then checks that nothing

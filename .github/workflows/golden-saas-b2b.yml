@@ -78,3 +78,44 @@ jobs:
 
       - name: Check a standalone copy of the golden repo (X01)
         run: bash golden/saas-b2b/tests/export/x01-standalone-copy.sh
+
+  # Tests on kind of the lite profile (spec 001, T051): E19, E22, E24 and the
+  # parts of E03 and E08 that step 6 delivers; the steps after it add theirs.
+  # kind and kubectl come checked against their SHA-256 (ADR-004, condition
+  # 5; research RS-18), Task from tests/tools/install.sh. The standard
+  # profile is refused until step 12, hence PROFILE=lite (tasks.md, gap 14).
+  # No path filter (research RS-17, relevé du 2026-11-25). Required check of
+  # the ruleset of main.
+  e2e-lite:
+    name: e2e-lite
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # renovate: datasource=github-releases depName=kubernetes/kubernetes
+      KUBECTL_VERSION: v1.36.6
+      # SHA-256 of kubectl linux/amd64, from kubectl.sha256 of the release
+      # (research RS-18). No manager updates it: a PR of Renovate on
+      # KUBECTL_VERSION fails here until the new sum is written by hand.
+      KUBECTL_SHA256: 29818b6729dc9262b692307470d0558d027725e738be5dd47c760261868a2634
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Task and conftest
+        working-directory: golden/saas-b2b
+        run: |
+          bash tests/tools/install.sh "$RUNNER_TEMP/golden-tools"
+          echo "$RUNNER_TEMP/golden-tools" >> "$GITHUB_PATH"
+
+      # Before the kind and the kubectl of the runner on PATH.
+      - name: Install kind and kubectl
+        run: |
+          bash scripts/ci/install-kind-kubectl.sh "$RUNNER_TEMP/kind-tools"
+          echo "$RUNNER_TEMP/kind-tools" >> "$GITHUB_PATH"
+
+      - name: Run the tests on kind (lite profile)
+        working-directory: golden/saas-b2b
+        env:
+          PROFILE: lite
+        run: task test:e2e

@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+# Simulated docker CLI of P07, the guard of local/tests/e2e/run.sh. It answers
+# the two calls of the guard and logs each call on a line of FAKE_LOG; any
+# other call is logged as UNEXPECTED and fails (a guard that created or
+# removed something would be seen at once).
+#   docker container inspect --format <template> saas-b2b-mirror
+#   docker volume inspect --format <template> saas-b2b-mirror
+# FAKE_E2E_CONTAINER  present or absent (default)
+# FAKE_E2E_VOLUME     present or absent (default)
+set -euo pipefail
+
+readonly NAME="saas-b2b-mirror"
+
+if [ -n "${FAKE_LOG:-}" ]; then
+  printf "docker %s\n" "$*" >>"$FAKE_LOG"
+fi
+
+unexpected() {
+  if [ -n "${FAKE_LOG:-}" ]; then
+    printf "UNEXPECTED docker %s\n" "$*" >>"$FAKE_LOG"
+  fi
+  printf "fake docker: unexpected call: docker %s\n" "$*" >&2
+  exit 99
+}
+
+# answer KIND STATE: the name when STATE is present, the engine error otherwise.
+answer() {
+  if [ "$2" = present ]; then
+    printf "%s\n" "$NAME"
+  else
+    printf "Error response from daemon: No such %s: %s\n" "$1" "$NAME" >&2
+    exit 1
+  fi
+}
+
+case "$*" in
+  "container inspect --format {{.Name}} $NAME") answer container "${FAKE_E2E_CONTAINER:-absent}" ;;
+  "volume inspect --format {{.Name}} $NAME") answer volume "${FAKE_E2E_VOLUME:-absent}" ;;
+  *) unexpected "$@" ;;
+esac

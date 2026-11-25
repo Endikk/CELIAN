@@ -63,8 +63,8 @@ celian_image_manager := with_value(image_manager, "managerFilePatterns", ["/^\\.
 # The manager of tests/tools/install.sh, next to platform.yaml.
 golden_tools_manager := {
 	"customType": "regex",
-	"description": "Task and conftest, in tests/tools/install.sh.",
-	"managerFilePatterns": ["/^tests/tools/install\\.sh$/"],
+	"description": "Task and conftest, in tests/tools/install.sh; kind, in local/scripts/lib/preflight-checks.sh.",
+	"managerFilePatterns": ["/^tests/tools/install\\.sh$/", "/^local/scripts/lib/preflight-checks\\.sh$/"],
 	"matchStrings": [`# renovate: datasource=(?<datasource>github-releases) depName=(?<depName>\S+)\s+[A-Z0-9_]+_VERSION="(?<currentValue>[^"\s]+)"`],
 	"extractVersionTemplate": "^v(?<version>.*)$",
 	"versioningTemplate": "semver",
@@ -72,7 +72,21 @@ golden_tools_manager := {
 
 # The same manager in CELIAN, where platform.yaml is
 # golden/saas-b2b/platform.yaml.
-celian_tools_manager := with_value(golden_tools_manager, "managerFilePatterns", ["/^golden/saas-b2b/tests/tools/install\\.sh$/"])
+celian_tools_manager := with_value(golden_tools_manager, "managerFilePatterns", ["/^golden/saas-b2b/tests/tools/install\\.sh$/", "/^golden/saas-b2b/local/scripts/lib/preflight-checks\\.sh$/"])
+
+# The manager of the images of the local layer: the node image of the kind
+# configuration and the zot image of the Taskfile of the layer (ADR-004,
+# version rule, point 5; ADR-011, condition 8; ADR-016).
+local_expression := `# renovate: datasource=(?<datasource>docker) depName=(?<depName>\S+)\s+(?:image|[A-Z0-9_]+_IMAGE)\s*:\s*\S+?:(?<currentValue>[^\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)`
+
+golden_local_manager := {
+	"customType": "regex",
+	"description": "Images of the local layer.",
+	"managerFilePatterns": ["/^local/kind/cluster\\.yaml$/", "/^local/tasks/.+\\.ya?ml$/"],
+	"matchStrings": [local_expression],
+}
+
+celian_local_manager := with_value(golden_local_manager, "managerFilePatterns", ["/^golden/saas-b2b/local/kind/cluster\\.yaml$/", "/^golden/saas-b2b/local/tasks/.+\\.ya?ml$/"])
 
 config_for(package_rules, managers) := {
 	"extends": celian_presets,
@@ -86,7 +100,7 @@ config_for(package_rules, managers) := {
 	"packageRules": package_rules,
 }
 
-config_with(package_rules) := config_for(package_rules, [image_manager, golden_tools_manager])
+config_with(package_rules) := config_for(package_rules, [image_manager, golden_tools_manager, golden_local_manager])
 
 valid_config := config_with(valid_rules)
 
@@ -124,13 +138,13 @@ test_s23_accepts_the_rules_of_the_constitution_and_the_adrs if {
 
 test_s23_accepts_files_under_a_folder if {
 	accepted([
-		{"path": "golden/saas-b2b/renovate.json", "contents": config_for(valid_rules, [celian_image_manager, celian_tools_manager])},
+		{"path": "golden/saas-b2b/renovate.json", "contents": config_for(valid_rules, [celian_image_manager, celian_tools_manager, celian_local_manager])},
 		{"path": "golden/saas-b2b/platform.yaml", "contents": valid_platform},
 	])
 }
 
 test_s23_accepts_the_layout_of_celian if {
-	accepted(in_celian(config_for(valid_rules, [celian_image_manager, celian_tools_manager])))
+	accepted(in_celian(config_for(valid_rules, [celian_image_manager, celian_tools_manager, celian_local_manager])))
 }
 
 test_s23_accepts_a_description_on_each_entry if {
@@ -428,13 +442,13 @@ file_rules := array.concat(
 file_config(managers) := object.union(config_for(file_rules, managers), {"pre-commit": {"enabled": true}})
 
 test_s23_accepts_the_layout_of_the_golden_repo_in_both_packages if {
-	files := checked(file_config([image_manager, golden_tools_manager]), valid_platform)
+	files := checked(file_config([image_manager, golden_tools_manager, golden_local_manager]), valid_platform)
 	accepted(files)
 	count(renovate_delay.deny) == 0 with input as files
 }
 
 test_s23_accepts_the_layout_of_celian_in_both_packages if {
-	files := in_celian(file_config([celian_image_manager, celian_tools_manager]))
+	files := in_celian(file_config([celian_image_manager, celian_tools_manager, celian_local_manager]))
 	accepted(files)
 	count(renovate_delay.deny) == 0 with input as files
 }
@@ -495,7 +509,7 @@ test_s23_accepts_a_regex_object_without_a_description if {
 
 # The custom managers. A template of an entry wins over what its expression
 # captures, and picks the datasource, the package and the registry, hence who
-# dates a release: customManagers holds the two known managers, to the letter
+# dates a release: customManagers holds the three known managers, to the letter
 # apart from the description, and nothing else.
 
 test_s23_rejects_one_more_custom_manager if {
@@ -505,59 +519,59 @@ test_s23_rejects_one_more_custom_manager if {
 		"matchStrings": ["FROM (?<depName>\\S+):(?<currentValue>\\S+)"],
 	}
 	renovate := config_for(valid_rules, [image_manager, extra, golden_tools_manager])
-	denied_with(checked(renovate, valid_platform), "customManagers[1] is not one of the two known managers")
+	denied_with(checked(renovate, valid_platform), "customManagers[1] is not one of the three known managers")
 }
 
 test_s23_rejects_one_more_custom_manager_in_celian if {
 	extra := {"customType": "regex", "managerFilePatterns": ["/^Dockerfile$/"], "matchStrings": ["FROM (?<depName>\\S+)"]}
-	renovate := config_for(valid_rules, [celian_image_manager, celian_tools_manager, extra])
-	denied_with(in_celian(renovate), "customManagers[2] is not one of the two known managers")
+	renovate := config_for(valid_rules, [celian_image_manager, celian_tools_manager, extra, celian_local_manager])
+	denied_with(in_celian(renovate), "customManagers[2] is not one of the three known managers")
 }
 
 test_s23_rejects_an_image_manager_with_a_datasource_template if {
 	manager := with_value(image_manager, "datasourceTemplate", "github-tags")
 	renovate := config_for(valid_rules, [manager, golden_tools_manager])
-	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the three known managers")
 }
 
 test_s23_rejects_an_image_manager_with_a_registry_url_template if {
 	manager := with_value(image_manager, "registryUrlTemplate", "https://registry.example.com")
 	renovate := config_for(valid_rules, [manager, golden_tools_manager])
-	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the three known managers")
 }
 
 test_s23_rejects_an_image_manager_with_another_expression if {
 	manager := with_value(image_manager, "matchStrings", ["(?<depName>\\S+)_IMAGE: (?<currentValue>\\S+)"])
 	renovate := config_for(valid_rules, [manager, golden_tools_manager])
-	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the three known managers")
 }
 
 test_s23_rejects_an_image_manager_with_another_file_pattern if {
 	manager := with_value(image_manager, "managerFilePatterns", ["/.*/"])
 	renovate := config_for(valid_rules, [manager, golden_tools_manager])
-	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the three known managers")
 }
 
 test_s23_rejects_the_image_manager_of_celian_in_the_golden_repo if {
 	renovate := config_for(valid_rules, [celian_image_manager, golden_tools_manager])
-	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the three known managers")
 }
 
 test_s23_rejects_the_image_manager_of_the_golden_repo_in_celian if {
 	renovate := config_for(valid_rules, [image_manager, celian_tools_manager])
-	denied_with(in_celian(renovate), "customManagers[0] is not one of the two known managers")
+	denied_with(in_celian(renovate), "customManagers[0] is not one of the three known managers")
 }
 
 test_s23_rejects_a_tools_manager_with_a_datasource_template if {
 	manager := with_value(golden_tools_manager, "datasourceTemplate", "github-tags")
 	renovate := config_for(valid_rules, [image_manager, manager])
-	denied_with(checked(renovate, valid_platform), "customManagers[1] is not one of the two known managers")
+	denied_with(checked(renovate, valid_platform), "customManagers[1] is not one of the three known managers")
 }
 
-test_s23_names_the_two_known_managers_in_the_message if {
+test_s23_names_the_three_known_managers_in_the_message if {
 	manager := with_value(image_manager, "datasourceTemplate", "github-tags")
 	renovate := config_for(valid_rules, [manager, golden_tools_manager])
-	denied_with(checked(renovate, valid_platform), "the _IMAGE variables of the workflows and tests/tools/install.sh")
+	denied_with(checked(renovate, valid_platform), "the _IMAGE variables of the workflows, tests/tools/install.sh with local/scripts/lib/preflight-checks.sh, and the images of local/kind/cluster.yaml and local/tasks/")
 }
 
 test_s23_rejects_custom_managers_that_is_not_a_list if {
@@ -569,8 +583,44 @@ test_s23_rejects_custom_managers_that_is_not_a_list if {
 
 test_s23_names_its_requirements_in_each_message if {
 	msgs := deny with input as checked({}, valid_platform)
-	count(msgs) == 6
+	count(msgs) == 7
 	every msg in msgs {
 		startswith(msg, "S23 (FR-013")
 	}
+}
+
+# The manager of the images of the local layer (step 6), and kind in the
+# manager of the versions.
+
+test_s23_rejects_a_config_without_the_local_manager if {
+	renovate := config_for(valid_rules, [image_manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of the images of local/kind/cluster.yaml and local/tasks/")
+}
+
+test_s23_rejects_the_local_manager_of_celian_in_the_golden_repo if {
+	renovate := config_for(valid_rules, [image_manager, golden_tools_manager, celian_local_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[2] is not one of the three known managers")
+}
+
+test_s23_rejects_the_local_manager_of_the_golden_repo_in_celian if {
+	renovate := config_for(valid_rules, [celian_image_manager, celian_tools_manager, golden_local_manager])
+	denied_with(in_celian(renovate), "no customManagers entry is the manager of the images of golden/saas-b2b/local/kind/cluster.yaml")
+}
+
+test_s23_rejects_a_local_manager_with_a_versioning_template if {
+	manager := with_value(golden_local_manager, "versioningTemplate", "loose")
+	renovate := config_for(valid_rules, [image_manager, golden_tools_manager, manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[2] is not one of the three known managers")
+}
+
+test_s23_rejects_a_local_manager_that_reads_every_file if {
+	manager := with_value(golden_local_manager, "managerFilePatterns", ["/^local/.+$/"])
+	renovate := config_for(valid_rules, [image_manager, golden_tools_manager, manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[2] is not one of the three known managers")
+}
+
+test_s23_rejects_a_tools_manager_without_the_preflight_checks if {
+	manager := with_value(golden_tools_manager, "managerFilePatterns", ["/^tests/tools/install\\.sh$/"])
+	renovate := config_for(valid_rules, [image_manager, manager, golden_local_manager])
+	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of tests/tools/install.sh")
 }

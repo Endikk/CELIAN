@@ -176,6 +176,22 @@ Effets : les contrôles passent dans `golden/saas-b2b/local/scripts/lib/prefligh
 | <https://github.com/docker/cli/blob/v29.8.2/cli/context/docker/constants.go> | 2026-11-25 | Nom de l'entrée : `docker` |
 | <https://github.com/docker/cli/blob/v29.8.2/opts/hosts.go> | 2026-11-25 | `ParseHost` : hôte sans schéma en `tcp://` ; `opts/hosts_unix.go`, hôte par défaut `unix:///var/run/docker.sock` |
 
+### Relevé du 2026-11-25 : variables expérimentales de kind (étape 6)
+
+Fait par [OPS]. Code de kind au tag v0.33.0, lu par `gh api`.
+
+`KIND_EXPERIMENTAL_PROVIDER` est lue par la CLI de kind dans `GetDefault` (`pkg/internal/runtime/runtime.go`, lignes 28 à 44). Une valeur vide vaut absence : kind détecte alors le moteur lui-même. `docker` force le fournisseur docker. `podman` force Podman, et `nerdctl`, `finch` et `nerdctl.lima` forcent nerdctl. Toute autre valeur est ignorée avec un avertissement, et kind détecte de nouveau.
+
+Décision du DSI du 2026-11-25, appliquée dans `local/scripts/lib/preflight-checks.sh` : les contrôles préalables refusent `KIND_EXPERIMENTAL_PROVIDER` posée à une autre valeur que `docker`, en la nommant, avant tout appel à `docker`. Une valeur inconnue est refusée aussi, bien que kind l'ignore, parce qu'elle trahit une intention que la règle ne suit pas. La valeur vide passe, comme pour kind. P02 joue chacune de ces valeurs.
+
+Ajout d'[OPS], à confirmer par le DSI : le fournisseur docker lit aussi `KIND_EXPERIMENTAL_DOCKER_NETWORK` (`pkg/cluster/internal/providers/docker/provider.go`, lignes 71 à 76), qui remplace le réseau `kind` (`network.go`, ligne 47) par un autre. Le miroir démarre sur le réseau `kind` (ADR-011, condition 2) : avec un autre réseau, les nœuds ne le joindraient plus. Les contrôles préalables refusent donc cette variable quand elle vaut autre chose que `kind`, sur le même modèle.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/internal/runtime/runtime.go> | 2026-11-25 | Lignes 28 à 44 : valeurs de `KIND_EXPERIMENTAL_PROVIDER`, vide ignorée, inconnue ignorée avec un avertissement |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/providers/docker/provider.go> | 2026-11-25 | Lignes 71 à 76 : `KIND_EXPERIMENTAL_DOCKER_NETWORK` remplace le réseau des nœuds |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/providers/docker/network.go> | 2026-11-25 | Ligne 47 : réseau `kind` par défaut |
+
 ## RS-09. Taskfile et scripts
 
 Décision : `Taskfile.yml` à la racine expose les commandes publiques et délègue aux Taskfiles inclus de `local/tasks/` et `gcp/tasks/`. La logique vit dans des scripts bash de `local/scripts/`, compatibles avec bash 3.2, sans heredoc, passés à shellcheck. Le Taskfile porte en tête l'inventaire des commandes qui créent, modifient ou suppriment un conteneur, un réseau ou un volume. Construction, chargement et application sont définis une fois et réutilisés par `task up` et `task reload`.
@@ -227,6 +243,19 @@ Effets : `golden/saas-b2b/Taskfile.yml` (T009) inclut `local/tasks/` en `interna
 | <https://taskfile.dev/docs/guide/platforms> | 2026-11-23 | Interpréteur intégré, contexte par entrée de `cmds`, appel explicite de `bash` |
 | <https://taskfile.dev/docs/reference/cli> | 2026-11-23 | Codes de sortie, `--silent`, `--dir`, `--taskfile`, `--list` |
 
+### Relevé du 2026-11-25 : noms à deux-points et variables d'un Taskfile inclus (étape 6)
+
+Fait par [OPS], avec Task v3.54.0 sur le poste de mesure, dans un Taskfile d'essai hors du dépôt.
+
+Une tâche du Taskfile racine peut porter un deux-points dans son nom : `mirror:purge` et `test:e2e` s'appellent tels quels, et `task --list` les affiche. La page des inclusions présente déjà `espace:tache` comme le nom d'appel d'une tâche incluse ; la page de définition des tâches ne dit rien d'un deux-points dans un nom écrit à la racine. Le constat sur le poste fait foi pour v3.54.0, et le contrat task-cli garde ces noms provisoires.
+
+Une variable posée sous `vars:` en tête d'un Taskfile inclus garde sa valeur face à la même variable passée par l'environnement (`MIRROR_IMAGE=... task show`) ou en ligne de commande (`task show MIRROR_IMAGE=...`) : les trois appels rendent la valeur du fichier. L'image du miroir vit donc sous `vars:` dans `local/tasks/local.yml`, où personne ne la remplace sans modifier le fichier, et y porte le commentaire `# renovate:` que demande l'ADR-016. `PROFILE`, à l'inverse, reste une entrée de l'utilisateur, passée par `env:` (relevé de RS-08 du 2026-11-24).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://taskfile.dev/docs/guide/includes> | 2026-11-25 | Appel `espace:tache` d'une tâche incluse |
+| Task v3.54.0 sur le poste, Taskfile d'essai | 2026-11-25 | Noms `mirror:purge` et `test:e2e` appelés et listés ; `vars:` d'un Taskfile inclus plus forte que l'environnement et que la ligne de commande |
+
 ## RS-10. Secrets locaux
 
 Décision : `db-auth`, `cache-auth`, `db-superuser` et `gateway-tls` en profil lite, `cache-auth` à partir de l'étape 19 (RS-11) ; valeurs de 40 caractères alphanumériques tirées de `/dev/urandom`, comme l'essai de BENCH-011, passées par un tube à `kubectl create -f -`, seulement si le Secret manque. Contrat : [contracts/secrets.md](contracts/secrets.md).
@@ -267,6 +296,51 @@ Restent à faire sur le golden repo, d'après les suites de l'ADR-012 : `readOnl
 Décision : l'ADR-011 tel quel, accepté par Lucas le 2026-11-21 avec ses réponses. `task down` supprime le cluster et `task app:down` le garde, noms provisoires que [PO] confirme en phase 5 ; le conteneur du miroir est retiré à chaque `task down`, son volume reste ; la purge passe par une commande explicite, `task mirror:purge`, et la rétention de zot n'entre qu'après un essai en `dryRun` et une relecture [SECU] ; un volume par projet. La liste des registres vit dans `local/mirror/registries`. La configuration zot et les `hosts.toml` en sont dérivés et versionnés ; S13 vérifie qu'ils restent d'accord, ce qui évite de générer du JSON à l'exécution sans outil dédié.
 
 Ouvert : les montages a et b pour plusieurs amonts, essayés à l'étape 12 avec ghcr.io, ou à l'étape 19 si le cache vient d'un autre registre que docker.io ; le temps de démarrage du miroir, mesuré par E17.
+
+### Relevé du 2026-11-25 : miroir, registres du nœud et configuration de kind (étape 6)
+
+Fait par [OPS]. Code de zot au tag v2.1.23, de kind au tag v0.33.0 et de l'API de moby au tag docker-v29.8.2, lus par `gh api` ; documentation de containerd, de kind et de Docker ; lectures sur le poste en lecture seule (`docker buildx imagetools inspect`, `docker system df -v`).
+
+Image de zot. Le tag `v2.1.23` de `ghcr.io/project-zot/zot` désigne toujours l'index `sha256:9d3de83ac2099e6f4843045b4c9b65b7e8baf40f92d28f54906dee9d4d390fd7`, celui que fige la condition 8 de l'ADR-011 ; il porte linux/amd64 et linux/arm64. La page des versions du paquet le donne « Published 23 days ago », et la release v2.1.23 date du 2026-11-02 : plus de 7 jours (principe VI, ADR-016). Le condensat entre dans `local/tasks/local.yml` sous `MIRROR_IMAGE`, avec le commentaire `# renovate:` que lit le gestionnaire des images de la couche `local` ; ses mises à jour passent par l'approbation de l'ADR-016.
+
+Ce que l'image lance. L'image publiée ne sort pas de `build/Dockerfile` : le workflow `publish.yaml` la construit par stacker depuis `build/stacker.yaml`, sur `gcr.io/distroless/base-nossl-debian13` pour Linux. Son entrée est `/usr/local/bin/zot-linux-<arch>`, sa commande `serve /etc/zot/config.json`, son utilisateur 0, et elle n'a aucun `HEALTHCHECK` (`docker image inspect` sur le poste : `Config.Healthcheck` à `null`). `build/Dockerfile`, qui en déclare un, n'est pas celui de la release. La sous-commande `zot healthcheck` existe dans le binaire 2.1.23 (`pkg/cli/server/healthcheck.go`), mais `--health-cmd` de la CLI docker la lancerait par un shell (`CMD-SHELL`, `cli/command/container/opts.go`, ligne 580, docker/cli v29.8.2), absent d'une base distroless ; et des options `--health-*` sans commande ne posent aucune sonde (essayé sur le poste : `State.Health` absent). Le projet monte sa configuration à `/etc/zot/config.json`, en lecture seule, et garde la commande de l'image.
+
+Attente du miroir. Sans port publié, sans `docker exec` et sans sonde dans l'image, la réponse HTTP du miroir ne se demande pas depuis le poste. zot lit sa configuration et ouvre son port au démarrage, et s'arrête aussitôt si l'un des deux échoue (`pkg/api/controller.go`, fonction `Run`, et `pkg/cli/server/root.go`, commande `serve`). `local/scripts/mirror.sh` attend donc l'état `running`, au plus 30 s, puis vérifie qu'il tient encore 2 s plus tard. La réponse elle-même a été relevée une fois sur le poste, le 2026-11-25 : un pod sur `docker.io/library/busybox:1.37.0` par condensat, tiré par le nœud à travers le miroir en capacité `pull` seule, a démarré en 5 s, et le journal de zot montre le `HEAD` puis les `GET` du manifeste et des couches, en 200, avec `?ns=docker.io`. T2 hors réseau en `pull` seul reste à l'étape 10 (E10).
+
+Configuration de zot. Celle de l'essai (`tests/bench/bench-010/zot/config-online.json`), reprise avec un journal en `info` : `sync` en `onDemand` avec `tlsVerify`, un seul amont, `https://index.docker.io`, `gc` à `false`, stockage sous `/var/lib/registry`. Les champs suivent l'exemple `examples/config-sync.json` du tag.
+
+Registres du nœud. La page `hosts.md` de containerd v2.3.4 : un dossier par registre sous `config_path`, `certs.d/<registre>/hosts.toml` ; les hôtes déclarés sont essayés d'abord, dans l'ordre, puis `server` ; `server` omis, le registre lui-même sert d'amont ; un hôte en HTTP s'écrit avec son schéma, `[host."http://..."]` ; `capabilities` prend `pull`, `resolve` et `push`, et « A public mirror should never be trusted to do a resolve action » ; le dossier se relit sans redémarrer containerd. `local/mirror/certs.d/docker.io/hosts.toml` omet `server` et déclare le seul miroir, `http://saas-b2b-mirror:5000`, en `pull`.
+
+Configuration de kind. Le correctif `containerdConfigPatches` qui pose `config_path` est celui de l'essai et de la page du registre local de kind, qui ajoute qu'il « is not necessary with images from kind v0.27.0+ ». Le golden repo le garde, comme le décrit l'ADR-011 : la configuration mesurée par T2 le portait. kind résout un `hostPath` relatif d'`extraMounts` par `filepath.Abs`, donc depuis le dossier où il tourne, pas depuis celui du fichier (`pkg/cluster/internal/providers/docker/provision.go`, lignes 89 à 97) : `local/scripts/cluster.sh` se place à la racine du golden repo avant d'appeler kind, et `local/kind/cluster.yaml` écrit `hostPath: local/mirror/certs.d`. Les champs `apiServerAddress`, `extraMounts` (`readOnly`) et `extraPortMappings` (`listenAddress`) sont ceux de `pkg/apis/config/v1alpha4/types.go`. kind étiquette chaque nœud `io.x-k8s.kind.cluster=<cluster>` (`constants.go`, ligne 21) : E03 s'en sert.
+
+Lancement par Docker. Options de `docker run` lues dans sa référence : `--network`, `--mount`, `--label`, `--name`, `--detach`, `--cap-drop`, `--security-opt`, `--read-only`, `--restart` à `no` par défaut, `--pull` à `missing` par défaut. Un montage `--mount type=bind,...,readonly` échoue si la source manque, là où `-v` créerait un dossier vide : le fichier de configuration absent ne peut pas devenir un dossier. `docker volume create` est idempotent pour un même nom et un même pilote, et `--label` y pose une étiquette. La page des étiquettes demande un préfixe en DNS inversé d'un domaine que l'on détient : le domaine réservé `saas-b2b.invalid` (RS-07) donne `invalid.saas-b2b.role`. Champs d'inspection relus dans l'API du moteur : `HostConfig.PortBindings`, `HostConfig.PublishAllPorts`, `NetworkSettings.Ports`, `NetworkSettings.Networks`. `docker system df -v --format '{{range .Volumes}}{{.Name}}={{.Size}};{{end}}'` rend la taille de chaque volume avec docker 29.8.2 (constaté, la page de `docker system df` ne liste pas les champs) ; `task down` s'en sert pour afficher la taille du volume du miroir.
+
+Essai sur le poste (OrbStack, docker 29.8.2), le 2026-11-25 : le conteneur garde l'utilisateur de l'image et tourne avec `--cap-drop ALL`, `--security-opt no-new-privileges=true` et `--read-only`, sans erreur dans son journal ; 66,8 Mio au repos d'après `docker stats`. La condition 6 de l'ADR-011 (UID non root) reste à essayer à l'étape 10 (E23).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| `docker buildx imagetools inspect ghcr.io/project-zot/zot:v2.1.23`, buildx 0.37.2 | 2026-11-25 | Index `9d3de83a`, manifestes linux/amd64 et linux/arm64 |
+| <https://github.com/project-zot/zot/pkgs/container/zot/versions?filters%5Bversion_type%5D=tagged> | 2026-11-25 | v2.1.23, condensat `9d3de83a`, « Published 23 days ago » |
+| <https://api.github.com/repos/project-zot/zot/releases/tags/v2.1.23> | 2026-11-25 | Publiée le 2026-11-02, release non immuable |
+| <https://github.com/project-zot/zot/blob/v2.1.23/build/stacker.yaml> | 2026-11-25 | Construction de l'image publiée : entrée, commande, aucun `HEALTHCHECK` |
+| <https://github.com/project-zot/zot/blob/v2.1.23/.github/workflows/publish.yaml> | 2026-11-25 | Base `gcr.io/distroless/base-nossl-debian13` pour Linux |
+| `docker image inspect` sur l'image par condensat, docker 29.8.2 | 2026-11-25 | `Config.Healthcheck` à `null`, entrée `/usr/local/bin/zot-linux-arm64`, utilisateur 0 |
+| <https://github.com/docker/cli/blob/v29.8.2/cli/command/container/opts.go> | 2026-11-25 | Ligne 580 : `--health-cmd` devient `CMD-SHELL` |
+| <https://github.com/project-zot/zot/blob/v2.1.23/pkg/api/controller.go> | 2026-11-25 | `Run` : port ouvert au démarrage, erreur rendue à `serve` si l'ouverture échoue |
+| <https://github.com/project-zot/zot/blob/v2.1.23/pkg/cli/server/healthcheck.go> | 2026-11-25 | `zot healthcheck <config>` existe : `/readyz`, 0 sur 2xx ; inutilisable sans shell par `--health-cmd` |
+| <https://github.com/project-zot/zot/blob/v2.1.23/pkg/cli/server/root.go> | 2026-11-25 | `serve <config>` |
+| <https://github.com/project-zot/zot/blob/v2.1.23/examples/config-sync.json> | 2026-11-25 | Champs de `sync` |
+| <https://github.com/containerd/containerd/blob/v2.3.4/docs/hosts.md> | 2026-11-25 | `server`, `host`, `capabilities`, ordre des hôtes, relecture sans redémarrage, hôte HTTP |
+| <https://kind.sigs.k8s.io/docs/user/local-registry/> | 2026-11-25 | Correctif `config_path`, inutile pour les images de kind v0.27.0 et après ; réseau `kind` |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/apis/config/v1alpha4/types.go> | 2026-11-25 | `apiServerAddress` à 127.0.0.1 par défaut, `containerdConfigPatches`, `Mount.readOnly`, `listenAddress` |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/providers/docker/provision.go> | 2026-11-25 | Lignes 89 à 97 : `hostPath` relatif résolu par `filepath.Abs` ; lignes 395 à 400 : `listenAddress` vide publiée sur 0.0.0.0 |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/providers/docker/constants.go> | 2026-11-25 | Ligne 21 : étiquette `io.x-k8s.kind.cluster` |
+| <https://docs.docker.com/reference/cli/docker/container/run/> | 2026-11-25 | Options de `docker run` citées plus haut |
+| <https://docs.docker.com/engine/storage/bind-mounts/> | 2026-11-25 | `--mount type=bind,src=...,dst=...,readonly` ; erreur si la source manque ; fichier seul accepté |
+| <https://docs.docker.com/reference/cli/docker/volume/create/> | 2026-11-25 | `--label` ; création idempotente pour un même nom |
+| <https://docs.docker.com/engine/manage-resources/labels/> | 2026-11-25 | Préfixe en DNS inversé, espaces réservés à Docker |
+| <https://docs.docker.com/reference/cli/docker/system/df/> | 2026-11-25 | `--verbose`, `--format` ; volumes avec leur taille |
+| <https://github.com/moby/moby/blob/docker-v29.8.2/api/swagger.yaml> | 2026-11-25 | `PortBindings`, `PublishAllPorts`, `PortMap`, `Networks`, `State.Status` |
 
 ## RS-14. Flux dans le profil standard
 
@@ -390,6 +464,22 @@ Fait par [DEV], dans le code et la documentation de Renovate au tag 44.247.1, lu
 | <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/migrations/custom/ignore-node-modules-migration.ts> | 2026-11-25 | Ligne 8 : `ignoreNodeModules` devient `ignorePaths` |
 | <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/presets/internal/helpers.preset.ts> | 2026-11-25 | `pinGitHubActionDigests` ne pose aucune des clés refusées ; `followTag` vient de presets hors d'`extends` |
 | <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/presets/internal/custom-managers.preset.ts> | 2026-11-25 | `githubActionsVersions` ne pose aucune des clés refusées |
+
+### Relevé du 2026-11-25 : Docker sur les runners et filtre du job sur kind (T040, étape 6)
+
+Fait par [OPS], dans le dépôt `actions/runner-images`.
+
+`ubuntu-latest` change d'image : la page d'accueil annonce Ubuntu 26.04 pour ce label en novembre 2026 et donne pour cette ligne « `ubuntu-latest` or `ubuntu-26.04` » ; la bascule d'un label `-latest` « is gradual and happens over 1-2 months ». Les deux images possibles portent Docker Engine 28.0.0 au moins (ADR-011, condition 3) : Docker Server 29.4.2 sur Ubuntu 26.04 (image 20261116.202.1), 28.0.4 sur Ubuntu 24.04 (image 20261116.376.1). Elles portent aussi kind 0.33.0 et kubectl 1.37.2 ; le job ne s'en sert pas, il installe les siens, vérifiés par leur SHA-256, devant le `PATH`. Le paquet `iproute2`, qui fournit `ss`, figure sur Ubuntu 26.04 : E03 lit les ports en écoute par `ss` sous Linux. Les contrôles préalables relisent la version du moteur à chaque exécution : une image sous 28.0.0 ferait échouer le job sans rien créer.
+
+Le job reste sur `ubuntu-latest`, le label que nomme T051. Un job requis qui change d'image d'un jour à l'autre peut échouer sans changement du dépôt ; si cela arrive, le repli est `ubuntu-24.04`, à décider par le DSI.
+
+Filtre de chemins (point 3 du relevé du 2026-11-23) : décision d'[OPS], `e2e-lite` tourne sans filtre à chaque PR, comme `static`. Le dépôt est public et les runners standard gratuits (R-16) ; un filtre demanderait un job de détection et la garde `always()` pour un gain de quelques minutes. À revoir si sa durée dépasse le quart d'heure.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/actions/runner-images/blob/main/README.md> | 2026-11-25 | `ubuntu-latest` vers Ubuntu 26.04 ; bascule sur un à deux mois |
+| <https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2604-Readme.md> | 2026-11-25 | Image 20261116.202.1 : Docker Server 29.4.2, kind 0.33.0, kubectl 1.37.2, bash 5.3.9, iproute2 |
+| <https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md> | 2026-11-25 | Image 20261116.376.1 : Docker Server 28.0.4, kind 0.33.0, kubectl 1.37.2, bash 5.2.21 ; annonce de la bascule |
 
 ## RS-18. Outils de test
 
@@ -539,6 +629,21 @@ Effets : `golden/saas-b2b/.pre-commit-config.yaml` (T097), `golden/saas-b2b/reno
 | <https://docs.astral.sh/uv/reference/environment/> | 2026-11-24 | `UV_TOOL_BIN_DIR`, depuis uv 0.3.0 |
 | <https://github.com/astral-sh/setup-uv/blob/68559e99cc807c1eb7e9238fd43a15bba460eec2/docs/environment-and-tools.md> | 2026-11-24 | Dossier des outils ajouté au `PATH` sous Windows seulement ; tag v10.3.3 égal à ce SHA |
 
+### Relevé du 2026-11-25 : kind et kubectl de la CI (T040, étape 6)
+
+Fait par [OPS]. API GitHub des dépôts `kubernetes/kubernetes` et `kubernetes-sigs/kind`, lue par `gh api`, et fichiers de sommes de `dl.k8s.io`.
+
+kubectl : v1.36.6, publiée le 2026-10-28 (28 jours, principe VI), dernière correction de la mineure 1.36 de `platform.yaml`, donc dans la plage 1.35 à 1.37 des contrôles préalables. SHA-256 du binaire linux/amd64, lu dans `kubectl.sha256` de la release : `29818b6729dc9262b692307470d0558d027725e738be5dd47c760261868a2634`, relu deux fois. Le job `e2e-lite` le télécharge de `dl.k8s.io` et le vérifie avant usage. Sa version vit dans le workflow sous `KUBECTL_VERSION`, avec le commentaire `# renovate: datasource=github-releases depName=kubernetes/kubernetes` que lit le preset `customManagers:githubActionsVersions` (motif `[A-Za-z0-9_]+?_VERSION\s*:`, Renovate 44.247.1) ; aucun gestionnaire ne met à jour `KUBECTL_SHA256`, et la PR de Renovate échoue en CI tant que la somme n'est pas écrite à la main, comme pour `tests/tools/SHA256SUMS`. Une version hors de la plage fait échouer les contrôles préalables du job.
+
+kind : 0.33.0 reste la dernière release (2026-08-26), et la release donne toujours `kindest/node:v1.36.4@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed`. Le job prend la version et le SHA-256 linux-amd64 dans `catalog/kubernetes-cluster.yaml` (ADR-004, condition 5), par `scripts/ci/install-kind-kubectl.sh`. Une PR de Renovate qui monte `KIND_VERSION` dans `local/scripts/lib/preflight-checks.sh` échoue donc en CI tant que le catalogue ne porte pas la nouvelle version et ses sommes.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://api.github.com/repos/kubernetes/kubernetes/releases> | 2026-11-25 | v1.36.6, v1.37.2 et v1.35.10 publiées le 2026-10-28 |
+| <https://dl.k8s.io/release/v1.36.6/bin/linux/amd64/kubectl.sha256> | 2026-11-25 | SHA-256 du binaire linux/amd64 |
+| <https://api.github.com/repos/kubernetes-sigs/kind/releases> | 2026-11-25 | v0.33.0 dernière release, du 2026-08-26 ; image de nœud v1.36.4 et son condensat |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/config/presets/internal/custom-managers.preset.ts> | 2026-11-25 | Lignes 63 à 78 : `githubActionsVersions`, motif des variables `_VERSION` des workflows |
+
 ## RS-19. Mesures de la gate
 
 Décision : la démo de l'étape 17 reprend la méthode des scripts de BENCH pour le volume et le temps, sur un poste propre, en profil standard, et rapporte le volume au budget de 900 s et au débit qu'il exige.
@@ -557,7 +662,31 @@ Décision : `task up` écrit le kubeconfig du cluster dans un fichier propre au 
 
 Pourquoi : ADR-004, condition 9 ; FR-019 ; décision de la GATE 1 (aucun contexte GKE sur le poste avant la GATE 2). Un fichier dédié évite aussi qu'un contexte cloud courant reçoive une commande par erreur.
 
-À trancher avec [SECU] à l'étape 6 : l'emplacement exact du fichier, au regard de R-07 (ce kubeconfig lit tous les Secrets du cluster).
+Tranché avec [SECU] à l'étape 6 (voir plus bas) : l'emplacement exact du fichier, au regard de R-07 (ce kubeconfig lit tous les Secrets du cluster).
+
+### Relevé et proposition du 2026-11-25 (T039), tranchés par [SECU]
+
+Fait par [OPS], dans le code de kind au tag v0.33.0, lu par `gh api`. T039 nomme [DEV] et [SECU] ; [OPS] écrit la proposition, et la décision reste à [SECU].
+
+Ce que fait kind. `kind create cluster` prend `--name`, `--config`, `--kubeconfig` (« sets kubeconfig path instead of $KUBECONFIG or $HOME/.kube/config ») et `--wait` (`pkg/cmd/kind/create/cluster/createcluster.go`, lignes 57 à 92) ; `kind delete cluster` et `kind export kubeconfig` prennent `--name` et `--kubeconfig`. Avec `--kubeconfig`, kind ne lit et n'écrit que ce fichier, mais il y fusionne : `WriteMerged` (`merge.go`) ajoute ses entrées à celles que le fichier contient déjà, et `RemoveKIND` (`remove.go`) retire les siennes et laisse le reste. Le fichier du projet ne tient que l'entrée du cluster `saas-b2b`, et `task down` le supprime en entier après le cluster, parce qu'il est propre au projet ; sans `--kubeconfig`, il prend `KUBECONFIG`, puis `$HOME/.kube/config` (`pkg/cluster/internal/kubeconfig/internal/kubeconfig/paths.go`, lignes 30 à 57). Chaque appel de kind des scripts passe donc `--kubeconfig` et `--name`, et chaque appel de kubectl `--kubeconfig` et `--context` (S19) : un `KUBECONFIG` de l'utilisateur n'est ni lu ni modifié (E24).
+
+Proposition : `$HOME/.kube/kind-saas-b2b`, fichier en mode 600 dans un dossier en 700, écrits sous `umask 077`. Le chemin vit dans `local/scripts/lib/local-env.sh`. Tranché par [SECU] à la relecture de la PR #65, le 2026-11-25 : cet emplacement est validé.
+
+- Hors du dépôt : ce fichier lit tous les Secrets du cluster. Dans l'arborescence, il tomberait dans une copie du dépôt (X01), une archive ou un contexte de `docker build` trop large, et ne serait qu'à un `.gitignore` près d'entrer dans Git. `.gitignore` garde ses motifs `kubeconfig*` et `*.kubeconfig` pour une copie laissée par erreur.
+- Sous `~/.kube/`, dossier des kubeconfigs de kubectl, que kubectl ne lit pas d'office à un autre nom que `config` : le fichier n'entre dans aucune fusion par défaut.
+- Dans CELIAN, `.claude/settings.json` refuse aux agents la lecture de `~/.kube` (R-07, `CLAUDE.md`, « Garde-fous ») : le fichier tombe sous ce refus sans règle de plus. Ce refus filtre un motif ; un script qui ouvre le fichier lui-même y échappe, comme le dit `CLAUDE.md`.
+- `task down` supprime le fichier après le cluster : il ne désignait plus rien.
+
+Les tests sur kind tournent avec un `HOME` à eux (`local/tests/e2e/run.sh`) : ils n'écrivent jamais dans le `~/.kube` du poste. Une seule valeur par poste, comme le nom du cluster `saas-b2b`, que kind tient pour unique par moteur. Point pour [SECU] : un nom propre à chaque clone (dossier du dépôt haché) éviterait que deux clones partagent le fichier, au prix d'un nom moins lisible ; le cluster, lui, reste partagé.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cmd/kind/create/cluster/createcluster.go> | 2026-11-25 | Options `--name`, `--config` (et `-` pour l'entrée standard), `--kubeconfig`, `--wait` |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cmd/kind/delete/cluster/deletecluster.go> | 2026-11-25 | Options `--name`, `--kubeconfig` |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cmd/kind/export/kubeconfig/kubeconfig.go> | 2026-11-25 | Options `--name`, `--kubeconfig` |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/kubeconfig/internal/kubeconfig/merge.go> | 2026-11-25 | `WriteMerged` : fusion des entrées de kind dans le fichier cible |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/kubeconfig/internal/kubeconfig/remove.go> | 2026-11-25 | `RemoveKIND` : retrait des seules entrées du cluster |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/kubeconfig/internal/kubeconfig/paths.go> | 2026-11-25 | Lignes 30 à 57 : `--kubeconfig` seul fichier lu et écrit, sinon `KUBECONFIG`, sinon `$HOME/.kube/config` |
 
 ## RS-22. Outil du SBOM et du scan, format du SBOM
 

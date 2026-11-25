@@ -1,0 +1,144 @@
+#!/usr/bin/env bash
+# Simulated docker CLI of the mirror tests, P06 and the launch part of S13.
+# It answers only the calls of local/scripts/mirror.sh (research RS-13), and
+# logs each one on a line of FAKE_LOG. Any other call is logged as
+# UNEXPECTED and fails, so a test sees at once a command it did not expect.
+#
+# FAKE_MIRROR_CONTAINER  state of the container named saas-b2b-mirror before
+#                        any docker run: absent (default); ours: the label
+#                        of the project and an image of ghcr.io/project-zot/
+#                        zot; foreign-label: another label; foreign-image:
+#                        the label, but another image
+# FAKE_MIRROR_VOLUME     state of the volume saas-b2b-mirror: absent
+#                        (default), ours (label of the project), foreign (no
+#                        label)
+# FAKE_KIND_NETWORK      present (default) or absent
+# FAKE_MIRROR_HEALTH     what the container reports once started: healthy
+#                        (default), starting, unhealthy, exited
+# FAKE_LOG               file that receives one line per call
+set -euo pipefail
+
+readonly NAME="saas-b2b-mirror"
+readonly LABEL_KEY="invalid.saas-b2b.role"
+readonly ROLE="registry-mirror"
+readonly OLD_IMAGE="ghcr.io/project-zot/zot:v2.1.22@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+
+log() {
+  if [ -n "${FAKE_LOG:-}" ]; then
+    printf '%s\n' "$1" >>"$FAKE_LOG"
+  fi
+}
+
+unexpected() {
+  log "UNEXPECTED docker $*"
+  printf 'fake docker: unexpected call: docker %s\n' "$*" >&2
+  exit 99
+}
+
+log "docker $*"
+
+# The container exists once a docker run is logged and no later rm is.
+started() {
+  [ -n "${FAKE_LOG:-}" ] || return 1
+  awk '/^docker run /{s=1} /^docker container rm /{s=0} END{exit !s}' "$FAKE_LOG"
+}
+
+removed() {
+  [ -n "${FAKE_LOG:-}" ] && grep -q '^docker container rm ' "$FAKE_LOG"
+}
+
+no_such_container() {
+  printf 'Error response from daemon: No such container: %s\n' "$1" >&2
+  exit 1
+}
+
+container_inspect() {
+  local template="$1" target="$2" state
+  [ "$target" = "$NAME" ] || no_such_container "$target"
+  state="${FAKE_MIRROR_CONTAINER:-absent}"
+  if started; then
+    state=started
+  elif removed; then
+    state=absent
+  fi
+  case "$template" in
+    *.Config.Labels*)
+      case "$state" in
+        absent) no_such_container "$target" ;;
+        ours) printf '%s|%s\n' "$ROLE" "$OLD_IMAGE" ;;
+        started) printf '%s|%s\n' "$ROLE" "$(run_image)" ;;
+        foreign-label) printf '|%s\n' "$OLD_IMAGE" ;;
+        foreign-image) printf '%s|%s\n' "$ROLE" "docker.io/library/registry:3" ;;
+        *) unexpected container inspect "$template" "$target" ;;
+      esac
+      ;;
+    *.State.Status*)
+      case "$state" in
+        absent) no_such_container "$target" ;;
+        started)
+          case "${FAKE_MIRROR_HEALTH:-healthy}" in
+            healthy) printf 'running|healthy\n' ;;
+            starting) printf 'running|starting\n' ;;
+            unhealthy) printf 'running|unhealthy\n' ;;
+            exited) printf 'exited|\n' ;;
+          esac
+          ;;
+        *) printf 'running|healthy\n' ;;
+      esac
+      ;;
+    *) unexpected container inspect --format "$template" "$target" ;;
+  esac
+}
+
+# The image of the last docker run: its last argument before "serve".
+run_image() {
+  awk '/^docker run /{line=$0} END{print line}' "$FAKE_LOG" |
+    awk '{for (i = 1; i <= NF; i++) if ($i == "serve") print $(i - 1)}'
+}
+
+volume_inspect() {
+  local target="$2"
+  [ "$target" = "$NAME" ] || {
+    printf 'Error response from daemon: get %s: no such volume\n' "$target" >&2
+    exit 1
+  }
+  if grep -q "^docker volume create .* $NAME\$" "$FAKE_LOG" 2>/dev/null; then
+    printf '%s\n' "$ROLE"
+    return 0
+  fi
+  case "${FAKE_MIRROR_VOLUME:-absent}" in
+    absent)
+      printf 'Error response from daemon: get %s: no such volume\n' "$target" >&2
+      exit 1
+      ;;
+    ours) printf '%s\n' "$ROLE" ;;
+    foreign) printf '\n' ;;
+  esac
+}
+
+case "$*" in
+  "network inspect --format {{.Name}} kind")
+    if [ "${FAKE_KIND_NETWORK:-present}" = present ]; then
+      printf 'kind\n'
+    else
+      printf 'Error response from daemon: network kind not found\n' >&2
+      exit 1
+    fi
+    ;;
+  "container inspect --format "*)
+    [ "$#" -eq 5 ] || unexpected "$@"
+    container_inspect "$4" "$5"
+    ;;
+  "container rm --force $NAME") printf '%s\n' "$NAME" ;;
+  "volume inspect --format "*)
+    [ "$#" -eq 5 ] || unexpected "$@"
+    volume_inspect "$4" "$5"
+    ;;
+  "volume create --label $LABEL_KEY=$ROLE $NAME") printf '%s\n' "$NAME" ;;
+  "volume rm $NAME") printf '%s\n' "$NAME" ;;
+  "run "*) printf '0123456789abcdef\n' ;;
+  "logs --tail "*) printf 'simulated log line of the mirror\n' ;;
+  "system df -v --format "*) printf '%s=12.5MB;other-volume=0B;\n' "$NAME" ;;
+  "image inspect --format {{.Id}} "*) printf 'sha256:2222222222222222222222222222222222222222222222222222222222222222\n' ;;
+  *) unexpected "$@" ;;
+esac
