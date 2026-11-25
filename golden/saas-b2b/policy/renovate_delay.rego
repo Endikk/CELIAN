@@ -5,7 +5,9 @@
 # - an update from a registry that Renovate cannot date waits on the
 #   Dependency Dashboard until a person ticks it (ADR-016);
 # - nothing turns updates off, security fixes included (principle VI,
-#   ADR-016).
+#   ADR-016);
+# - entries are written in packageRules at the top only, where the checks
+#   of both packages read them.
 #
 # The rules that hold for any Renovate configuration of CELIAN live here,
 # apart from the rules that follow platform.yaml, in package renovate_rules.
@@ -119,6 +121,65 @@ deny contains msg if {
 	msg := sprintf("%s: %v is a legacy key that Renovate turns into the delay, the approval, the dashboard or a preset", [label_delay, path])
 }
 
+# Legacy containers of entries. Renovate moves their content into
+# packageRules before it reads the configuration, at every depth, where the
+# checks of the entries (allowedVersions, the branch keys, the entry of
+# ADR-016) do not look for it:
+# - pathRules and packages are appended to packageRules
+#   (lib/config/migrations/custom/path-rules-migration.ts, lines 9 to 17;
+#   packages-migration.ts, lines 9 to 17);
+# - an object of packageFiles with more than its packageFile becomes an entry
+#   (package-files-migration.ts, lines 8 to 41);
+# - dependencies, devDependencies, optionalDependencies, peerDependencies,
+#   engines and depTypes become entries on matchDepTypes
+#   (dep-types-migration.ts, lines 12 to 40);
+# - an object under docker, dotnet, golang, java, js, node, php, python,
+#   ruby or rust becomes an entry on matchCategories, placed first
+#   (lib/config/migration.ts, lines 140 to 166).
+# No current option and no manager bears one of these names
+# (lib/config/options/index.ts; lib/modules/manager/api.ts), so S23 refuses
+# the name whatever its value. Entries are written in packageRules only.
+legacy_container_keys := {
+	"pathRules",
+	"packages",
+	"packageFiles",
+	"dependencies",
+	"devDependencies",
+	"optionalDependencies",
+	"peerDependencies",
+	"engines",
+	"depTypes",
+	"docker",
+	"dotnet",
+	"golang",
+	"java",
+	"js",
+	"node",
+	"php",
+	"python",
+	"ruby",
+	"rust",
+}
+
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, _])
+	count(path) > 0
+	path[count(path) - 1] in legacy_container_keys
+	msg := sprintf("%s: %v is a legacy key that Renovate moves into packageRules, out of reach of the checks of the entries; entries are written in packageRules only", [label, path])
+}
+
+# Renovate merges each entry of a nested packageRules into its parent, and
+# puts the result in place of the parent (lib/config/migration.ts, lines 167
+# to 191).
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, _])
+	count(path) > 1
+	path[count(path) - 1] == "packageRules"
+	msg := sprintf("%s: %v nests packageRules; Renovate flattens it out of reach of the checks of the entries, which are written in packageRules at the top only", [label, path])
+}
+
 # Experimental options of the delay (lib/config/options/index.ts, lines 2506
 # to 2529, Renovate 44.247.1). With the sync, Renovate passes the delay to the
 # package managers, and upstream warns that the behaviour may change.
@@ -225,8 +286,7 @@ deny contains msg if {
 # settings of vulnerabilityAlerts, where enabled is not set
 # (lib/workers/repository/init/vulnerability.ts, lines 160 to 166;
 # lib/util/package-rules/index.ts, lines 79 to 103). So enabled is true
-# wherever it is written, legacy pathRules included, which Renovate moves
-# into packageRules (lib/config/migrations/custom/path-rules-migration.ts).
+# wherever it is written, legacy containers included.
 deny contains msg if {
 	is_object(config)
 	walk(config, [path, value])
