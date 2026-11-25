@@ -10,7 +10,8 @@
 #   RS-17): the postgres major (ADR-012, condition 5), the node image on the
 #   Kubernetes minor and kind with its node image (ADR-004, version rule,
 #   point 5), Envoy Gateway in one group (ADR-005, updates, point 2), and the
-#   custom manager of golden/saas-b2b/tests/tools/install.sh. Both files are
+#   custom managers of golden/saas-b2b/tests/tools/install.sh with the
+#   preflight checks, and of the images of the local layer. Both files are
 #   checked against the same platform.yaml, so they cannot drift apart.
 # Runs the tests of each package, then the package on renovate.json and
 # golden/saas-b2b/platform.yaml, then checks the "# renovate:" comments of
@@ -52,6 +53,8 @@ for package in $packages; do
   conftest test --no-color --combine --policy "$policy_dir" --namespace "$package" $inputs
 done
 
-# The versions of the installer of the golden repo, each under the comment
-# that the custom manager of renovate.json reads.
+# The versions of the installer of the golden repo and of its preflight
+# checks (kind), each under the comment that the custom manager of
+# renovate.json reads.
 bash golden/saas-b2b/tests/tools/check-renovate-comments.sh golden/saas-b2b/tests/tools/install.sh
+bash golden/saas-b2b/tests/tools/check-renovate-comments.sh golden/saas-b2b/local/scripts/lib/preflight-checks.sh

@@ -10,7 +10,8 @@
 # delay, which holds for every renovate.json of CELIAN) and renovate_rules
 # (the rules that follow platform.yaml, which holds the majors and minors
 # they must follow), then both packages on renovate.json and platform.yaml.
-# Last, the versions of tests/tools/install.sh keep the comments that let
+# Last, the versions of tests/tools/install.sh and of
+# local/scripts/lib/preflight-checks.sh keep the comments that let
 # Renovate find them (tests/tools/check-renovate-comments.sh).
 # Renovate never reads this file in CELIAN (research RS-17); the validator
 # of Renovate reads it in X01.
@@ -43,7 +44,9 @@ for package in $packages; do
   conftest test --no-color --combine --policy policy --namespace "$package" $inputs
 done
 
-# The versions of tests/tools/install.sh, each under the comment that the
+# The versions of tests/tools/install.sh and of
+# local/scripts/lib/preflight-checks.sh (kind), each under the comment that the
 # custom manager of renovate.json reads (package renovate_rules checks the
 # manager itself).
 bash tests/tools/check-renovate-comments.sh tests/tools/install.sh
+bash tests/tools/check-renovate-comments.sh local/scripts/lib/preflight-checks.sh

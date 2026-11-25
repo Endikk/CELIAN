@@ -5,14 +5,15 @@
 # The Kubernetes minor and the Postgres major have one value each, in
 # platform.yaml, and every file that repeats them agrees with it. Runs the
 # tests of policy package platform_values, then the policy on the real files.
-# Step 1 gives it platform.yaml alone; T041, T065 and T105 add the kind
-# configuration, the Postgres manifests and the OpenTofu layer to "inputs".
+# Step 1 gave it platform.yaml alone; step 6 (T041) adds the kind
+# configuration; T065 and T105 add the Postgres manifests and the OpenTofu
+# layer to "inputs".
 set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 CDPATH='' cd -- "$root"
 
-inputs="platform.yaml"
+inputs="platform.yaml local/kind/cluster.yaml"
 
 if ! command -v conftest >/dev/null 2>&1; then
   echo "conftest is not installed: run tests/tools/install.sh <dir>, then put <dir> on PATH." >&2

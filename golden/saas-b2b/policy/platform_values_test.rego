@@ -88,3 +88,44 @@ test_s21_names_its_requirements_in_each_message if {
 		startswith(msg, "S21 (FR-010, FR-017;")
 	}
 }
+
+# The kind configuration of the local layer (T041).
+
+node_image(tag) := sprintf("kindest/node:%s@sha256:099e049362a1526b2db71494e1947aae99bd16290d7c895f2b7ea312e3cbfaed", [tag])
+
+with_kind(images) := [
+	{"path": "platform.yaml", "contents": valid_values},
+	{"path": "local/kind/cluster.yaml", "contents": {"nodes": [{"role": "control-plane", "image": image} | some image in images]}},
+]
+
+test_s21_accepts_a_node_image_on_the_platform_minor if {
+	accepted(with_kind([node_image("v1.36.4")]))
+}
+
+test_s21_accepts_two_nodes_on_the_platform_minor if {
+	accepted(with_kind([node_image("v1.36.4"), node_image("v1.36.5")]))
+}
+
+test_s21_rejects_a_node_image_on_another_minor if {
+	denied_with(with_kind([node_image("v1.37.0")]), "nodes[0].image in local/kind/cluster.yaml runs Kubernetes 1.37, platform.yaml says kubernetes_minor 1.36")
+}
+
+test_s21_rejects_the_second_node_on_another_minor if {
+	denied_with(with_kind([node_image("v1.36.4"), node_image("v1.35.8")]), "nodes[1].image")
+}
+
+test_s21_rejects_a_node_image_without_a_version_tag if {
+	denied_with(with_kind(["kindest/node:latest"]), "has no vX.Y.Z tag to compare with kubernetes_minor")
+}
+
+test_s21_rejects_a_node_without_image if {
+	files := [
+		{"path": "platform.yaml", "contents": valid_values},
+		{"path": "local/kind/cluster.yaml", "contents": {"nodes": [{"role": "control-plane"}]}},
+	]
+	denied_with(files, "has no vX.Y.Z tag to compare with kubernetes_minor, found null")
+}
+
+test_s21_does_not_take_a_minor_prefix_for_the_minor if {
+	denied_with(with_kind([node_image("v1.361.0")]), "runs Kubernetes 1.361")
+}

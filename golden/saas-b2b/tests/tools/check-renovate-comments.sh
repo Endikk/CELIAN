@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Checks that Renovate finds each version pinned in tests/tools/install.sh
-# (research RS-17). Every line that sets a <NAME>_VERSION variable holds its
+# Checks that Renovate finds each version pinned in a script: Task and
+# conftest in tests/tools/install.sh, kind in
+# local/scripts/lib/preflight-checks.sh (research RS-17). Every line that
+# sets a <NAME>_VERSION variable holds its
 # value in double quotes, right below the comment that the custom manager of
 # renovate.json reads:
 #   # renovate: datasource=github-releases depName=<owner>/<repo>
@@ -9,11 +11,11 @@
 # scripts/renovate/check-renovate.sh. One awk program shared by both, so the
 # two checks cannot drift apart.
 #
-# Usage: tests/tools/check-renovate-comments.sh <install.sh>
+# Usage: tests/tools/check-renovate-comments.sh <script>
 set -euo pipefail
 
 if [ "$#" -ne 1 ]; then
-  echo "usage: tests/tools/check-renovate-comments.sh <install.sh>" >&2
+  echo "usage: tests/tools/check-renovate-comments.sh <script>" >&2
   exit 1
 fi
 if [ ! -f "$1" ]; then

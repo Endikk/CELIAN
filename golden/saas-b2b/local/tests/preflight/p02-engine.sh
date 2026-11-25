@@ -7,9 +7,12 @@
 # first, before any version (contracts/task-cli.md, "dans cet ordre"). The
 # docker context must reach a local engine through a unix socket, since kind
 # creates the cluster wherever docker points (research RS-08); it is
-# announced when accepted. docker gets a bounded time to answer. A message
-# of the engine is shown without its control characters. Simulated binaries
-# only (lib/harness.sh).
+# announced when accepted. kind itself must use docker and the network
+# kind: KIND_EXPERIMENTAL_PROVIDER set to another engine, and
+# KIND_EXPERIMENTAL_DOCKER_NETWORK set to another network, are refused
+# first. docker gets a bounded time to answer. A message of the engine is
+# shown without its control characters. Simulated binaries only
+# (lib/harness.sh).
 set -uo pipefail
 # shellcheck disable=SC1091 # lib/harness.sh is checked on its own
 . "$(dirname "${BASH_SOURCE[0]}")/lib/harness.sh"
@@ -122,6 +125,44 @@ run_case "engine missing and kind missing" --without docker --without kind
 expect_refused
 expect_output "no container engine found"
 expect_no_output "kind is not installed"
+
+# kind runs another engine than docker when KIND_EXPERIMENTAL_PROVIDER
+# names one, and the checks above would read the wrong engine (research
+# RS-08); decision of the DSI of 2026-11-25: any value but docker is
+# refused, and named. An empty value is unset for kind.
+for provider in podman nerdctl finch nerdctl.lima unknown-engine; do
+  run_case "KIND_EXPERIMENTAL_PROVIDER=$provider: refused before docker" KIND_EXPERIMENTAL_PROVIDER="$provider"
+  expect_refused
+  expect_output "KIND_EXPERIMENTAL_PROVIDER=$provider"
+  expect_output "unset KIND_EXPERIMENTAL_PROVIDER"
+  expect_output "Nothing was created"
+  expect_not_called docker
+  expect_not_called kind
+done
+
+run_case "KIND_EXPERIMENTAL_PROVIDER=docker: accepted" KIND_EXPERIMENTAL_PROVIDER=docker
+expect_ok
+
+run_case "KIND_EXPERIMENTAL_PROVIDER empty: accepted, as kind reads it" KIND_EXPERIMENTAL_PROVIDER=
+expect_ok
+
+run_case "KIND_EXPERIMENTAL_PROVIDER with a terminal sequence: shown printable" \
+  KIND_EXPERIMENTAL_PROVIDER=$'pod\033[31mman'
+expect_refused
+expect_no_control_characters
+expect_output "KIND_EXPERIMENTAL_PROVIDER=pod?[31mman"
+
+# kind puts its nodes on another network than kind when
+# KIND_EXPERIMENTAL_DOCKER_NETWORK names one, and the mirror, on the network
+# kind, would be out of their reach (research RS-13).
+run_case "KIND_EXPERIMENTAL_DOCKER_NETWORK=other: refused" KIND_EXPERIMENTAL_DOCKER_NETWORK=other
+expect_refused
+expect_output "KIND_EXPERIMENTAL_DOCKER_NETWORK=other"
+expect_output "unset KIND_EXPERIMENTAL_DOCKER_NETWORK"
+expect_not_called docker
+
+run_case "KIND_EXPERIMENTAL_DOCKER_NETWORK=kind: accepted" KIND_EXPERIMENTAL_DOCKER_NETWORK=kind
+expect_ok
 
 # A task that sources preflight.sh instead of running it still runs the
 # checks: no guard lets it end in success without them.
