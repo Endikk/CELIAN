@@ -1,0 +1,127 @@
+# Postgres of the local layer, without an operator (ADR-012): one replica
+# around the official image, by tag and digest, in the namespace of the
+# application (condition 9). The cluster of GCP runs Cloud SQL instead.
+#
+# - Condition 1: UID 999 of the image, runAsNonRoot, no privilege
+#   escalation, every capability dropped, seccomp RuntimeDefault, no service
+#   account token, a read-only root filesystem (research RS-12): the pod
+#   passes the restricted profile of the namespace. The data, the socket
+#   directory and /tmp are the only writable paths.
+# - Conditions 2 and 8: the entrypoint reads the superuser from the files of
+#   db-superuser (POSTGRES_USER_FILE, POSTGRES_PASSWORD_FILE), never from a
+#   value; initdb writes scram-sha-256 for local and host connections, so no
+#   trust line exists. The script of postgres-init creates the role of
+#   db-auth, without superuser, owner of the database app. The application
+#   never mounts db-superuser (S12).
+# - Condition 3: the variables POSTGRES_* and the script only act on an
+#   empty volume; local/scripts/secrets.sh never draws a new password while
+#   the volume lives.
+# - The volume goes to /var/lib/postgresql, the VOLUME of the image from
+#   PostgreSQL 18 on; PGDATA, /var/lib/postgresql/18/docker, lies inside it
+#   (research RS-12; R-35).
+# - Readiness: pg_isready on 127.0.0.1, which the temporary server of the
+#   initialization does not listen on (research RS-12). task up then waits
+#   for an authenticated SELECT 1 through the Service (condition 6).
+#
+# S12 (local/tests/static/s12-postgres.sh) checks this file once rendered,
+# and S21 its major against platform.yaml. Renovate follows the image under
+# the comment below, on the major of platform.yaml only (condition 5).
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: postgres
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: postgres
+          # renovate: datasource=docker depName=docker.io/library/postgres
+          image: docker.io/library/postgres:18.7-trixie@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_USER_FILE
+              value: /run/secrets/db-superuser/username
+            - name: POSTGRES_PASSWORD_FILE
+              value: /run/secrets/db-superuser/password
+            - name: POSTGRES_INITDB_ARGS
+              value: --auth-local=scram-sha-256 --auth-host=scram-sha-256
+          readinessProbe:
+            exec:
+              command:
+                - pg_isready
+                - --host=127.0.0.1
+                - --port=5432
+                - --username=postgres
+                - --dbname=postgres
+                - --quiet
+            periodSeconds: 5
+            timeoutSeconds: 4
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql
+            - name: run
+              mountPath: /run/postgresql
+            - name: tmp
+              mountPath: /tmp
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+            - name: db-superuser
+              mountPath: /run/secrets/db-superuser
+              readOnly: true
+            - name: db-auth
+              mountPath: /run/secrets/db-auth
+              readOnly: true
+      volumes:
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+        - name: init
+          configMap:
+            name: postgres-init
+            defaultMode: 0444
+        - name: db-superuser
+          secret:
+            secretName: db-superuser
+            defaultMode: 0440
+        - name: db-auth
+          secret:
+            secretName: db-auth
+            defaultMode: 0440
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi

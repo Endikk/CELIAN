@@ -38,6 +38,10 @@
   # owner alone (research RS-21; ADR-004, condition 9). Every kubectl call
   # names it with the context above (S19).
   readonly KUBECONFIG_FILE="${HOME:?HOME is not set}/.kube/kind-$CLUSTER_NAME"
+  # The namespace of the application and of its database (k8s/base/;
+  # ADR-012, condition 9), which the controller of Envoy Gateway watches
+  # (ADR-005, complement of 2026-11-25).
+  readonly APP_NAMESPACE="$CLUSTER_NAME"
 }
 
 # kube ARG...: kubectl on the local cluster, and on it alone (FR-019).
