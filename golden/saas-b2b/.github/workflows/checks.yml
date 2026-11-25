@@ -29,7 +29,7 @@ jobs:
 
       # Release archives checked against tests/tools/SHA256SUMS before use,
       # without any third-party action.
-      - name: Install Task and conftest
+      - name: Install the tools of task check
         run: |
           bash tests/tools/install.sh "$RUNNER_TEMP/tools"
           echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
@@ -46,7 +46,7 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Install Task and conftest
+      - name: Install the tools of task check
         run: |
           bash tests/tools/install.sh "$RUNNER_TEMP/tools"
           echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"

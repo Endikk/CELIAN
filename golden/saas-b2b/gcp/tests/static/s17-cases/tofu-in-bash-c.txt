@@ -1,0 +1,4 @@
+# Failing case of S17: a command hidden in a string.
+# expect: OpenTofu command outside the allowlist of the gcp layer
+
+  bash -c "tofu taint google_x.y"

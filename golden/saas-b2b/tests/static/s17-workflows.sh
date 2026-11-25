@@ -8,13 +8,24 @@
 # generated project (T094), and there must be at least one. When the golden
 # repo sits in CELIAN, at golden/saas-b2b/, it also checks the CELIAN
 # workflow that runs it (research RS-17); a standalone copy (X01) has no
-# such workflow. T105 adds the Taskfiles of gcp/. Arguments, if given,
-# replace the default list.
+# such workflow. Arguments, if given, replace the default list.
+#
+# T105 adds what a workflow calls: the Taskfiles, and the shell scripts of the
+# gcp layer, where the OpenTofu commands live. They get the rules of
+# principle X (no plan, apply or destroy, no Google credential, no published
+# plan); the rules on secrets, OIDC tokens and pins are for workflows only.
+#
+# The gcp layer gets a stricter rule, an allowlist, until GATE 2: in its
+# Taskfile and scripts, OpenTofu runs only fmt, init (with -backend=false),
+# validate, version and providers; gcloud and kubectl do not appear. A list of
+# what is refused would miss import, state, console or taint. The failing
+# cases are in gcp/tests/static/s17-cases/, run through this script alone.
 set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 problems=0
+default_run=0
 
 report() {
   problems=$((problems + 1))
@@ -22,6 +33,7 @@ report() {
 }
 
 if [ "$#" -eq 0 ]; then
+  default_run=1
   for file in "$root"/.github/workflows/*.yml "$root"/.github/workflows/*.yaml; do
     if [ -f "$file" ]; then
       set -- "$@" "$file"
@@ -34,6 +46,12 @@ if [ "$#" -eq 0 ]; then
   if [ "$celian_root/golden/saas-b2b" = "$root" ] && [ -d "$celian_root/.github/workflows" ]; then
     set -- "$@" "$celian_root/.github/workflows/golden-saas-b2b.yml"
   fi
+  for file in "$root"/Taskfile.yml "$root"/local/tasks/*.yml "$root"/gcp/tasks/*.yml \
+    "$root"/gcp/tests/static/*.sh "$root"/gcp/scripts/*.sh; do
+    if [ -f "$file" ]; then
+      set -- "$@" "$file"
+    fi
+  done
 fi
 
 # Prints "<line number>:<text>" for each line of $1, YAML comments removed:
@@ -79,6 +97,58 @@ word_start='(^|[^[:alnum:]_-])'
 word_end='([^[:alnum:]_-]|$)'
 separator='[^[:alnum:]_-]'
 
+# Allowlist of the gcp layer, until GATE 2 (principle X). Reads the code
+# lines of $1 and, for each use of tofu or terraform, takes the first word
+# after its options as the subcommand. Prints "<line>|<rule>|<text>" for a
+# subcommand outside fmt, init, validate, version and providers, and for an
+# init without -backend=false on the same line. A use with no subcommand
+# (command -v tofu, a path) passes. A word in a message counts too: write
+# "OpenTofu" there, which is not matched.
+gcp_tofu_findings() {
+  code_lines "$1" | awk '
+    {
+      split_at = index($0, ":")
+      number = substr($0, 1, split_at - 1)
+      text = substr($0, split_at + 1)
+      rest = text
+      while (match(rest, /(^|[^A-Za-z0-9_.\/-])(tofu|terraform)([^A-Za-z0-9_.\/-]|$)/)) {
+        seg = substr(rest, RSTART, RLENGTH)
+        skip = (substr(seg, 1, 1) == "t") ? 0 : 1
+        tool_len = (substr(seg, skip + 1, 9) == "terraform") ? 9 : 4
+        rest = substr(rest, RSTART + skip + tool_len)
+        tail = rest
+        sub_cmd = ""
+        while (tail != "") {
+          sub(/^[ \t]+/, "", tail)
+          if (tail == "") { break }
+          word = tail
+          sub(/[ \t].*$/, "", word)
+          if (word ~ /^-/) { tail = substr(tail, length(word) + 1); continue }
+          if (match(word, /^[a-z][a-z-]*/)) { sub_cmd = substr(word, 1, RLENGTH) }
+          break
+        }
+        if (sub_cmd == "") { continue }
+        if (sub_cmd !~ /^(fmt|init|validate|version|providers)$/) {
+          print number "|OpenTofu command outside the allowlist of the gcp layer (fmt, init, validate, version, providers)|" text
+        } else if (sub_cmd == "init" && text !~ /(^|[ \t])-backend=false([ \t]|$)/) {
+          print number "|OpenTofu init without -backend=false|" text
+        }
+      }
+    }
+  ' || true
+}
+
+# The rules of the gcp layer, for its Taskfile and its scripts.
+check_gcp_layer() {
+  local file="$1" number rule text
+  forbid "$file" "${word_start}(gcloud|kubectl)${word_end}" \
+    "gcloud or kubectl in the gcp layer, before GATE 2"
+  while IFS='|' read -r number rule text; do
+    [ -n "$number" ] || continue
+    report "$file" "$number" "$rule: ${text#"${text%%[![:space:]]*}"}"
+  done < <(gcp_tofu_findings "$file")
+}
+
 for file in "$@"; do
   if [ ! -f "$file" ]; then
     report "$file" 0 "workflow not found"
@@ -91,18 +161,55 @@ for file in "$@"; do
   forbid "$file" "${word_start}(tofu|terraform)${separator}(.*${separator})?(plan|apply|destroy)${word_end}" \
     "OpenTofu plan, apply or destroy"
   forbid "$file" "${word_start}gcp:(plan|apply|destroy)${word_end}" "task gcp:plan, gcp:apply or gcp:destroy"
-  # No cloud credential: no secret but the workflow token, no OIDC token for
-  # an identity federation, no Google authentication.
-  forbid "$file" 'secrets\.' "secret other than GITHUB_TOKEN" 'secrets\.GITHUB_TOKEN([^[:alnum:]_]|$)'
-  forbid "$file" 'id-token:[[:space:]]*write' "OIDC token requested (id-token: write)"
+  # No cloud credential: no Google authentication.
   forbid "$file" 'google-github-actions/auth|credentials_json|workload_identity_provider|GOOGLE_APPLICATION_CREDENTIALS|GOOGLE_GHA_CREDS_PATH|CLOUDSDK_AUTH' \
     "Google Cloud credential"
   forbid "$file" "${word_start}gcloud[[:space:]]+auth${word_end}" "Google Cloud credential (gcloud auth)"
   # No published plan.
   forbid "$file" "tfplan|${word_start}(tofu|terraform)[[:space:]]+show${word_end}|[[:space:]]-out[=[:space:]]" \
     "OpenTofu plan file or plan output"
-  check_pins "$file"
+  case "$file" in
+    */gcp/tasks/* | */gcp/tests/static/* | */gcp/scripts/*)
+      check_gcp_layer "$file"
+      ;;
+  esac
+  case "$file" in
+    */.github/workflows/*)
+      # In a workflow, no secret but the workflow token, and no OIDC token
+      # for an identity federation.
+      forbid "$file" 'secrets\.' "secret other than GITHUB_TOKEN" 'secrets\.GITHUB_TOKEN([^[:alnum:]_]|$)'
+      forbid "$file" 'id-token:[[:space:]]*write' "OIDC token requested (id-token: write)"
+      check_pins "$file"
+      ;;
+  esac
 done
+
+# Each failing case of the gcp layer, in gcp/tests/static/s17-cases/, is run
+# through this script alone: it must fail, and its output must hold the text
+# of the case's "# expect:" line. Without that folder (a project rendered for
+# the local target alone), there is nothing to run.
+check_cases() {
+  local case_file expect out found=0
+  for case_file in "$root"/gcp/tests/static/s17-cases/*.txt; do
+    [ -f "$case_file" ] || continue
+    found=$((found + 1))
+    expect="$(awk -v key='# expect: ' 'NR > 10 { exit } index($0, key) == 1 { print substr($0, length(key) + 1); exit }' "$case_file")"
+    if [ -z "$expect" ]; then
+      report "$case_file" 0 "no '# expect:' line"
+    elif out="$(bash "${BASH_SOURCE[0]}" "$case_file" 2>&1)"; then
+      report "$case_file" 0 "accepted, yet it is a failing case: $expect"
+    elif ! printf '%s\n' "$out" | grep -F -q -e "$expect"; then
+      report "$case_file" 0 "refused, but no message holds: $expect"
+    fi
+  done
+  if [ "$found" -eq 0 ]; then
+    report "$root/gcp/tests/static/s17-cases" 0 "holds no failing case"
+  fi
+}
+
+if [ "$default_run" -eq 1 ] && [ -d "$root/gcp/tests/static/s17-cases" ]; then
+  check_cases
+fi
 
 if [ "$problems" -gt 0 ]; then
   exit 1

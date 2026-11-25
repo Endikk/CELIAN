@@ -129,3 +129,71 @@ test_s21_rejects_a_node_without_image if {
 test_s21_does_not_take_a_minor_prefix_for_the_minor if {
 	denied_with(with_kind([node_image("v1.361.0")]), "runs Kubernetes 1.361")
 }
+
+# OpenTofu layer (T105).
+
+reads_platform := {"platform": `${yamldecode(file("${path.module}/../../platform.yaml"))}`}
+
+tofu_root(locals, cluster_version, database_version) := {
+	"locals": [locals],
+	"resource": {
+		"a_cluster": {"main": [{"min_master_version": cluster_version}]},
+		"a_database": {"main": [{"database_version": database_version}]},
+	},
+}
+
+with_tofu(contents) := [
+	{"path": "platform.yaml", "contents": valid_values},
+	{"path": "gcp/tofu/main.tf", "contents": contents},
+]
+
+# The Kubernetes minor is read from platform.yaml by a local. The Postgres
+# major is a literal that must equal platform.yaml: Trivy does not resolve a
+# computed value, and skips its Cloud SQL checks on it.
+test_s21_accepts_a_layer_that_reads_platform_yaml if {
+	accepted(with_tofu(tofu_root(reads_platform, "${local.platform.kubernetes_minor}", "POSTGRES_18")))
+}
+
+test_s21_accepts_any_name_for_the_local if {
+	shared := {"shared": reads_platform.platform}
+	accepted(with_tofu(tofu_root(shared, "${local.shared.kubernetes_minor}", "POSTGRES_18")))
+}
+
+test_s21_rejects_a_layer_that_does_not_read_platform_yaml if {
+	other := {"platform": `${yamldecode(file("${path.module}/platform.yaml"))}`}
+	denied_with(with_tofu(tofu_root(other, "${local.platform.kubernetes_minor}", "POSTGRES_18")), "the OpenTofu layer does not read platform.yaml")
+}
+
+test_s21_rejects_a_literal_kubernetes_minor if {
+	denied_with(with_tofu(tofu_root(reads_platform, "1.36", "POSTGRES_18")), "a_cluster.main.min_master_version is '1.36'")
+}
+
+test_s21_rejects_a_computed_postgres_major if {
+	denied_with(with_tofu(tofu_root(reads_platform, "${local.platform.kubernetes_minor}", "POSTGRES_${local.platform.postgres_major}")), "must be the literal 'POSTGRES_18'")
+}
+
+test_s21_rejects_a_postgres_literal_that_differs_from_platform_yaml if {
+	denied_with(with_tofu(tofu_root(reads_platform, "${local.platform.kubernetes_minor}", "POSTGRES_17")), "a_database.main.database_version is 'POSTGRES_17'")
+}
+
+test_s21_rejects_a_postgres_literal_when_platform_yaml_moves if {
+	files := [
+		{"path": "platform.yaml", "contents": {"kubernetes_minor": "1.36", "postgres_major": "19"}},
+		{"path": "gcp/tofu/main.tf", "contents": tofu_root(reads_platform, "${local.platform.kubernetes_minor}", "POSTGRES_18")},
+	]
+	denied_with(files, "must be the literal 'POSTGRES_19'")
+}
+
+test_s21_rejects_a_variable_for_the_postgres_major if {
+	denied_with(with_tofu(tofu_root(reads_platform, "${local.platform.kubernetes_minor}", "${var.database_version}")), "must be the literal 'POSTGRES_18'")
+}
+
+test_s21_rejects_a_layer_that_sets_no_kubernetes_minor if {
+	root := {"locals": [reads_platform], "resource": {"a_database": {"main": [{"database_version": "POSTGRES_18"}]}}}
+	denied_with(with_tofu(root), "no resource of the OpenTofu layer sets min_master_version")
+}
+
+test_s21_rejects_a_layer_that_sets_no_postgres_major if {
+	root := {"locals": [reads_platform], "resource": {"a_cluster": {"main": [{"min_master_version": "${local.platform.kubernetes_minor}"}]}}}
+	denied_with(with_tofu(root), "no resource of the OpenTofu layer sets database_version")
+}

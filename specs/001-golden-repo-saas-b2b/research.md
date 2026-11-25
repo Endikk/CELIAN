@@ -432,6 +432,105 @@ Décision : racine OpenTofu unique dans `gcp/tofu/`, ressources du socle de l'AD
 
 Contrainte de date : `google` 8.12.0 ne passe le délai de 7 jours que le 2026-11-24 (ADR-008, règle de version, point 2). Avant cette date, l'étape 13 prend la version précédente qui passe le délai, ou attend.
 
+### Relevé du 2026-11-25 (T102)
+
+Fait par [OPS]. Sources : l'API GitHub des releases, lue par `gh api` ; la documentation d'OpenTofu, dont chaque page lue s'annonce en v1.13.x ; la documentation du provider `hashicorp/google` au tag `v8.12.0` et celle de `hashicorp/random` au tag `v3.9.1`, lues dans leurs dépôts par `gh api` ; des pages de Google Cloud. Les essais ont tourné avec OpenTofu 1.13.9 (Homebrew, darwin_arm64) dans un environnement vidé (`env -i`, `HOME` et `CLOUDSDK_CONFIG` vers des dossiers vides) : aucun identifiant n'était joignable, et rien n'a contacté Google Cloud. Aucun `tofu plan`, aucun apply.
+
+Versions retenues :
+
+| Outil | Version | Publiée le | Délai de 7 jours | Note |
+| --- | --- | --- | --- | --- |
+| OpenTofu, en CI | 1.13.9 | 2026-11-05 | passé | 1.13.10 (2026-11-23) corrige GO-2026-6859, un crash de serveur HTTP/1 de Go, d'après sa note de version. L'exception de sécurité du principe VI la permettrait dès maintenant ; non retenue, rien ne montrant que `init` ou `validate` ouvrent un serveur HTTP/1. Elle passe le délai le 2026-11-30, et Renovate la proposera |
+| Provider `google` | 8.12.0 | 2026-11-17 à 19:43:15 UTC | passé depuis le 2026-11-24 à 19:43 UTC | Dernière release au 2026-11-25 |
+| Provider `random` | 3.9.1 | 2026-09-11 | passé | Dernière release ; ressource éphémère `random_password` |
+
+SHA-256 d'OpenTofu 1.13.9, lus dans `tofu_1.13.9_SHA256SUMS` de la release et égaux au champ `digest` de l'API :
+
+| Archive | SHA-256 |
+| --- | --- |
+| `tofu_1.13.9_linux_amd64.tar.gz` | `b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857` |
+| `tofu_1.13.9_linux_arm64.tar.gz` | `5dc196dde75b667e4806d358310ec96742774cd0993c54c1237efee5644b69b8` |
+| `tofu_1.13.9_darwin_amd64.tar.gz` | `347e2e5a2cfe2f368829572d308b2e7c1e0486b20a1779090ff06360f7551e4f` |
+| `tofu_1.13.9_darwin_arm64.tar.gz` | `496f4c3064b5c3bff79174b3dae4faaf65a66774eb8e2bf074f895412c5f124f` |
+
+Backend. `-backend=false` : « To skip backend configuration ». Un bloc `backend "gcs" {}` vide est une configuration partielle : le seau et le préfixe arrivent à l'init par `-backend-config`. Essai : `tofu init -backend=false -input=false` passe sur une racine qui déclare ce bloc, sans joindre autre chose que le registre.
+
+Chiffrement `gcp_kms`. Fournisseur de clé `gcp_kms` (`kms_encryption_key`, `key_length`), méthode `aes_gcm`, blocs `state` et `plan` avec `method` et `enforced = true`. AES-GCM « needs 16, 24, or 32-byte keys » : `key_length = 32`. Variables et locaux sont admis dans cette configuration, s'ils se résolvent à l'init. Essai : `tofu validate` passe sans identifiant ni accès à la clé. `tofu console`, lui, construit la clé et s'arrête sur « Unable to build encryption key data [...] could not find default credentials ». Conséquence : une commande qui lit l'état appelle Cloud KMS avec les identifiants qu'elle trouve. Les scripts de la couche lancent donc OpenTofu dans un environnement vidé, pour qu'aucun identifiant du poste ne serve, même par accident.
+
+Verrou multi-plateformes (ADR-008, question 5). `tofu providers lock -platform=<os>_<arch>`, option répétable. Essai : le registre d'OpenTofu publie les sommes de toutes les plateformes, et `tofu init` comme `tofu providers lock -platform=linux_amd64` ont écrit 15 sommes `h1:` et 15 sommes `zh:` par provider. Effet de `-lockfile=readonly` : sur un verrou privé des sommes `h1:` mais qui garde les `zh:`, l'init passe, affiche « Provider lock file not updated » et laisse le verrou intact ; sur un verrou dont aucune somme ne correspond, l'init échoue (« doesn't match any of the checksums previously recorded in the dependency lock file »). Commande retenue pour T108 : `tofu providers lock -platform=linux_amd64 -platform=linux_arm64 -platform=darwin_amd64 -platform=darwin_arm64`. Le verrou ne suit que les providers, jamais les modules.
+
+Lecture de `platform.yaml`. `yamldecode` lit un sous-ensemble de YAML 1.2, un seul document ; `!!map` donne un objet, `!!str` une chaîne. Essai : `yamldecode(file("${path.module}/../../platform.yaml"))` donne `{"kubernetes_minor" = "1.36", "postgres_major" = "18"}`, des chaînes, et `"POSTGRES_${...postgres_major}"` donne `"POSTGRES_18"`. `min_master_version` accepte la forme `1.X`, qui se résout en « The highest valid patch release in the specified minor version » ; c'est un minimum, que GKE dépasse en montant de version. Mise à jour du 2026-11-25 : `database_version` s'écrit en littéral `POSTGRES_18`, parce que Trivy ne résout pas cette lecture (RS-22) ; S21 le compare à `platform.yaml`.
+
+Activations, attributs de `google_container_cluster` en 8.12.0 :
+
+- Gateway API : `gateway_api_config { channel }`, valeurs `CHANNEL_DISABLED`, `CHANNEL_EXPERIMENTAL`, `CHANNEL_STANDARD` ;
+- synchronisation des secrets : `secret_sync_config { enabled, rotation_config { enabled, rotation_interval } }`, intervalle par défaut de 2 minutes. La page de Google écrit l'intervalle `60s` ou `300s`, avec un minimum d'une minute, et « The secret version must be in the same region as the cluster » ; une entrée de `SecretSync` donne une clé du Secret, d'où un secret de Secret Manager par clé de `db-auth` ;
+- flotte : `fleet { project }`, qui expose `fleet.0.membership_id` et `fleet.0.membership_location`. Google : « To install Config Sync, all clusters must be registered to a fleet », avec ce bloc dans ses exemples Terraform ;
+- Config Sync : `google_gke_hub_feature` (`name = "configmanagement"`, `location = "global"`) et `google_gke_hub_feature_membership` avec `configmanagement { version, management, config_sync { enabled } }`. `config_sync.enabled` « needs to be set to `true` explicitly to install Config Sync » ; `MANAGEMENT_MANUAL` coupe les montées automatiques. Google documente l'installation sans source : « only set the `spec.configSync.enabled` field as `true` », puis les `RootSync` par `kubectl`.
+
+Restent en `pending`, écrits en commentaire daté dans la racine : l'API de la fonction `configmanagement`, qu'aucune page lue ne nomme ; la coupure de l'export des métriques de Config Sync (ADR-010, condition 7), qu'aucun attribut de `config_sync` ne porte en 8.12.0 ; les rôles du compte de la CI (ADR-008, question 3).
+
+Attributs en écriture seule. `password_wo` et `password_wo_version` (`google_sql_user`), `root_password_wo` (`google_sql_database_instance`), `secret_data_wo` et `secret_data_wo_version` (`google_secret_manager_secret_version`). OpenTofu écrit `null` à leur place dans l'état et dans le plan, à partir de 1.11, et ne voit pas seul un changement de valeur : l'attribut `*_wo_version` sert à le signaler. Les ressources éphémères existent à partir de 1.11 ; ni l'une ni l'autre page ne dit si deux ressources qui lisent la même ressource éphémère dans une exécution reçoivent la même valeur. La racine le suppose pour `db-auth` : le test de la condition 3 de l'ADR-007 le vérifie, l'API se connectant avec le mot de passe synchronisé.
+
+Autres faits lus :
+
+- API : la page de la flotte demande `container`, `gkeconnect`, `gkehub` et `cloudresourcemanager`, plus `iam` pour sa fédération d'identité ; `compute.googleapis.com` est le service de l'API Compute Engine ; les autres viennent du socle de BENCH-008 ;
+- fédération de la CI : Google déconseille les champs de nom (`repository`, `repository_owner`) au profit des champs `*_id` ; format générique `principalSet://iam.googleapis.com/projects/PROJECT_NUMBER/locations/global/workloadIdentityPools/POOL_ID/attribute.ATTRIBUTE_NAME/ATTRIBUTE_VALUE` ; émetteur de GitHub écrit `https://token.actions.githubusercontent.com/`. La longueur du `sub` face à `google.subject` reste ouverte (ADR-008, question 4) ;
+- point d'accès DNS : « accessible from any network reachable by Google Cloud APIs », et « Best practice: Use only the DNS-based endpoint ». Valeur proposée par [OPS] pour la condition 5 de l'ADR-008 : `allow_external_traffic = true`, le point d'accès IP désactivé, pour que l'utilisateur applique les manifests de la couche depuis son poste. [SECU] la confirme ;
+- Cloud SQL : à partir de `POSTGRES_16`, l'API prend `ENTERPRISE_PLUS` par défaut, qui refuse les tiers partagés et personnalisés ; `edition = "ENTERPRISE"` s'écrit donc ;
+- Renovate : son gestionnaire `terraform` lit `**/*.tf` et `**/*.tofu`, interroge par défaut `registry.terraform.io`, et propose une `packageRule` avec `registryUrls` vers `https://registry.opentofu.org` ; il tient `.terraform.lock.hcl` « without calling the underlying package manager ». Cette règle n'est pas posée par l'étape 13 (point ouvert pour le DSI).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://api.github.com/repos/opentofu/opentofu/releases> | 2026-11-25 | Dates de 1.13.9 et 1.13.10, note de 1.13.10 |
+| <https://github.com/opentofu/opentofu/releases/download/v1.13.9/tofu_1.13.9_SHA256SUMS> | 2026-11-25 | Les quatre SHA-256, lus par `gh release download` |
+| <https://api.github.com/repos/hashicorp/terraform-provider-google/releases> | 2026-11-25 | 8.12.0 du 2026-11-17, dernière release |
+| <https://api.github.com/repos/hashicorp/terraform-provider-random/releases> | 2026-11-25 | 3.9.1 du 2026-09-11, dernière release |
+| <https://opentofu.org/docs/cli/commands/init/> | 2026-11-25 | `-backend=false`, `-lockfile=readonly`, `-backend-config` |
+| <https://opentofu.org/docs/language/settings/backends/configuration/> | 2026-11-25 | Configuration partielle, bloc vide |
+| <https://opentofu.org/docs/language/settings/backends/gcs/> | 2026-11-25 | Backend `gcs`, `bucket`, `prefix`, verrouillage |
+| <https://opentofu.org/docs/cli/commands/providers/lock/> | 2026-11-25 | `-platform`, répétable |
+| <https://opentofu.org/docs/language/files/dependency-lock/> | 2026-11-25 | `h1:` et `zh:`, modules hors du verrou |
+| <https://opentofu.org/docs/language/state/encryption/> | 2026-11-25 | `gcp_kms`, `aes_gcm`, `state`, `plan`, `enforced`, variables admises |
+| <https://opentofu.org/docs/language/functions/yamldecode/> | 2026-11-25 | Types, un seul document |
+| <https://opentofu.org/docs/language/ephemerality/> et ses pages `ephemeral-resources` et `write-only-attributes` | 2026-11-25 | Ressources éphémères et attributs en écriture seule à partir de 1.11 |
+| <https://opentofu.org/docs/cli/config/environment-variables/> | 2026-11-25 | `TF_DATA_DIR`, `TF_ENCRYPTION` |
+| <https://github.com/hashicorp/terraform-provider-google/tree/v8.12.0/website/docs/r> | 2026-11-25 | Pages des ressources utilisées par la racine : cluster, flotte, Config Sync, Cloud SQL, Secret Manager, Artifact Registry, réseau, IAM, fédération ; `website/docs/guides/provider_reference.html.markdown` |
+| <https://github.com/hashicorp/terraform-provider-random/blob/v3.9.1/docs/ephemeral-resources/password.md> | 2026-11-25 | `random_password` éphémère, `length`, `special`, `result` |
+| <https://docs.cloud.google.com/kubernetes-engine/versioning> | 2026-11-25 | Formes de version `1.X`, `1.X.Y`, `1.X.Y-gke.N` |
+| <https://docs.cloud.google.com/secret-manager/docs/sync-k8-secrets> | 2026-11-25 | Région du secret, une clé par entrée, rôle et principal, intervalle |
+| <https://docs.cloud.google.com/kubernetes-engine/config-sync/docs/how-to/installing-config-sync> | 2026-11-25 | Flotte obligatoire, installation sans source, exemples Terraform |
+| <https://docs.cloud.google.com/kubernetes-engine/fleet-management/docs/before-you-begin> | 2026-11-25 | API de la flotte |
+| <https://docs.cloud.google.com/compute/docs/reference/rest/v1> | 2026-11-25 | `compute.googleapis.com` |
+| <https://docs.cloud.google.com/iam/docs/workload-identity-federation-with-deployment-pipelines> | 2026-11-25 | Champs `*_id`, `principalSet`, émetteur |
+| <https://docs.cloud.google.com/kubernetes-engine/docs/concepts/network-isolation> | 2026-11-25 | Point d'accès DNS |
+| <https://docs.renovatebot.com/modules/manager/terraform/> | 2026-11-25 | Fichiers lus, registre par défaut, verrou |
+| <https://kubernetes.io/docs/concepts/overview/working-with-objects/names/> | 2026-11-25 | Règles de nom des variables `app_namespace` et `app_service_account` |
+
+### Utilisateur de `db-auth` sur Cloud SQL (T107, 2026-11-25)
+
+Écrit par [OPS] d'après la relecture [SECU] de l'étape 3 (RS-04, PR #54), à relire par [SECU]. La racine crée la base `app` par `google_sql_database`, qui n'a pas d'argument `owner`, et l'utilisateur `app` par `google_sql_user`, en authentification intégrée, mot de passe par `password_wo`.
+
+Hypothèse retenue, écrite aussi en tête de `google_sql_user.app` dans `gcp/tofu/database.tf` : la base `app` appartient à `cloudsqlsuperuser`, comme une base créée par la console ; l'utilisateur `app` reçoit `cloudsqlsuperuser`, hérite donc de l'appartenance implicite à `pg_database_owner`, et peut créer dans `public` : le script de schéma de l'API passe. Le prix est l'écart de privilèges : sur GCP, l'API tourne avec `cloudsqlsuperuser` (`CREATEROLE`, `CREATEDB`, triggers d'événement, réplication logique, `pg_largeobject`), quand en local le même utilisateur n'est que propriétaire de sa base. L'écart est listé au README du golden repo (ENF-02) et suivi par R-39. Le dépôt n'a pas encore de modèle de menaces : l'écart y entrera quand [SECU] l'ouvrira.
+
+À lire au premier apply autorisé par Lucas, pour E12 (fonctions et catalogues lus dans la documentation de PostgreSQL 18, sources ci-dessous) :
+
+```sql
+SELECT pg_get_userbyid(datdba) AS owner FROM pg_database WHERE datname = 'app';
+SELECT has_schema_privilege('app', 'public', 'CREATE');
+SELECT roleid::regrole, admin_option, inherit_option, set_option
+  FROM pg_auth_members WHERE member = 'app'::regrole;
+```
+
+Si le propriétaire n'est pas `cloudsqlsuperuser`, ou si `inherit_option` est faux, l'hypothèse tombe et le script de schéma échoue sur `CREATE TABLE` : la couche `gcp` passe alors au durcissement prévu par R-39 avant tout déploiement.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://www.postgresql.org/docs/18/catalog-pg-auth-members.html> | 2026-11-25 | Colonnes `roleid`, `member`, `admin_option`, `inherit_option`, `set_option` |
+| <https://www.postgresql.org/docs/18/catalog-pg-database.html> | 2026-11-25 | `datdba`, propriétaire de la base |
+| <https://www.postgresql.org/docs/18/functions-info.html> | 2026-11-25 | `has_schema_privilege` (`CREATE`, `USAGE`), `pg_get_userbyid` |
+| <https://www.postgresql.org/docs/18/datatype-oid.html> | 2026-11-25 | Type `regrole` |
+
 ## RS-17. CI du golden repo dans CELIAN
 
 Décision : un workflow racine de CELIAN, `golden-saas-b2b.yml`, appelle les tâches du golden repo ; les workflows du golden repo appellent les mêmes tâches. Le contrôle X01 copie le golden repo dans un dépôt Git neuf pour exercer ses propres hooks et sa configuration.
@@ -872,6 +971,86 @@ Sources :
 | <https://github.com/aquasecurity/trivy> | 2026-11-23 | Apache-2.0 ; « an Aqua Security open source project » ; dépôt non archivé |
 | <https://docs.dependencytrack.org/usage/cicd/> | 2026-11-23 | Dependency-Track consomme des BOM CycloneDX |
 | <https://docs.github.com/en/organizations/managing-organization-settings/configuring-the-retention-period-for-github-actions-artifacts-and-logs-in-your-organization> | 2026-11-23 | Rétention des artefacts : 90 jours par défaut, de 1 à 90 jours pour un dépôt public |
+
+### Relevé du 2026-11-25 : Trivy figé (T103)
+
+Fait par [OPS], second porteur [SECU], qui relit la vérification de signature avant la fusion. Trivy est figé dès l'étape 13, qui scanne le HCL (S15) ; la première PR de l'étape 18 reprend cette version (écart 6 de tasks.md).
+
+Version : 0.76.2, publiée le 2026-11-05 à 12:50:25 UTC, release immuable (`immutable: true`), au-dessus du plancher de 0.71.1. Elle passe le délai de 7 jours.
+
+Signature. La documentation de 0.76.2 (`docs/getting-started/signature-verification.md` au tag `v0.76.2`) : depuis 0.68.1, chaque fichier de la release a son bundle sigstore `.sigstore.json`, et les commandes « assume cosign v3.0.0+ ». cosign retenu : v3.1.4, publiée le 2026-10-20, release immuable ; v3.1.5 du 2026-11-24 ne passe pas le délai. Le binaire `cosign-darwin-arm64` a été tiré par `gh release download` dans un dossier vide, et son SHA-256 (`9f9b8cd557cf2e5b3df3373a00baa005a86b02391e3e06dd0ce37b3a1533d3a4`) comparé à `cosign_checksums.txt` de la même release avant tout usage. La somme protège de la corruption, pas d'une substitution : la signature de cosign lui-même reste à vérifier par [SECU], avec un cosign déjà de confiance. Commande lancée sur le fichier de sommes de Trivy :
+
+```text
+cosign verify-blob trivy_0.76.2_checksums.txt \
+  --bundle trivy_0.76.2_checksums.txt.sigstore.json \
+  --certificate-oidc-issuer=https://token.actions.githubusercontent.com \
+  --certificate-identity 'https://github.com/aquasecurity/trivy/.github/workflows/reusable-release.yaml@refs/tags/v0.76.2'
+```
+
+Résultat : « Verified OK ». La même commande sur une copie du fichier modifiée d'un octet échoue (« invalid signature when validating ASN.1 encoded signature »). Le fichier de sommes signé porte les quatre sommes ci-dessous, égales au champ `digest` de l'API ; elles entrent dans `golden/saas-b2b/tests/tools/SHA256SUMS`, et `install.sh` les vérifie avant d'ouvrir l'archive. L'archive `macOS-ARM64` tirée pour l'essai contient le seul binaire `trivy`, avec `LICENSE`, `README.md` et `contrib/`.
+
+| Archive | SHA-256 |
+| --- | --- |
+| `trivy_0.76.2_Linux-64bit.tar.gz` | `bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf` |
+| `trivy_0.76.2_Linux-ARM64.tar.gz` | `ab9d51f86e6a5fb936f605faff6b593ac51bc378fff4d3e8b9d58358b9c367c3` |
+| `trivy_0.76.2_macOS-64bit.tar.gz` | `e08bb9ea449ecf66c6bfb03cbb8697c503ff33d35fc585c9747e3eaeb7ed4c7b` |
+| `trivy_0.76.2_macOS-ARM64.tar.gz` | `ae7ea358326960406b703c77b2ac490190797d80b306b5b50c2a27221da0a5b8` |
+
+Scan du HCL, d'après la documentation de 0.76.2 (`trivy config`, et la page de configuration des erreurs de configuration) :
+
+- `--exit-code` fixe le code de sortie quand un problème est trouvé ; `--misconfig-scanners terraform` limite le scan au HCL ;
+- `--ignorefile ''` désactive la lecture de `.trivyignore` (« empty string disables loading ») : chaque échec admis se justifie alors à côté de sa ressource, par le commentaire `#trivy:ignore:<ID>` placé juste au-dessus d'elle (« immediately adjacent to resource definitions ») ;
+- `--disable-telemetry` coupe l'envoi de données d'usage à Aqua (« disable sending anonymous usage data to Aqua »), envoi actif par défaut ;
+- les règles viennent d'un bundle tiré de `mirror.gcr.io/aquasec/trivy-checks:2` (`--checks-bundle-repository`) ; `--skip-check-update` n'est pas employé dans ce relevé du T103 ; la décision du DSI du 2026-11-25 (relevé ci-dessous) la remplace ;
+- `--include-non-failures` liste aussi les règles passées.
+
+Essai sur le socle écrit à la main de BENCH-008, avec cette version : les cinq échecs que relevait [SECU] reviennent, AVD-GCP-0029 et AVD-GCP-0076 (journaux de flux du sous-réseau), AVD-GCP-0050 (compte des nœuds), AVD-GCP-0051 (étiquettes du cluster), AVD-GCP-0061 (réseaux autorisés du plan de contrôle). La racine de l'étape 13 en corrige quatre et justifie le dernier par écrit (T109).
+
+Résultat sur la racine de l'étape 13, le 2026-11-25 (T109) : 91 règles passées, aucun échec. AVD-GCP-0061 est justifié au-dessus de `google_container_cluster.main` : le point d'accès IP du plan de contrôle est désactivé, il n'y a donc aucune plage à restreindre, et l'accès passe par le point d'accès DNS, sous IAM. Sans ce commentaire, Trivy échoue sur cette seule règle. [SECU] relit la justification. Les journaux de flux du sous-réseau partent vers Cloud Logging, dont le prix n'a pas été lu : [FINOPS] en fixe l'échantillonnage avec le budget.
+
+Sur le poste, Trivy 0.76.2 vient de Homebrew : même version, binaire non comparé à la release. La CI installe celui de la release, par sa somme.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://api.github.com/repos/aquasecurity/trivy/releases/tags/v0.76.2> | 2026-11-25 | Date, release immuable, sommes et bundles des archives |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/getting-started/signature-verification.md> | 2026-11-25 | Bundles sigstore depuis 0.68.1, cosign v3, commande `verify-blob` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/guide/references/configuration/cli/trivy_config.md> | 2026-11-25 | Options de `trivy config` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/guide/scanner/misconfiguration/config/config.md> | 2026-11-25 | Commentaire `#trivy:ignore:<ID>` adjacent à la ressource |
+| <https://api.github.com/repos/sigstore/cosign/releases> | 2026-11-25 | v3.1.4 du 2026-10-20, v3.1.5 du 2026-11-24, releases immuables |
+| <https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign_checksums.txt> | 2026-11-25 | SHA-256 de `cosign-darwin-arm64` |
+
+### Relevé du 2026-11-25 : relecture [SECU] de la PR #64
+
+Fait par [OPS]. Sources lues le 2026-11-25 : le code et la documentation de Trivy au tag `v0.76.2`, les règles du dépôt `aquasecurity/trivy-checks` au commit embarqué dans ce binaire (`ac85645895ed`, lu dans `go.mod` de Trivy), la page des options de Cloud SQL, la page de PostgreSQL 18 sur les journaux, la page OIDC de GitHub et celle de la fédération d'identité de Google. Aucun `tofu plan`, aucun apply, aucune commande `gcloud`.
+
+Valeur calculée et Trivy. Trivy ne résout pas `yamldecode(file(...))` : avec `database_version = "POSTGRES_${local.platform.postgres_major}"`, il passait sans appliquer AVD-GCP-0014, 0016, 0020, 0022 et 0025, qui ne visent que les instances PostgreSQL. La version s'écrit donc en littéral (`POSTGRES_18`), et S21 compare ce littéral à `postgres_major` de `platform.yaml`. S15 garde la preuve : une copie de la racine dont les cinq options sont coupées doit échouer sur les cinq règles. L'essai sur la racine avant correction acceptait cette copie.
+
+Les cinq règles, d'après leur source. Trivy lit l'option `database_flags` d'une instance PostgreSQL ; `log_connections`, `log_disconnections`, `log_checkpoints` et `log_lock_waits` valent « on » pour lui, `log_temp_files` doit valoir 0 (une valeur négative ou positive échoue), et une option absente vaut « off » (-1 pour `log_temp_files`). Les cinq sont activées, sans exception `#trivy:ignore`. Volume : un événement par ouverture et fermeture de session, par point de contrôle, par attente de verrou plus longue que `deadlock_timeout`, par fichier temporaire. Pour `log_temp_files`, la page de Cloud SQL donne 0 comme valeur par défaut : l'écrire ne change pas le volume, et la page de PostgreSQL 18 donne -1 par défaut pour le moteur nu. La page de Cloud SQL liste ces options en booléen « on » ou « off » ; elle ne porte pas de mention de version pour elles, et ne confirme pas non plus leur prise en charge sur PostgreSQL 18 : à lire au premier apply autorisé. PostgreSQL 18 remplace `log_connections` par une liste d'options mais accepte encore « on » (page de PostgreSQL 18).
+
+Options de Trivy. `--skip-version-check` avec `--disable-telemetry` : le code de `pkg/notification/notice.go` ne fait aucune requête vers `check.trivy.dev` quand les deux sont vraies, et envoie la télémétrie quand seule la vérification de version est coupée. `--config ''` : « empty string disables loading » (page de `trivy config`), pour qu'un `trivy.yaml` du dépôt ne fasse pas taire le scan. Décision du DSI : `--skip-check-update`, pour utiliser les règles embarquées dans le binaire vérifié par `install.sh` ; le résultat est reproductible, et Renovate apporte les règles nouvelles avec chaque version de Trivy. La documentation de 0.76.2 dit que le bundle est embarqué à la compilation et sert de repli ; l'essai avec un cache vide le confirme (« Falling back to embedded checks ») et applique les cinq règles. Ce relevé remplace le choix du T103, qui laissait tirer le bundle à chaque exécution.
+
+Commentaires d'exception. Trivy lit comme règle tout mot qui commence par `trivy:` ou `tfsec:` après `#`, `/` ou `*` (code de `pkg/iac/ignore`, `*` pour tout, suffixes `exp` et crochets compris). S15 refuse donc tout commentaire de ce genre qui n'est pas, ligne entière, `#trivy:ignore:AVD-GCP-0061` au-dessus de `google_container_cluster.main` ; la liste est `allowed_ignores` dans le script. Six cas d'échec : une règle de journalisation, le joker, la bonne règle sur une autre ressource, le préfixe `tfsec:`, un suffixe d'expiration, deux règles sur une ligne.
+
+Fédération de la CI. `event_name` est une revendication du jeton GitHub (« The name of the event that triggered the workflow run », page OIDC). La page de Google dit que la condition d'attribut peut lire `assertion` et tout attribut du mappage, sans confirmer qu'une revendication non mappée passe ; `event_name` est donc mappé aussi (`attribute.event_name`), comme les trois autres. La condition exige `assertion.event_name == 'push'` : `pull_request_target`, `workflow_run`, `schedule` et `workflow_dispatch` n'obtiennent pas le jeton.
+
+Point d'accès DNS. `enable_k8s_tokens_via_dns` et `enable_k8s_certs_via_dns` sont des arguments de `dns_endpoint_config` en 8.12.0 (« Controls whether the k8s token auth is allowed via Dns », idem pour les certificats). La page ne donne pas leur valeur par défaut : les deux sont écrits à `false`, et S15 (condition 5) refuse `true` comme l'absence.
+
+Liste d'autorisations de S17. Dans le Taskfile et les scripts de `gcp/`, OpenTofu ne s'exécute qu'avec `fmt`, `init` (avec `-backend=false` sur la même ligne), `validate`, `version`, `providers` ; `gcloud` et `kubectl` sont refusés jusqu'à la GATE 2. Le contrôle lit le premier mot après les options, y compris dans un message : S14 écrit « OpenTofu » dans ses messages. Sept cas d'échec dans `gcp/tests/static/s17-cases/`.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/notification/notice.go> | 2026-11-25 | Requête vers `check.trivy.dev`, conditions de `--skip-version-check` et `--disable-telemetry` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/iac/ignore/parse.go> | 2026-11-25 | Mots `trivy:` et `tfsec:` lus comme règles |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/iac/adapters/terraform/google/sql/adapt.go> | 2026-11-25 | Lecture de `database_flags`, valeurs « on » et défauts |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/guide/references/configuration/cli/trivy_config.md> | 2026-11-25 | `--config`, `--skip-check-update`, `--skip-version-check` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/guide/scanner/misconfiguration/check/builtin.md> | 2026-11-25 | Bundle embarqué à la compilation, repli |
+| <https://github.com/aquasecurity/trivy-checks/tree/ac85645895ed/checks/cloud/google/sql> | 2026-11-25 | Règles AVD-GCP-0014, 0016, 0020, 0022, 0025 |
+| <https://docs.cloud.google.com/sql/docs/postgres/flags> | 2026-11-25 | Les cinq options, types, défaut de `log_temp_files` |
+| <https://www.postgresql.org/docs/18/runtime-config-logging.html> | 2026-11-25 | `log_connections` en liste, « on » accepté, défauts |
+| <https://docs.github.com/en/actions/reference/security/oidc> | 2026-11-25 | Revendication `event_name` |
+| <https://docs.cloud.google.com/iam/docs/workload-identity-federation> | 2026-11-25 | Condition d'attribut, mot `assertion`, attributs mappés |
+| <https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/container_cluster.html.markdown> | 2026-11-25 | `enable_k8s_tokens_via_dns`, `enable_k8s_certs_via_dns` |
+| <https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/sql_database_instance.html.markdown> | 2026-11-25 | `database_flags`, `name`, `value` |
 
 ## RS-23. Seuil de gravité et exceptions
 

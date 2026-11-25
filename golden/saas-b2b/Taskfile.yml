@@ -25,11 +25,10 @@ includes:
   local:
     taskfile: ./local/tasks/local.yml
     internal: true
-  # gcp:validate, gcp:policy and gcp:scan arrive with step 13 (T105), which
-  # writes this file; `optional` goes away then.
+  # gcp:validate, gcp:policy and gcp:scan: the checks of the OpenTofu root,
+  # without any credential. `task check` runs them too.
   gcp:
     taskfile: ./gcp/tasks/gcp.yml
-    optional: true
 
 tasks:
   up:
@@ -53,7 +52,7 @@ tasks:
       - task: local:reload
 
   check:
-    desc: Run the static checks and the simulated preflight checks, without a cluster.
+    desc: Run the static checks, OpenTofu layer included, and the simulated preflight checks, without a cluster or a cloud credential.
     cmds:
       - bash tests/run-static.sh
 

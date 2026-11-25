@@ -6,7 +6,7 @@ Projet de référence du blueprint SaaS B2B de CELIAN, construit à la main avan
 
 En construction. Le dépôt ne démarre pas encore. `task up` passe ses contrôles préalables, puis s'arrête : le cluster, le miroir et l'application arrivent aux étapes 6 à 9. `task down` et `task reload` répondent qu'ils ne sont pas livrés, et disent à quelle étape ils arrivent. `task check` tourne en entier, avec les contrôles statiques des étapes 1 à 3 et les contrôles préalables de l'étape 5, joués contre des binaires simulés. `task test` lance les tests unitaires de l'API dans son image de construction : il demande Docker, et aucun SDK .NET.
 
-Pour lancer `task check` sur son poste, il faut Task et conftest. `tests/tools/install.sh <dossier>` les installe dans le dossier donné, après avoir vérifié le SHA-256 de chaque archive, puis ce dossier se met dans le `PATH`.
+Pour lancer `task check` sur son poste, il faut Task, conftest, OpenTofu et Trivy. `tests/tools/install.sh <dossier>` les installe dans le dossier donné, après avoir vérifié le SHA-256 de chaque archive, puis ce dossier se met dans le `PATH`.
 
 Le dépôt porte ses propres conventions Git : hooks pre-commit, commitlint, Renovate, release-please et workflows dans `.github/`. Elles prennent effet dans une copie autonome du dossier, où `pre-commit install` pose les hooks ; dans CELIAN, ce sont celles de CELIAN qui s'appliquent, et le contrôle X01 exerce celles-ci dans une copie.
 
@@ -38,3 +38,15 @@ Une couche de cible tient dans un seul dossier. Tout ce qui est hors de `local/`
 | tout le reste | commune | code de l'application, base et overlays Kustomize, conventions Git, README, tests et politiques communs |
 
 La couche commune ne nomme aucun outil ni aucun fournisseur. Seule `local/` nomme kind, Envoy Gateway, zot ou Flux, et seule `gcp/` nomme un service de Google.
+
+## Couche GCP
+
+`gcp/tofu/` décrit la cible GCP en OpenTofu : réseau privé, GKE Autopilot, Cloud SQL, Artifact Registry, Secret Manager, Config Sync et identité de la CI par fédération. Rien dans ce dépôt ne la déploie. `task gcp:validate`, `task gcp:policy` et `task gcp:scan` la vérifient sans identifiant cloud, et `task check` les lance aussi. Le premier déploiement attend l'accord de Lucas et un budget validé.
+
+## Écarts entre les cibles
+
+Liste tenue au fil des étapes (ENF-02) ; le README complet de l'étape 11 la reprend.
+
+| Écart | Sur le poste | Sur GCP | Suivi |
+| --- | --- | --- | --- |
+| Privilèges de l'utilisateur de `db-auth` | propriétaire de la base `app`, sans autre attribut | membre de `cloudsqlsuperuser` : `CREATEROLE`, `CREATEDB`, triggers d'événement, réplication logique | R-39 ; vérifié au premier déploiement, durci après le MVP par un ADR |

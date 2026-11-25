@@ -1,0 +1,4 @@
+# Failing case of S17: a gcloud call.
+# expect: gcloud or kubectl in the gcp layer, before GATE 2
+
+  gcloud container clusters list

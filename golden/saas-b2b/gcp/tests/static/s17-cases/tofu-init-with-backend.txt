@@ -1,0 +1,4 @@
+# Failing case of S17: an init that reaches the backend.
+# expect: OpenTofu init without -backend=false
+
+  sandboxed tofu -chdir="$dir" init -lockfile=readonly
