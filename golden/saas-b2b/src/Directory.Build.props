@@ -1,0 +1,22 @@
+<!--
+  Settings shared by the API and its tests (spec 001, step 3). Versions and
+  dates of every package: research RS-18 of spec 001.
+-->
+<Project>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <!-- packages.lock.json holds the whole package graph; the image build
+         restores with locked mode, so a graph change fails until the lock
+         file is updated and committed (research RS-18). -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <!-- NuGet audit runs at each restore, over the whole package graph for
+         net10.0. A high (NU1903) or critical (NU1904) advisory fails the
+         restore; low and moderate ones stay warnings. Example and defaults:
+         https://learn.microsoft.com/en-us/nuget/concepts/auditing-packages,
+         read on 2026-11-24 (review [SECU] of step 3). -->
+    <WarningsAsErrors>$(WarningsAsErrors);NU1903;NU1904</WarningsAsErrors>
+  </PropertyGroup>
+</Project>

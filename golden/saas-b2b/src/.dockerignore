@@ -1,0 +1,5 @@
+# Build context of the API image (src/Api/Dockerfile): the sources only.
+**/bin/
+**/obj/
+**/*.user
+**/.vs/

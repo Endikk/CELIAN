@@ -42,6 +42,29 @@ jobs:
       - name: Run the static checks
         run: task check
 
+  # U01: unit tests of the API, in its build image (research RS-06). The
+  # runner's Docker builds the test stage of src/Api/Dockerfile; no .NET SDK
+  # is installed. A required check, like static.
+  unit:
+    name: unit
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: golden/saas-b2b
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Task and conftest
+        run: |
+          bash tests/tools/install.sh "$RUNNER_TEMP/golden-tools"
+          echo "$RUNNER_TEMP/golden-tools" >> "$GITHUB_PATH"
+
+      - name: Run the unit tests
+        run: task test
+
   # X01: the golden repo as a project of its own, copied into a new Git
   # repository where its hooks, commitlint, actionlint and gitleaks run
   # (research RS-17). Outside the required checks until the DSI decides.
