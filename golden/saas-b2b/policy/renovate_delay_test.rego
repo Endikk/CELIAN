@@ -259,6 +259,80 @@ test_s23_rejects_package_rules_nested_in_an_entry if {
 	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"packageRules\"] nests packageRules")
 }
 
+# Keys that change what Renovate reads, or where it looks a package up: each
+# can stop an update, security fixes included, through any entry, manager or
+# the top.
+
+changes_lookup(path) := sprintf("%s changes what Renovate reads", [path])
+
+test_s23_rejects_override_package_name if {
+	rule := {"matchPackageNames": ["kindest/node"], "overridePackageName": "example/node"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"overridePackageName\"]"))
+}
+
+test_s23_rejects_override_datasource if {
+	rule := {"matchPackageNames": ["postgres"], "overrideDatasource": "github-tags"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"overrideDatasource\"]"))
+}
+
+test_s23_rejects_override_dep_name if {
+	rule := {"matchPackageNames": ["postgres"], "overrideDepName": "example/postgres"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"overrideDepName\"]"))
+}
+
+test_s23_rejects_registry_urls if {
+	rule := {"matchPackageNames": ["postgres"], "registryUrls": ["https://registry.example.com"]}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"registryUrls\"]"))
+}
+
+test_s23_rejects_default_registry_urls if {
+	renovate := with_value(valid_config, "dockerfile", {"defaultRegistryUrls": ["https://registry.example.com"]})
+	denied_with(checked(renovate), changes_lookup("[\"dockerfile\", \"defaultRegistryUrls\"]"))
+}
+
+test_s23_rejects_follow_tag if {
+	rule := {"matchPackageNames": ["*"], "followTag": "next"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"followTag\"]"))
+}
+
+test_s23_rejects_ignore_deps if {
+	renovate := with_value(valid_config, "ignoreDeps", ["kindest/node"])
+	denied_with(checked(renovate), changes_lookup("[\"ignoreDeps\"]"))
+}
+
+test_s23_rejects_enabled_managers if {
+	renovate := with_value(valid_config, "enabledManagers", ["npm"])
+	denied_with(checked(renovate), changes_lookup("[\"enabledManagers\"]"))
+}
+
+test_s23_rejects_ignore_paths_at_the_top if {
+	renovate := with_value(valid_config, "ignorePaths", ["golden/**"])
+	denied_with(checked(renovate), changes_lookup("[\"ignorePaths\"]"))
+}
+
+test_s23_rejects_ignore_paths_in_a_manager if {
+	renovate := with_value(valid_config, "dockerfile", {"ignorePaths": ["golden/**"]})
+	denied_with(checked(renovate), changes_lookup("[\"dockerfile\", \"ignorePaths\"]"))
+}
+
+test_s23_rejects_include_paths if {
+	renovate := with_value(valid_config, "includePaths", ["src/**"])
+	denied_with(checked(renovate), changes_lookup("[\"includePaths\"]"))
+}
+
+# Renovate turns ignoreNodeModules into ignorePaths
+# (lib/config/migrations/custom/ignore-node-modules-migration.ts, line 8).
+test_s23_rejects_the_legacy_ignore_node_modules if {
+	renovate := with_value(valid_config, "ignoreNodeModules", true)
+	denied_with(checked(renovate), changes_lookup("[\"ignoreNodeModules\"]"))
+}
+
+# The ignorePaths of the regex object, which package renovate_rules fixes to
+# the letter, stays allowed.
+test_s23_accepts_the_ignore_paths_of_the_regex_object if {
+	accepted(checked(with_value(valid_config, "regex", {"ignorePaths": ["**/node_modules/**"]})))
+}
+
 # The objects of current managers stay allowed: both renovate.json files set
 # pre-commit and regex.
 test_s23_accepts_the_objects_of_current_managers if {
