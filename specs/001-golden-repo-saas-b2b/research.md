@@ -459,7 +459,7 @@ Chiffrement `gcp_kms`. Fournisseur de clé `gcp_kms` (`kms_encryption_key`, `key
 
 Verrou multi-plateformes (ADR-008, question 5). `tofu providers lock -platform=<os>_<arch>`, option répétable. Essai : le registre d'OpenTofu publie les sommes de toutes les plateformes, et `tofu init` comme `tofu providers lock -platform=linux_amd64` ont écrit 15 sommes `h1:` et 15 sommes `zh:` par provider. Effet de `-lockfile=readonly` : sur un verrou privé des sommes `h1:` mais qui garde les `zh:`, l'init passe, affiche « Provider lock file not updated » et laisse le verrou intact ; sur un verrou dont aucune somme ne correspond, l'init échoue (« doesn't match any of the checksums previously recorded in the dependency lock file »). Commande retenue pour T108 : `tofu providers lock -platform=linux_amd64 -platform=linux_arm64 -platform=darwin_amd64 -platform=darwin_arm64`. Le verrou ne suit que les providers, jamais les modules.
 
-Lecture de `platform.yaml`. `yamldecode` lit un sous-ensemble de YAML 1.2, un seul document ; `!!map` donne un objet, `!!str` une chaîne. Essai : `yamldecode(file("${path.module}/../../platform.yaml"))` donne `{"kubernetes_minor" = "1.36", "postgres_major" = "18"}`, des chaînes, et `"POSTGRES_${...postgres_major}"` donne `"POSTGRES_18"`. `min_master_version` accepte la forme `1.X`, qui se résout en « The highest valid patch release in the specified minor version » ; c'est un minimum, que GKE dépasse en montant de version.
+Lecture de `platform.yaml`. `yamldecode` lit un sous-ensemble de YAML 1.2, un seul document ; `!!map` donne un objet, `!!str` une chaîne. Essai : `yamldecode(file("${path.module}/../../platform.yaml"))` donne `{"kubernetes_minor" = "1.36", "postgres_major" = "18"}`, des chaînes, et `"POSTGRES_${...postgres_major}"` donne `"POSTGRES_18"`. `min_master_version` accepte la forme `1.X`, qui se résout en « The highest valid patch release in the specified minor version » ; c'est un minimum, que GKE dépasse en montant de version. Mise à jour du 2026-11-25 : `database_version` s'écrit en littéral `POSTGRES_18`, parce que Trivy ne résout pas cette lecture (RS-22) ; S21 le compare à `platform.yaml`.
 
 Activations, attributs de `google_container_cluster` en 8.12.0 :
 
@@ -1001,7 +1001,7 @@ Scan du HCL, d'après la documentation de 0.76.2 (`trivy config`, et la page de 
 - `--exit-code` fixe le code de sortie quand un problème est trouvé ; `--misconfig-scanners terraform` limite le scan au HCL ;
 - `--ignorefile ''` désactive la lecture de `.trivyignore` (« empty string disables loading ») : chaque échec admis se justifie alors à côté de sa ressource, par le commentaire `#trivy:ignore:<ID>` placé juste au-dessus d'elle (« immediately adjacent to resource definitions ») ;
 - `--disable-telemetry` coupe l'envoi de données d'usage à Aqua (« disable sending anonymous usage data to Aqua »), envoi actif par défaut ;
-- les règles viennent d'un bundle tiré de `mirror.gcr.io/aquasec/trivy-checks:2` (`--checks-bundle-repository`) ; `--skip-check-update` n'est pas employé, pour qu'une règle nouvelle se voie. Le bundle n'est gardé d'une exécution à l'autre ni en CI ni par la tâche ;
+- les règles viennent d'un bundle tiré de `mirror.gcr.io/aquasec/trivy-checks:2` (`--checks-bundle-repository`) ; `--skip-check-update` n'est pas employé dans ce relevé du T103 ; la décision du DSI du 2026-11-25 (relevé ci-dessous) la remplace ;
 - `--include-non-failures` liste aussi les règles passées.
 
 Essai sur le socle écrit à la main de BENCH-008, avec cette version : les cinq échecs que relevait [SECU] reviennent, AVD-GCP-0029 et AVD-GCP-0076 (journaux de flux du sous-réseau), AVD-GCP-0050 (compte des nœuds), AVD-GCP-0051 (étiquettes du cluster), AVD-GCP-0061 (réseaux autorisés du plan de contrôle). La racine de l'étape 13 en corrige quatre et justifie le dernier par écrit (T109).
@@ -1018,6 +1018,39 @@ Sur le poste, Trivy 0.76.2 vient de Homebrew : même version, binaire non compar
 | <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/guide/scanner/misconfiguration/config/config.md> | 2026-11-25 | Commentaire `#trivy:ignore:<ID>` adjacent à la ressource |
 | <https://api.github.com/repos/sigstore/cosign/releases> | 2026-11-25 | v3.1.4 du 2026-10-20, v3.1.5 du 2026-11-24, releases immuables |
 | <https://github.com/sigstore/cosign/releases/download/v3.1.4/cosign_checksums.txt> | 2026-11-25 | SHA-256 de `cosign-darwin-arm64` |
+
+### Relevé du 2026-11-25 : relecture [SECU] de la PR #64
+
+Fait par [OPS]. Sources lues le 2026-11-25 : le code et la documentation de Trivy au tag `v0.76.2`, les règles du dépôt `aquasecurity/trivy-checks` au commit embarqué dans ce binaire (`ac85645895ed`, lu dans `go.mod` de Trivy), la page des options de Cloud SQL, la page de PostgreSQL 18 sur les journaux, la page OIDC de GitHub et celle de la fédération d'identité de Google. Aucun `tofu plan`, aucun apply, aucune commande `gcloud`.
+
+Valeur calculée et Trivy. Trivy ne résout pas `yamldecode(file(...))` : avec `database_version = "POSTGRES_${local.platform.postgres_major}"`, il passait sans appliquer AVD-GCP-0014, 0016, 0020, 0022 et 0025, qui ne visent que les instances PostgreSQL. La version s'écrit donc en littéral (`POSTGRES_18`), et S21 compare ce littéral à `postgres_major` de `platform.yaml`. S15 garde la preuve : une copie de la racine dont les cinq options sont coupées doit échouer sur les cinq règles. L'essai sur la racine avant correction acceptait cette copie.
+
+Les cinq règles, d'après leur source. Trivy lit l'option `database_flags` d'une instance PostgreSQL ; `log_connections`, `log_disconnections`, `log_checkpoints` et `log_lock_waits` valent « on » pour lui, `log_temp_files` doit valoir 0 (une valeur négative ou positive échoue), et une option absente vaut « off » (-1 pour `log_temp_files`). Les cinq sont activées, sans exception `#trivy:ignore`. Volume : un événement par ouverture et fermeture de session, par point de contrôle, par attente de verrou plus longue que `deadlock_timeout`, par fichier temporaire. Pour `log_temp_files`, la page de Cloud SQL donne 0 comme valeur par défaut : l'écrire ne change pas le volume, et la page de PostgreSQL 18 donne -1 par défaut pour le moteur nu. La page de Cloud SQL liste ces options en booléen « on » ou « off » ; elle ne porte pas de mention de version pour elles, et ne confirme pas non plus leur prise en charge sur PostgreSQL 18 : à lire au premier apply autorisé. PostgreSQL 18 remplace `log_connections` par une liste d'options mais accepte encore « on » (page de PostgreSQL 18).
+
+Options de Trivy. `--skip-version-check` avec `--disable-telemetry` : le code de `pkg/notification/notice.go` ne fait aucune requête vers `check.trivy.dev` quand les deux sont vraies, et envoie la télémétrie quand seule la vérification de version est coupée. `--config ''` : « empty string disables loading » (page de `trivy config`), pour qu'un `trivy.yaml` du dépôt ne fasse pas taire le scan. Décision du DSI : `--skip-check-update`, pour utiliser les règles embarquées dans le binaire vérifié par `install.sh` ; le résultat est reproductible, et Renovate apporte les règles nouvelles avec chaque version de Trivy. La documentation de 0.76.2 dit que le bundle est embarqué à la compilation et sert de repli ; l'essai avec un cache vide le confirme (« Falling back to embedded checks ») et applique les cinq règles. Ce relevé remplace le choix du T103, qui laissait tirer le bundle à chaque exécution.
+
+Commentaires d'exception. Trivy lit comme règle tout mot qui commence par `trivy:` ou `tfsec:` après `#`, `/` ou `*` (code de `pkg/iac/ignore`, `*` pour tout, suffixes `exp` et crochets compris). S15 refuse donc tout commentaire de ce genre qui n'est pas, ligne entière, `#trivy:ignore:AVD-GCP-0061` au-dessus de `google_container_cluster.main` ; la liste est `allowed_ignores` dans le script. Six cas d'échec : une règle de journalisation, le joker, la bonne règle sur une autre ressource, le préfixe `tfsec:`, un suffixe d'expiration, deux règles sur une ligne.
+
+Fédération de la CI. `event_name` est une revendication du jeton GitHub (« The name of the event that triggered the workflow run », page OIDC). La page de Google dit que la condition d'attribut peut lire `assertion` et tout attribut du mappage, sans confirmer qu'une revendication non mappée passe ; `event_name` est donc mappé aussi (`attribute.event_name`), comme les trois autres. La condition exige `assertion.event_name == 'push'` : `pull_request_target`, `workflow_run`, `schedule` et `workflow_dispatch` n'obtiennent pas le jeton.
+
+Point d'accès DNS. `enable_k8s_tokens_via_dns` et `enable_k8s_certs_via_dns` sont des arguments de `dns_endpoint_config` en 8.12.0 (« Controls whether the k8s token auth is allowed via Dns », idem pour les certificats). La page ne donne pas leur valeur par défaut : les deux sont écrits à `false`, et S15 (condition 5) refuse `true` comme l'absence.
+
+Liste d'autorisations de S17. Dans le Taskfile et les scripts de `gcp/`, OpenTofu ne s'exécute qu'avec `fmt`, `init` (avec `-backend=false` sur la même ligne), `validate`, `version`, `providers` ; `gcloud` et `kubectl` sont refusés jusqu'à la GATE 2. Le contrôle lit le premier mot après les options, y compris dans un message : S14 écrit « OpenTofu » dans ses messages. Sept cas d'échec dans `gcp/tests/static/s17-cases/`.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/notification/notice.go> | 2026-11-25 | Requête vers `check.trivy.dev`, conditions de `--skip-version-check` et `--disable-telemetry` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/iac/ignore/parse.go> | 2026-11-25 | Mots `trivy:` et `tfsec:` lus comme règles |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/iac/adapters/terraform/google/sql/adapt.go> | 2026-11-25 | Lecture de `database_flags`, valeurs « on » et défauts |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/guide/references/configuration/cli/trivy_config.md> | 2026-11-25 | `--config`, `--skip-check-update`, `--skip-version-check` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/guide/scanner/misconfiguration/check/builtin.md> | 2026-11-25 | Bundle embarqué à la compilation, repli |
+| <https://github.com/aquasecurity/trivy-checks/tree/ac85645895ed/checks/cloud/google/sql> | 2026-11-25 | Règles AVD-GCP-0014, 0016, 0020, 0022, 0025 |
+| <https://docs.cloud.google.com/sql/docs/postgres/flags> | 2026-11-25 | Les cinq options, types, défaut de `log_temp_files` |
+| <https://www.postgresql.org/docs/18/runtime-config-logging.html> | 2026-11-25 | `log_connections` en liste, « on » accepté, défauts |
+| <https://docs.github.com/en/actions/reference/security/oidc> | 2026-11-25 | Revendication `event_name` |
+| <https://docs.cloud.google.com/iam/docs/workload-identity-federation> | 2026-11-25 | Condition d'attribut, mot `assertion`, attributs mappés |
+| <https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/container_cluster.html.markdown> | 2026-11-25 | `enable_k8s_tokens_via_dns`, `enable_k8s_certs_via_dns` |
+| <https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/sql_database_instance.html.markdown> | 2026-11-25 | `database_flags`, `name`, `value` |
 
 ## RS-23. Seuil de gravité et exceptions
 

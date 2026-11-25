@@ -244,6 +244,10 @@ Sources lues le 15/11/2026 par [FINOPS] :
 <https://docs.cloud.google.com/billing/docs/how-to/budgets>,
 <https://docs.cloud.google.com/billing/docs/how-to/budgets-spend-caps>.
 
+Mise à jour du 2026-11-25 : les étiquettes `owner`, `env` et `ttl` sont posées
+sur les ressources de la couche GCP, et S15 refuse une racine qui les omet ou
+les écrit hors format.
+
 ### R-06. Catalogue qui se périme
 
 Licences qui changent (Terraform, Vault), projets archivés (MinIO), services
@@ -441,6 +445,11 @@ d'agrandissement du disque de Cloud SQL et une alerte budget déclarée dans le
 code. Les grilles tarifaires de Cloud SQL, Memorystore et du réseau n'ont pas
 pu être lues le 2026-11-19 : aucun budget de démo n'est validable avant leur
 lecture (R-05).
+
+Mise à jour du 2026-11-25 : la limite d'agrandissement du disque de Cloud SQL
+et le nombre de sauvegardes conservées sont deux variables de la couche GCP
+sans valeur par défaut, et S15 refuse une racine qui les laisse au défaut du
+provider.
 
 ### R-18. Services GCP facturés au volume
 
