@@ -13,7 +13,11 @@
 #          only (ADR-004, condition 4): the CRDs of Gateway API, the CRDs of
 #          Envoy Gateway, the namespace of Envoy Gateway, its controller,
 #          then the EnvoyProxy and the GatewayClass; it waits until the
-#          controller is available and the GatewayClass accepted
+#          controller is available and the GatewayClass accepted. The
+#          controller watches its namespace and the one of the application
+#          alone (ADR-005, complement of 2026-11-25): up stops before the
+#          controller when the namespace of the application is missing,
+#          since task up creates it with the Secrets
 #   IMAGE  the controller image, by tag and digest: ENVOY_GATEWAY_IMAGE of
 #          local/tasks/local.yml
 #
@@ -139,6 +143,23 @@ check() {
   verify_render "$1"
 }
 
+# watched_namespaces_exist: every namespace of an object of the controller
+# render, but its own, exists. The controller watches the namespace of the
+# application alone with its own (ADR-005, complement of 2026-11-25), and
+# the render holds its Role and RoleBinding there: kubectl would refuse
+# them in a namespace that does not exist. task up creates it with the
+# Secrets, before the platform.
+watched_namespaces_exist() {
+  local namespace found
+  while IFS= read -r namespace; do
+    [ "$namespace" = "$CONTROLLER_NAMESPACE" ] && continue
+    found="$(kube get namespace "$namespace" --ignore-not-found --output name)" ||
+      die "cannot read the namespace $namespace; the messages of kubectl are above. The controller was not applied."
+    [ -n "$found" ] ||
+      die "the namespace $namespace, which the controller of Envoy Gateway watches, does not exist: task up creates it with the Secrets, before the platform. The controller was not applied."
+  done < <(sed -n -E 's/^  namespace: "?([a-z0-9-]+)"?$/\1/p' "$ENVOY_GATEWAY_RENDER" | LC_ALL=C sort -u)
+}
+
 # apply FILE...: server-side apply of files of the repository.
 apply() {
   local args=() file
@@ -156,6 +177,7 @@ up() {
   kube wait --for=condition=Established --timeout="$CRD_WAIT" crd --all >/dev/null ||
     die "the CRDs are not established within $CRD_WAIT. Run task down, then task up."
   printf 'Platform: CRDs of Gateway API and of Envoy Gateway established, from local/vendor/.\n'
+  watched_namespaces_exist
   apply "$PLATFORM/namespace.yaml" "$ENVOY_GATEWAY_RENDER" ||
     die "the controller of Envoy Gateway was not applied; the messages of kubectl are above."
   if ! kube --namespace "$CONTROLLER_NAMESPACE" rollout status "deployment/$CONTROLLER_DEPLOYMENT" \
