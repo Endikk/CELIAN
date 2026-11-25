@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # control: S15
-# carries: FR-011, FR-012; ADR-008, conditions 1 to 6 and 8; ADR-007, condition 2; ADR-010; R-32
+# carries: FR-011, FR-012; ADR-008, conditions 1 to 6 and 8; ADR-007, condition 2; ADR-010; R-32; R-05, R-17, R-18
 #
 # Two parts, both on the HCL of gcp/tofu/, without any credential:
 # - policy: the tests of the conftest packages of gcp/policy/, then each
@@ -21,7 +21,7 @@ CDPATH='' cd -- "$root"
 part="${1:-both}"
 dir="gcp/tofu"
 policies="gcp/policy"
-packages="tofu_adr008 tofu_secret_sync tofu_config_sync"
+packages="tofu_adr008 tofu_secret_sync tofu_config_sync tofu_finops"
 problems=0
 
 case "$part" in
