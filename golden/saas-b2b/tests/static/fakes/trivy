@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# A stand-in for trivy, used by S26 (tests/static/s26-scan-policy.sh) to read
+# what tests/scan/scan-images.sh passes to Trivy, without network. S26 copies
+# it into a temporary directory first on PATH. The scan runs Trivy under
+# env -i, so this file finds its log and its mode next to itself:
+# - trivy.log gets one "ARGS" line per call, the arguments joined by "|",
+#   then one "ENV" line per variable of the environment;
+# - mode holds "ok" (write an empty report of schema 2 to --output) or
+#   "dbfail" (fail as Trivy 0.76.2 does when no database repository answers,
+#   research RS-22).
+set -euo pipefail
+
+here="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+log="$here/trivy.log"
+
+joined="$(
+  IFS='|'
+  printf '%s' "$*"
+)"
+printf 'ARGS %s\n' "$joined" >>"$log"
+env | LC_ALL=C sort | sed -e 's/^/ENV /' >>"$log"
+
+output=""
+image=""
+previous=""
+for arg in "$@"; do
+  if [ "$previous" = "--output" ]; then
+    output="$arg"
+  fi
+  previous="$arg"
+  image="$arg"
+done
+
+case "$(cat "$here/mode")" in
+  dbfail)
+    echo "FATAL Fatal error run error: init error: DB error: failed to download vulnerability DB: fake of S26" >&2
+    exit 1
+    ;;
+  ok)
+    [ -n "$output" ] || {
+      echo "fake trivy: no --output given" >&2
+      exit 2
+    }
+    printf '{"SchemaVersion": 2, "ArtifactName": "%s", "ArtifactType": "container_image"}\n' "$image" >"$output"
+    ;;
+  *)
+    echo "fake trivy: unknown mode" >&2
+    exit 2
+    ;;
+esac

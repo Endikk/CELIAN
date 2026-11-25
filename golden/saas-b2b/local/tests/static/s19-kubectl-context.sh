@@ -93,7 +93,8 @@ printf '%s\n' \
   'docker -H tcp://192.0.2.1:2375 run x' \
   'docker --host=tcp://192.0.2.1:2375 volume rm x' \
   'export KUBECONFIG=/tmp/x' \
-  '  - kubectl apply -k k8s/overlays/local' >"$samples/bad.sh"
+  '  - kubectl apply -k k8s/overlays/local' \
+  'kubectl kustomize local/k8s/lite | kubectl apply -f -' >"$samples/bad.sh"
 printf '%s\n' \
   '# kubectl get pods, in a comment' \
   'kubectl --kubeconfig "$KUBECONFIG_FILE" --context "$KUBE_CONTEXT" get pods' \
@@ -107,10 +108,11 @@ printf '%s\n' \
   'docker info --format "{{.MemTotal}}"' \
   'docker context inspect --format "{{.Name}}"' \
   'if ! command -v docker >/dev/null 2>&1; then' \
-  'echo "docker --context is refused"' >"$samples/good.sh"
+  'echo "docker --context is refused"' \
+  'rendered="$(kubectl kustomize "local/k8s/$profile")"' >"$samples/good.sh"
 bad_found="$(check_file "$samples/bad.sh" | wc -l | tr -d ' ')"
-if [ "$bad_found" != 14 ]; then
-  echo "the rule caught $bad_found of the 14 findings of the 13 bad samples:" >&2
+if [ "$bad_found" != 15 ]; then
+  echo "the rule caught $bad_found of the 15 findings of the 14 bad samples:" >&2
   check_file "$samples/bad.sh" >&2
   exit 1
 fi

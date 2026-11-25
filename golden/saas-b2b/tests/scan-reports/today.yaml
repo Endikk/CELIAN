@@ -1,0 +1,3 @@
+# The fixed date of U03: the example exceptions are judged on this day, not
+# on the day the test runs (research RS-23).
+scan_today: "2026-12-01"
