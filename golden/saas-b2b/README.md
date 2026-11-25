@@ -6,7 +6,7 @@ Projet de référence du blueprint SaaS B2B de CELIAN, construit à la main avan
 
 En construction. Le dépôt ne démarre pas encore. `task up` passe ses contrôles préalables, puis s'arrête : le cluster, le miroir et l'application arrivent aux étapes 6 à 9. `task down` et `task reload` répondent qu'ils ne sont pas livrés, et disent à quelle étape ils arrivent. `task check` tourne en entier, avec les contrôles statiques des étapes 1 à 3 et les contrôles préalables de l'étape 5, joués contre des binaires simulés. `task test` lance les tests unitaires de l'API dans son image de construction : il demande Docker, et aucun SDK .NET.
 
-Pour lancer `task check` sur son poste, il faut Task et conftest. `tests/tools/install.sh <dossier>` les installe dans le dossier donné, après avoir vérifié le SHA-256 de chaque archive, puis ce dossier se met dans le `PATH`.
+Pour lancer `task check` sur son poste, il faut Task, conftest, OpenTofu et Trivy. `tests/tools/install.sh <dossier>` les installe dans le dossier donné, après avoir vérifié le SHA-256 de chaque archive, puis ce dossier se met dans le `PATH`.
 
 Le dépôt porte ses propres conventions Git : hooks pre-commit, commitlint, Renovate, release-please et workflows dans `.github/`. Elles prennent effet dans une copie autonome du dossier, où `pre-commit install` pose les hooks ; dans CELIAN, ce sont celles de CELIAN qui s'appliquent, et le contrôle X01 exerce celles-ci dans une copie.
 

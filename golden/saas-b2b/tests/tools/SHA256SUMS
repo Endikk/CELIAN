@@ -6,3 +6,11 @@ c3f6b2a753bd56e377a1e51a95ae3e057f926f2e9139f7d5b5dfbbaf810f7985  open-policy-ag
 218c682e110ae7e826dc14a746a6f9b43eb782643dbe730b771fd305634e3f47  open-policy-agent/conftest/v0.71.1/conftest_0.71.1_Linux_arm64.tar.gz
 a309853b5763c18486768157442d440248ee683b20a2aa1f6b28214e818bd780  open-policy-agent/conftest/v0.71.1/conftest_0.71.1_Darwin_x86_64.tar.gz
 e1cc50d2590b6c5e3da6912666a71264bae82d60bdd62d7ae2b99971ccc8eedd  open-policy-agent/conftest/v0.71.1/conftest_0.71.1_Darwin_arm64.tar.gz
+b34b327cc1ef07178207b6f2cd1f5276537d3e5b7be316500f6dac50d4c0a857  opentofu/opentofu/v1.13.9/tofu_1.13.9_linux_amd64.tar.gz
+5dc196dde75b667e4806d358310ec96742774cd0993c54c1237efee5644b69b8  opentofu/opentofu/v1.13.9/tofu_1.13.9_linux_arm64.tar.gz
+347e2e5a2cfe2f368829572d308b2e7c1e0486b20a1779090ff06360f7551e4f  opentofu/opentofu/v1.13.9/tofu_1.13.9_darwin_amd64.tar.gz
+496f4c3064b5c3bff79174b3dae4faaf65a66774eb8e2bf074f895412c5f124f  opentofu/opentofu/v1.13.9/tofu_1.13.9_darwin_arm64.tar.gz
+bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  aquasecurity/trivy/v0.76.2/trivy_0.76.2_Linux-64bit.tar.gz
+ab9d51f86e6a5fb936f605faff6b593ac51bc378fff4d3e8b9d58358b9c367c3  aquasecurity/trivy/v0.76.2/trivy_0.76.2_Linux-ARM64.tar.gz
+e08bb9ea449ecf66c6bfb03cbb8697c503ff33d35fc585c9747e3eaeb7ed4c7b  aquasecurity/trivy/v0.76.2/trivy_0.76.2_macOS-64bit.tar.gz
+ae7ea358326960406b703c77b2ac490190797d80b306b5b50c2a27221da0a5b8  aquasecurity/trivy/v0.76.2/trivy_0.76.2_macOS-ARM64.tar.gz

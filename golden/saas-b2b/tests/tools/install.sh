@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# Installs the tools of `task check` into a directory: Task and conftest,
-# from their GitHub releases. Each archive is checked against the SHA-256
-# written in SHA256SUMS, next to this script, before it is opened. No
-# third-party GitHub Action is involved (spec 001, T011).
+# Installs the tools of `task check` into a directory: Task, conftest,
+# OpenTofu and Trivy, from their GitHub releases. Each archive is checked
+# against the SHA-256 written in SHA256SUMS, next to this script, before it is
+# opened. No third-party GitHub Action is involved (spec 001, T011), and never
+# the actions of Trivy (S26).
 #
 # Usage: tests/tools/install.sh <directory>
 # Then put <directory> on PATH. Linux and macOS, amd64 and arm64.
 #
 # Versions and sums: research RS-09 (Task) and RS-18 (conftest), read on
-# 2026-11-23 from the checksum files that each release publishes. A new
-# version changes the constant below and its lines in SHA256SUMS together.
+# 2026-11-23, RS-16 (OpenTofu) and RS-22 (Trivy), read on 2026-11-25, from
+# the checksum files that each release publishes. A new version changes the
+# constant below and its lines in SHA256SUMS together. For Trivy, [SECU]
+# first checks the sigstore signature of the checksum file with cosign
+# (research RS-22), then copies the sums.
 #
 # Renovate proposes the new versions: a custom manager of renovate.json (in
 # CELIAN, the one at the root) reads the "# renovate:" comment above each
@@ -23,6 +27,10 @@ set -euo pipefail
 TASK_VERSION="3.54.0"
 # renovate: datasource=github-releases depName=open-policy-agent/conftest
 CONFTEST_VERSION="0.71.1"
+# renovate: datasource=github-releases depName=opentofu/opentofu
+TOFU_VERSION="1.13.9"
+# renovate: datasource=github-releases depName=aquasecurity/trivy
+TRIVY_VERSION="0.76.2"
 
 here="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 sums_file="$here/SHA256SUMS"
@@ -105,5 +113,21 @@ install_binary \
   "open-policy-agent/conftest/v$CONFTEST_VERSION/conftest_${CONFTEST_VERSION}_${conftest_os}_${conftest_arch}.tar.gz" \
   conftest
 
+install_binary "opentofu/opentofu/v$TOFU_VERSION/tofu_${TOFU_VERSION}_${os}_${arch}.tar.gz" tofu
+
+case "$os" in
+  linux) trivy_os="Linux" ;;
+  darwin) trivy_os="macOS" ;;
+esac
+case "$arch" in
+  amd64) trivy_arch="64bit" ;;
+  arm64) trivy_arch="ARM64" ;;
+esac
+install_binary \
+  "aquasecurity/trivy/v$TRIVY_VERSION/trivy_${TRIVY_VERSION}_${trivy_os}-${trivy_arch}.tar.gz" \
+  trivy
+
 "$dest/task" --version
 "$dest/conftest" --version
+"$dest/tofu" version
+"$dest/trivy" --version

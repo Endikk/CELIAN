@@ -41,7 +41,7 @@
     },
     {
       "customType": "regex",
-      "description": "Task and conftest, pinned in the installer of the golden repo, golden/saas-b2b/tests/tools/install.sh, and kind, pinned in golden/saas-b2b/local/scripts/lib/preflight-checks.sh, each version under a # renovate: comment. kind moves with its node image, in the group of the packageRules below; its sums live in catalog/kubernetes-cluster.yaml. Renovate cannot update SHA256SUMS, next to the script: its lines for the new version are written by hand in the same PR, from the checksum file of the release. Until then install.sh finds no sum for the new archives, and the CI of the PR fails.",
+      "description": "Task, conftest, OpenTofu and Trivy, pinned in the installer of the golden repo, golden/saas-b2b/tests/tools/install.sh, and kind, pinned in golden/saas-b2b/local/scripts/lib/preflight-checks.sh, each version under a # renovate: comment. kind moves with its node image, in the group of the packageRules below; its sums live in catalog/kubernetes-cluster.yaml. Renovate cannot update SHA256SUMS, next to the script: its lines for the new version are written by hand in the same PR, from the checksum file of the release. Until then install.sh finds no sum for the new archives, and the CI of the PR fails.",
       "managerFilePatterns": [
         "/^golden/saas-b2b/tests/tools/install\\.sh$/",
         "/^golden/saas-b2b/local/scripts/lib/preflight-checks\\.sh$/"
