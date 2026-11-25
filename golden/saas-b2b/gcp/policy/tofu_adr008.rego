@@ -33,7 +33,7 @@ first(body, key) := object.get(body, key, [{}])[0]
 
 # Condition 1: federation of the CI on numeric ids, never on names.
 
-required_claims := ["assertion.repository_id", "assertion.repository_owner_id", "assertion.ref"]
+required_claims := ["assertion.repository_id", "assertion.repository_owner_id", "assertion.ref", "assertion.event_name"]
 
 checks_claim(condition, claim) if {
 	escaped := replace(claim, ".", `\.`)
@@ -53,6 +53,29 @@ deny contains msg if {
 	condition := object.get(provider.body, "attribute_condition", "")
 	regex.match(`assertion\.repository(_owner)?([^_A-Za-z0-9]|$)`, condition)
 	msg := sprintf("%s: %s: attribute_condition filters on a name (repository or repository_owner); use the numeric *_id claims", [label(1), where(provider)])
+}
+
+# Only a push may get the token: a workflow run by pull_request_target,
+# workflow_run, schedule or workflow_dispatch does not. The event name is
+# compared with the literal 'push' (single or double quotes).
+event_literals(condition) := [match[1] |
+	some match in regex.find_all_string_submatch_n(`assertion\.event_name\s*==\s*['"]([^'"]*)['"]`, condition, -1)
+]
+
+deny contains msg if {
+	some provider in blocks_of("google_iam_workload_identity_pool_provider")
+	condition := object.get(provider.body, "attribute_condition", "")
+	checks_claim(condition, "assertion.event_name")
+	not "push" in event_literals(condition)
+	msg := sprintf("%s: %s: assertion.event_name must be 'push' in attribute_condition", [label(1), where(provider)])
+}
+
+deny contains msg if {
+	some provider in blocks_of("google_iam_workload_identity_pool_provider")
+	condition := object.get(provider.body, "attribute_condition", "")
+	some event in event_literals(condition)
+	event != "push"
+	msg := sprintf("%s: %s: assertion.event_name must be 'push' in attribute_condition, found '%s'", [label(1), where(provider), event])
 }
 
 variable_validated(name) if {
@@ -228,6 +251,19 @@ deny contains msg if {
 	some cluster in clusters
 	object.get(first(cluster.body, "private_cluster_config"), "enable_private_nodes", false) != true
 	msg := sprintf("%s: %s: the nodes are not private (private_cluster_config.enable_private_nodes = true)", [label(5), where(cluster)])
+}
+
+# Neither Kubernetes tokens nor certificates are accepted through the DNS
+# endpoint: access goes through IAM. The provider's default is not read, so
+# false is written out, and a variable is not enough.
+dns_auth_flags := ["enable_k8s_tokens_via_dns", "enable_k8s_certs_via_dns"]
+
+deny contains msg if {
+	some cluster in clusters
+	dns := first(first(cluster.body, "control_plane_endpoints_config"), "dns_endpoint_config")
+	some flag in dns_auth_flags
+	object.get(dns, flag, null) != false
+	msg := sprintf("%s: %s: control_plane_endpoints_config.dns_endpoint_config.%s must be written false", [label(5), where(cluster), flag])
 }
 
 # Condition 6: the suites of BENCH-008 not covered above.

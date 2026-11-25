@@ -21,11 +21,15 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.repository_id"       = "assertion.repository_id"
     "attribute.repository_owner_id" = "assertion.repository_owner_id"
     "attribute.ref"                 = "assertion.ref"
+    "attribute.event_name"          = "assertion.event_name"
   }
 
-  # Each interpolated variable has a validation block (variables.tf), so that
-  # a quote cannot rewrite this CEL expression.
-  attribute_condition = "assertion.repository_id == '${var.github_repository_id}' && assertion.repository_owner_id == '${var.github_repository_owner_id}' && assertion.ref == '${var.github_ref}'"
+  # event_name is a claim of the GitHub token, "the event that triggered the
+  # workflow run" (GitHub OIDC page, read on 2026-11-25): only a push gets the
+  # token, not pull_request_target, workflow_run, schedule nor
+  # workflow_dispatch. Each interpolated variable has a validation block
+  # (variables.tf), so that a quote cannot rewrite this CEL expression.
+  attribute_condition = "assertion.repository_id == '${var.github_repository_id}' && assertion.repository_owner_id == '${var.github_repository_owner_id}' && assertion.ref == '${var.github_ref}' && assertion.event_name == 'push'"
 
   oidc {
     issuer_uri = "https://token.actions.githubusercontent.com/"

@@ -6,9 +6,14 @@
 # - policy: the tests of the conftest packages of gcp/policy/, then each
 #   failing case of gcp/policy/testdata/, which must be refused with the
 #   message its "# expect:" line gives, then the packages on the root;
-# - scan: Trivy on the root. Each finding is fixed, or justified in writing
-#   right above its resource with a "#trivy:ignore:<ID>" comment (T109). No
-#   .trivyignore file is read, and nothing is sent to Aqua (research RS-22).
+# - scan: Trivy on the root, with the checks embedded in its binary. Each
+#   finding is fixed, or justified in writing right above its resource with a
+#   "#trivy:ignore:<ID>" comment (T109), and only the closed list of this
+#   script, allowed_ignores, may carry one. No .trivyignore file and no
+#   trivy.yaml is read. Nothing is sent to Aqua: with the telemetry and the
+#   version check both off, Trivy sends no request to check.trivy.dev, and
+#   no checks bundle is fetched (research RS-22). A copy of the root with the
+#   Cloud SQL logging flags off must fail on the five checks they answer.
 #
 # Usage: gcp/tests/static/s15-tofu-policy.sh [policy|scan]
 # Without argument, both parts: that is how `task check` runs it, through
@@ -23,6 +28,14 @@ dir="gcp/tofu"
 policies="gcp/policy"
 packages="tofu_adr008 tofu_secret_sync tofu_config_sync tofu_finops"
 problems=0
+
+# The closed list of Trivy ignore comments: "<comment line>|<resource>". A
+# comment that is not here, in this exact form, right above this resource, is
+# refused. Adding one takes a review by [SECU], and a justification written
+# above the comment (research RS-22).
+allowed_ignores=(
+  "#trivy:ignore:AVD-GCP-0061|google_container_cluster.main"
+)
 
 case "$part" in
   policy | scan | both) ;;
@@ -103,17 +116,74 @@ run_policy() {
 
 # Trivy in an emptied environment, with its cache in a temporary directory.
 # $1 is the scratch directory, $2 the directory to scan.
+# - --config '' : no trivy.yaml, so that a file of the repository cannot
+#   silence the scan; --ignorefile '' : no .trivyignore;
+# - --disable-telemetry and --skip-version-check : both off, Trivy sends no
+#   request to check.trivy.dev (pkg/notification/notice.go at v0.76.2);
+# - --skip-check-update : the checks embedded in the binary, so that the
+#   result follows the version that install.sh verified (decision of the DSI,
+#   research RS-22); Renovate brings new rules with each Trivy version.
 trivy_scan() {
-  env -i PATH="$PATH" HOME="$1/home" trivy config --quiet \
-    --cache-dir "$1/cache" --disable-telemetry --ignorefile '' \
+  env -i PATH="$PATH" HOME="$1/home" trivy config --quiet --config '' \
+    --cache-dir "$1/cache" --disable-telemetry --skip-version-check \
+    --skip-check-update --ignorefile '' \
     --misconfig-scanners terraform --exit-code 1 "$2"
 }
 
-# Findings of the "#trivy:ignore" comments of the files given as arguments,
-# one "<file>:<line>: <comment>|<resource>" per comment that is not in the
-# closed list. Filled by the next commit.
+# The comments that Trivy reads as a rule in the files given as arguments:
+# one "<file>:<line>: <comment>|<resource>" for each that is not in the closed
+# list. Trivy takes any word that starts with "trivy:" or "tfsec:" (after
+# "#", "/" or "*") as a rule, so the test is on that word, and the comment
+# must be the whole line, right above its resource (v0.76.2, pkg/iac/ignore).
 ignore_findings() {
-  return 0
+  local file entry where claimed allowed known
+  for file in "$@"; do
+    [ -f "$file" ] || continue
+    while IFS= read -r entry; do
+      [ -n "$entry" ] || continue
+      where="${entry%%: *}"
+      claimed="${entry#*: }"
+      known=0
+      for allowed in "${allowed_ignores[@]}"; do
+        if [ "$claimed" = "$allowed" ]; then
+          known=1
+        fi
+      done
+      if [ "$known" -eq 0 ]; then
+        printf '%s: ignore comment outside the closed list (%s); only allowed_ignores of gcp/tests/static/s15-tofu-policy.sh may silence Trivy\n' "$where" "$claimed"
+      fi
+    done < <(awk '
+      function trim(s) {
+        sub(/^[ \t]+/, "", s)
+        sub(/[ \t]+$/, "", s)
+        return s
+      }
+      function flush(address) {
+        print FILENAME ":" pending_line ": " pending "|" address
+        pending = ""
+      }
+      {
+        line = trim($0)
+        if (line ~ /(^|[ \t#\/*])(tfsec|trivy):/) {
+          if (pending != "") { flush("") }
+          pending = line
+          pending_line = FNR
+          next
+        }
+        if (pending != "" && line != "" && line !~ /^(#|\/\/)/) {
+          address = ""
+          if (match(line, /^resource[ \t]+"[^"]+"[ \t]+"[^"]+"/)) {
+            address = substr(line, RSTART, RLENGTH)
+            sub(/^resource[ \t]+"/, "", address)
+            sub(/"[ \t]+"/, ".", address)
+            sub(/"$/, "", address)
+          }
+          flush(address)
+        }
+      }
+      END { if (pending != "") { flush("") } }
+    ' "$file")
+  done
 }
 
 # Each failing case of testdata/ignores/ must be refused, with the message
@@ -160,9 +230,9 @@ check_scan_applies_checks() {
     problems=$((problems + 1))
     return 0
   fi
-  for id in AVD-GCP-0014 AVD-GCP-0016 AVD-GCP-0020 AVD-GCP-0022 AVD-GCP-0025; do
-    if ! printf '%s\n' "$out" | grep -F -q -e "$id"; then
-      echo "Trivy did not report $id on a copy of $dir with its Cloud SQL logging flags off: it does not apply that check." >&2
+  for id in GCP-0014 GCP-0016 GCP-0020 GCP-0022 GCP-0025; do
+    if ! printf '%s\n' "$out" | grep -F -q -e "$id ("; then
+      echo "Trivy did not report AVD-$id on a copy of $dir with its Cloud SQL logging flags off: it does not apply that check." >&2
       problems=$((problems + 1))
     fi
   done

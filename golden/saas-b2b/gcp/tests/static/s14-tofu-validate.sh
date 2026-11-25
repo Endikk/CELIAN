@@ -22,7 +22,7 @@ dir="gcp/tofu"
 lock="$dir/.terraform.lock.hcl"
 
 if ! command -v tofu >/dev/null 2>&1; then
-  echo "tofu is not installed: run tests/tools/install.sh <dir>, then put <dir> on PATH." >&2
+  echo "OpenTofu is not installed: run tests/tools/install.sh <dir>, then put <dir> on PATH." >&2
   exit 1
 fi
 
@@ -55,7 +55,7 @@ fi
 # writes it; an init that would change the lock fails (research RS-16).
 sandboxed tofu -chdir="$dir" init -backend=false -lockfile=readonly -input=false -no-color >"$work/init.log" 2>&1 || {
   cat "$work/init.log" >&2
-  echo "tofu init failed on $dir, backend off and lock read-only." >&2
+  echo "OpenTofu init failed on $dir, backend off and lock read-only." >&2
   exit 1
 }
 

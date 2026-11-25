@@ -23,8 +23,9 @@ resource "google_project_iam_member" "nodes" {
 # plane. That endpoint is disabled (ip_endpoints_config), so there is no IP
 # access to restrict: the control plane answers on its DNS endpoint only,
 # where IAM decides who connects (ADR-008, condition 5). Written by [OPS] on
-# 2026-11-25, for [SECU] to review. The ignore comment stays right above the
-# resource, where Trivy reads it.
+# 2026-11-25, reviewed by [SECU] on 2026-11-25. S15 accepts this one ignore
+# comment only, by a closed list. The comment stays right above the resource,
+# where Trivy reads it.
 #trivy:ignore:AVD-GCP-0061
 resource "google_container_cluster" "main" {
   project          = var.project_id
@@ -67,6 +68,12 @@ resource "google_container_cluster" "main" {
   control_plane_endpoints_config {
     dns_endpoint_config {
       allow_external_traffic = true
+      # Written false: no Kubernetes token or certificate authentication
+      # through the DNS endpoint, IAM only. Argument names of the provider
+      # page at v8.12.0, read on 2026-11-25; S15 (condition 5) refuses true
+      # and an absent line.
+      enable_k8s_tokens_via_dns = false
+      enable_k8s_certs_via_dns  = false
     }
 
     ip_endpoints_config {

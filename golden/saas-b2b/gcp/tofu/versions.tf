@@ -4,7 +4,7 @@
 #
 # Principle X: nothing in this repository plans, applies or destroys this
 # root. The checks run `tofu init -backend=false -lockfile=readonly` and
-# `tofu validate`, without any credential (gcp/scripts/validate.sh).
+# `tofu validate`, without any credential (gcp/tests/static/s14-tofu-validate.sh).
 
 terraform {
   # Ephemeral resources and write-only attributes need OpenTofu 1.11 or later

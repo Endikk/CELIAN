@@ -8,8 +8,10 @@
 # configuration with it; T065 and T105 add the Postgres image and the
 # OpenTofu layer.
 #
-# OpenTofu layer (T105): its .tf files read platform.yaml through a local, and
-# take the Kubernetes minor and the Postgres major from it, never a literal.
+# OpenTofu layer (T105): its .tf files read the Kubernetes minor from
+# platform.yaml through a local. The Postgres major is a literal that equals
+# the one of platform.yaml: Trivy does not resolve a computed value, and then
+# skips its Cloud SQL checks (AVD-GCP-0014, 0016, 0020, 0022, 0025).
 package platform_values
 
 # Shared keys and the form of their value. Both are strings: YAML would read
@@ -113,10 +115,13 @@ deny contains msg if {
 # it, and the form each attribute must take, %s standing for the local.
 platform_expression := `${yamldecode(file("${path.module}/../../platform.yaml"))}`
 
-layer_values := {
-	"min_master_version": "${local.%s.kubernetes_minor}",
-	"database_version": "POSTGRES_${local.%s.postgres_major}",
-}
+# Read from the local.
+computed_values := {"min_master_version": "${local.%s.kubernetes_minor}"}
+
+# A literal, %s standing for the postgres_major of platform.yaml.
+literal_values := {"database_version": "POSTGRES_%s"}
+
+layer_values := object.union(computed_values, literal_values)
 
 tf_files contains file if {
 	some file in input
@@ -147,9 +152,32 @@ deny contains msg if {
 
 deny contains msg if {
 	some setting in layer_settings
-	allowed := {sprintf(layer_values[setting.attribute], [name]) | some name in platform_locals}
+	some attribute, form in computed_values
+	setting.attribute == attribute
+	allowed := {sprintf(form, [name]) | some name in platform_locals}
 	not setting.value in allowed
-	msg := sprintf("%s: %s: %s.%s is '%v'; it must read platform.yaml, as %s", [label, setting.path, setting.where, setting.attribute, setting.value, sprintf(layer_values[setting.attribute], ["<local>"])])
+	msg := sprintf("%s: %s: %s.%s is '%v'; it must read platform.yaml, as %s", [label, setting.path, setting.where, setting.attribute, setting.value, sprintf(form, ["<local>"])])
+}
+
+# The majors that platform.yaml states. The rules above refuse a missing, a
+# duplicated or a malformed file, so this one speaks only when the value is
+# unambiguous.
+platform_postgres_majors contains major if {
+	some file in platform_files
+	major := file.contents.postgres_major
+	is_string(major)
+	regex.match(shared_keys.postgres_major, major)
+}
+
+deny contains msg if {
+	count(platform_postgres_majors) == 1
+	some major in platform_postgres_majors
+	some setting in layer_settings
+	some attribute, form in literal_values
+	setting.attribute == attribute
+	expected := sprintf(form, [major])
+	setting.value != expected
+	msg := sprintf("%s: %s: %s.%s is '%v'; it must be the literal '%s', the postgres_major of platform.yaml (Trivy does not resolve a computed value and then skips its Cloud SQL checks)", [label, setting.path, setting.where, setting.attribute, setting.value, expected])
 }
 
 deny contains msg if {
