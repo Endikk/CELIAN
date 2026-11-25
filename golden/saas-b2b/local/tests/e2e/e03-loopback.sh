@@ -23,6 +23,8 @@
 #   (tasks.md, gap 20; ADR-011, condition 1). The proxy runs from the first
 #   Gateway on: E03 expects a node that has not pulled it yet, as run.sh
 #   gives it.
+# - the namespace envoy-gateway-system enforces Pod Security (restricted or
+#   baseline) and Pod Security refused none of its pods.
 # What a pod reaches of the mirror needs an image with a shell: it waits for
 # the Postgres image of step 8 (tasks.md, gaps 21 and 30).
 set -uo pipefail
@@ -154,6 +156,22 @@ if ! kube_e2e -n "$E2E_APP_NAMESPACE" wait --for=condition=Programmed \
   fail "the Gateway $E2E_GATEWAY is not Programmed within $GATEWAY_WAIT_SECONDS s"
   kube_e2e -n "$E2E_APP_NAMESPACE" get gateway "$E2E_GATEWAY" --output yaml || :
   e2e_finish
+fi
+
+# Pod Security on the namespace of Envoy Gateway: the label is on the live
+# namespace (restricted or baseline), and no pod of the controller, of certgen
+# or of the proxy was refused for it, the Gateway being Programmed.
+readonly CONTROLLER_NAMESPACE="envoy-gateway-system"
+pod_security="$(kube_e2e get namespace "$CONTROLLER_NAMESPACE" \
+  --output 'jsonpath={.metadata.labels.pod-security\.kubernetes\.io/enforce}' 2>/dev/null)"
+case "$pod_security" in
+  restricted | baseline) printf 'note: %s enforces Pod Security %s.\n' "$CONTROLLER_NAMESPACE" "$pod_security" ;;
+  *) fail "the namespace $CONTROLLER_NAMESPACE has no pod-security.kubernetes.io/enforce of restricted or baseline (found \"$pod_security\")" ;;
+esac
+refused="$(kube_e2e -n "$CONTROLLER_NAMESPACE" get events --field-selector reason=FailedCreate \
+  --output 'jsonpath={range .items[*]}{.message}{"\n"}{end}' 2>/dev/null | grep -F 'violates PodSecurity' || true)"
+if [ -n "$refused" ]; then
+  fail "Pod Security refused a pod of $CONTROLLER_NAMESPACE: $refused"
 fi
 
 # http_status PORT PATH: the status code that GET PATH gets on

@@ -68,3 +68,68 @@ test_s05_ports_rejects_an_envoy_proxy_without_node_port if {
 test_s05_ports_rejects_a_node_port_that_no_mapping_reaches if {
 	denied_with([cluster(both), proxy([{"port": 80, "nodePort": 30081}])], [18080, 18443], "nodePort 30081")
 }
+
+# The EnvoyProxy stays what ADR-005 writes: a NodePort Service whose ports
+# are patched, and nothing else (SECU review of the PR of step 7).
+good_ports := [{"port": 80, "nodePort": 30080}]
+
+good_service := {
+	"type": "NodePort",
+	"patch": {"type": "StrategicMerge", "value": {"spec": {"ports": good_ports}}},
+}
+
+proxy_of(spec) := {"path": "local/platform/envoy-proxy.yaml", "contents": {
+	"apiVersion": "gateway.envoyproxy.io/v1alpha1",
+	"kind": "EnvoyProxy",
+	"spec": spec,
+}}
+
+with_service(service) := proxy_of({"provider": {"type": "Kubernetes", "kubernetes": {"envoyService": service}}})
+
+denied_proxy(proxy_file, fragment) if denied_with([cluster(both), proxy_file], [18080, 18443], fragment)
+
+test_s05_ports_accepts_the_written_proxy if {
+	accepted([cluster(both), with_service(good_service)], [18080, 18443])
+}
+
+test_s05_ports_rejects_a_proxy_without_service_type if {
+	denied_proxy(with_service(object.remove(good_service, ["type"])), "envoyService.type must be NodePort")
+}
+
+test_s05_ports_rejects_a_load_balancer_service if {
+	denied_proxy(with_service(object.union(good_service, {"type": "LoadBalancer"})), "envoyService.type must be NodePort")
+}
+
+test_s05_ports_rejects_a_patch_without_type if {
+	service := object.union(good_service, {"patch": {"type": "JSONMerge"}})
+	denied_proxy(with_service(service), "patch.type must be StrategicMerge")
+}
+
+test_s05_ports_rejects_external_ips_in_the_patch if {
+	service := {"type": "NodePort", "patch": {"type": "StrategicMerge", "value": {"spec": {"ports": good_ports, "externalIPs": ["203.0.113.7"]}}}}
+	denied_proxy(with_service(service), "patch.value.spec holds ports only")
+}
+
+test_s05_ports_rejects_metadata_in_the_patch if {
+	service := {"type": "NodePort", "patch": {"type": "StrategicMerge", "value": {"metadata": {"annotations": {"a": "b"}}, "spec": {"ports": good_ports}}}}
+	denied_proxy(with_service(service), "patch.value holds spec only")
+}
+
+test_s05_ports_rejects_a_target_port_in_the_patch if {
+	service := {"type": "NodePort", "patch": {"type": "StrategicMerge", "value": {"spec": {"ports": [{"port": 80, "nodePort": 30080, "targetPort": 22}]}}}}
+	denied_proxy(with_service(service), "carries port and nodePort only")
+}
+
+test_s05_ports_rejects_another_key_of_the_service if {
+	denied_proxy(with_service(object.union(good_service, {"externalTrafficPolicy": "Local"})), "envoyService holds type and patch only")
+}
+
+test_s05_ports_rejects_a_deployment_patch if {
+	kubernetes := {"envoyService": good_service, "envoyDeployment": {"patch": {"type": "StrategicMerge", "value": {"spec": {"template": {"spec": {"hostNetwork": true}}}}}}}
+	denied_proxy(proxy_of({"provider": {"type": "Kubernetes", "kubernetes": kubernetes}}), "provider.kubernetes holds envoyService only")
+}
+
+test_s05_ports_rejects_another_key_of_the_proxy_spec if {
+	spec := {"provider": {"type": "Kubernetes", "kubernetes": {"envoyService": good_service}}, "bootstrap": {"type": "Replace", "value": "x"}}
+	denied_proxy(proxy_of(spec), "spec of the EnvoyProxy holds provider only")
+}

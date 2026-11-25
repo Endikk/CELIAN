@@ -15,6 +15,8 @@ crds_path := "local/vendor/envoy-gateway/gateway-crds-helm.yaml"
 
 helm_path := "local/vendor/envoy-gateway/gateway-helm.yaml"
 
+namespace_path := "local/platform/namespace.yaml"
+
 crd(name, group, annotations) := {
 	"apiVersion": "apiextensions.k8s.io/v1",
 	"kind": "CustomResourceDefinition",
@@ -56,7 +58,50 @@ job(image) := {
 	"spec": {"template": {"spec": {"containers": [{"name": "envoy-gateway-certgen", "image": image}]}}},
 }
 
-valid_files := [
+# An object of the render of gateway-helm that the checks only name.
+stub(kind, name) := {"apiVersion": "v1", "kind": kind, "metadata": {"name": name, "labels": labels}}
+
+role(kind, name, verbs) := {
+	"apiVersion": "rbac.authorization.k8s.io/v1",
+	"kind": kind,
+	"metadata": {"name": name, "labels": labels},
+	"rules": [{"apiGroups": [""], "resources": ["configmaps"], "verbs": verbs}],
+}
+
+binding(kind, name, role_kind, role_name) := {
+	"apiVersion": "rbac.authorization.k8s.io/v1",
+	"kind": kind,
+	"metadata": {"name": name, "labels": labels},
+	"roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": role_kind, "name": role_name},
+	"subjects": [{"kind": "ServiceAccount", "name": "envoy-gateway", "namespace": "envoy-gateway-system"}],
+}
+
+# The 14 objects of the render besides the ConfigMap, the Deployment and the
+# Job; with those three, the 17 that S22 freezes.
+other_objects := [
+	role("ClusterRole", "eg-gateway-helm-certgen:envoy-gateway-system", ["get", "update"]),
+	role("ClusterRole", "eg-gateway-helm-envoy-gateway-role", ["get", "list", "watch"]),
+	binding("ClusterRoleBinding", "eg-gateway-helm-certgen:envoy-gateway-system", "ClusterRole", "eg-gateway-helm-certgen:envoy-gateway-system"),
+	binding("ClusterRoleBinding", "eg-gateway-helm-envoy-gateway-rolebinding", "ClusterRole", "eg-gateway-helm-envoy-gateway-role"),
+	stub("MutatingWebhookConfiguration", "envoy-gateway-topology-injector.envoy-gateway-system"),
+	role("Role", "eg-gateway-helm-certgen", ["get", "update"]),
+	role("Role", "eg-gateway-helm-infra-manager", ["create", "get"]),
+	role("Role", "eg-gateway-helm-leader-election-role", ["get", "update"]),
+	binding("RoleBinding", "eg-gateway-helm-certgen", "Role", "eg-gateway-helm-certgen"),
+	binding("RoleBinding", "eg-gateway-helm-infra-manager", "Role", "eg-gateway-helm-infra-manager"),
+	binding("RoleBinding", "eg-gateway-helm-leader-election-rolebinding", "Role", "eg-gateway-helm-leader-election-role"),
+	stub("Service", "envoy-gateway"),
+	stub("ServiceAccount", "eg-gateway-helm-certgen"),
+	stub("ServiceAccount", "envoy-gateway"),
+]
+
+namespace(labels_of) := {
+	"apiVersion": "v1",
+	"kind": "Namespace",
+	"metadata": {"name": "envoy-gateway-system", "labels": labels_of},
+}
+
+base_files := [
 	{"path": gateway_api_path, "contents": crd("gateways.gateway.networking.k8s.io", "gateway.networking.k8s.io", standard)},
 	{"path": gateway_api_path, "contents": crd("httproutes.gateway.networking.k8s.io", "gateway.networking.k8s.io", standard)},
 	{"path": crds_path, "contents": crd("envoyproxies.gateway.envoyproxy.io", "gateway.envoyproxy.io", {})},
@@ -64,6 +109,11 @@ valid_files := [
 	{"path": helm_path, "contents": deployment(controller)},
 	{"path": helm_path, "contents": job(controller)},
 ]
+
+valid_files := array.concat(
+	array.concat(base_files, [{"path": helm_path, "contents": obj} | some obj in other_objects]),
+	[{"path": namespace_path, "contents": namespace({"pod-security.kubernetes.io/enforce": "restricted"})}],
+)
 
 accepted(files, refs_data) if {
 	msgs := deny with input as files with data.envoy_gateway as refs_data
@@ -178,4 +228,67 @@ test_s22_rejects_a_reference_by_tag if {
 
 test_s22_rejects_missing_references if {
 	denied_with(valid_files, {}, "the helm_chart reference of local/tasks/local.yml")
+}
+
+# The 17 objects of the render of gateway-helm are frozen by kind and name.
+test_s22_rejects_an_object_added_to_the_render if {
+	files := array.concat(valid_files, [{"path": helm_path, "contents": stub("Secret", "envoy-gateway-token")}])
+	denied_with(files, references, "Secret envoy-gateway-token")
+}
+
+test_s22_rejects_an_object_missing_from_the_render if {
+	files := [f | some i, f in valid_files; i != 8]
+	denied_with(files, references, "ClusterRoleBinding eg-gateway-helm-certgen:envoy-gateway-system")
+}
+
+test_s22_rejects_an_object_renamed_in_the_render if {
+	files := replace(valid_files, 19, {"path": helm_path, "contents": stub("ServiceAccount", "envoy-gateway-admin")})
+	denied_with(files, references, "ServiceAccount envoy-gateway-admin")
+}
+
+test_s22_rejects_a_service_in_the_render_of_another_kind if {
+	files := replace(valid_files, 17, {"path": helm_path, "contents": stub("Service", "envoy-gateway-admin")})
+	denied_with(files, references, "frozen list")
+}
+
+test_s22_rejects_a_binding_to_cluster_admin if {
+	files := array.concat(valid_files, [{"path": helm_path, "contents": binding("ClusterRoleBinding", "eg-gateway-helm-envoy-gateway-rolebinding", "ClusterRole", "cluster-admin")}])
+	denied_with(files, references, "cluster-admin")
+}
+
+test_s22_rejects_a_role_binding_to_cluster_admin if {
+	files := replace(valid_files, 14, {"path": helm_path, "contents": binding("RoleBinding", "eg-gateway-helm-certgen", "ClusterRole", "cluster-admin")})
+	denied_with(files, references, "cluster-admin")
+}
+
+test_s22_rejects_the_wildcard_verb_in_a_cluster_role if {
+	files := replace(valid_files, 7, {"path": helm_path, "contents": role("ClusterRole", "eg-gateway-helm-envoy-gateway-role", ["get", "*"])})
+	denied_with(files, references, "verb *")
+}
+
+test_s22_rejects_the_wildcard_verb_in_a_role if {
+	files := replace(valid_files, 12, {"path": helm_path, "contents": role("Role", "eg-gateway-helm-infra-manager", ["*"])})
+	denied_with(files, references, "verb *")
+}
+
+# Pod Security on the namespace of Envoy Gateway (SECU review of the PR of
+# step 7).
+test_s22_rejects_a_missing_namespace_file if {
+	files := [f | some f in valid_files; f.path != namespace_path]
+	denied_with(files, references, "local/platform/namespace")
+}
+
+test_s22_rejects_a_namespace_without_pod_security if {
+	files := replace(valid_files, 20, {"path": namespace_path, "contents": namespace({})})
+	denied_with(files, references, "pod-security.kubernetes.io/enforce")
+}
+
+test_s22_rejects_a_privileged_namespace if {
+	files := replace(valid_files, 20, {"path": namespace_path, "contents": namespace({"pod-security.kubernetes.io/enforce": "privileged"})})
+	denied_with(files, references, "pod-security.kubernetes.io/enforce")
+}
+
+test_s22_accepts_the_baseline_namespace if {
+	files := replace(valid_files, 20, {"path": namespace_path, "contents": namespace({"pod-security.kubernetes.io/enforce": "baseline"})})
+	accepted(files, references)
 }

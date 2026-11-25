@@ -12,6 +12,12 @@
 #   listed file gone, against a simulated kubectl that logs every call, it
 #   refuses, names the file and calls kubectl not once; on the intact copy,
 #   its check passes, still without kubectl;
+# - only files of the form (gateway-api|envoy-gateway)/<name>.yaml are accepted,
+#   all ordinary files (no symbolic link, no Git mode but 100644 and 100755),
+#   none above MAX_VENDOR_FILE_BYTES of platform.sh; platform.sh refuses the
+#   others too, sums right or not;
+# - no kustomization.yaml under k8s/ and local/ takes a resource, a component,
+#   a base or a patch file from a URL (policy/kustomize_sources.rego);
 # - no command of the tasks and of the scripts applies, creates or replaces
 #   from a URL.
 # The URL rule is first checked against samples.
@@ -50,22 +56,27 @@ if [ ! -f "$sums_file" ]; then
   exit 1
 fi
 
+# The cap that platform.sh enforces on each vendored file: a little above the
+# largest render of today (2.86 MB, gateway-crds-helm.yaml).
+max_bytes="$(awk -F= '$1 == "readonly MAX_VENDOR_FILE_BYTES" { print $2; exit }' local/scripts/platform.sh)"
+largest="$(find "$vendor" -type f ! -name SHA256SUMS -exec wc -c {} + | awk '$2 != "total" && $1 > m { m = $1 } END { print m + 0 }')"
+if ! [[ $max_bytes =~ ^[0-9]+$ ]]; then
+  fail "local/scripts/platform.sh has no \"readonly MAX_VENDOR_FILE_BYTES=<bytes>\": the size of a vendored file is not capped."
+  max_bytes=0
+elif [ "$max_bytes" -le "$largest" ] || [ "$max_bytes" -gt $((largest + largest / 4)) ]; then
+  fail "MAX_VENDOR_FILE_BYTES is $max_bytes, the largest vendored file is $largest bytes: the cap is expected above it, by 25% at most."
+fi
+
 listed=""
 line_number=0
 while IFS= read -r line || [ -n "$line" ]; do
   line_number=$((line_number + 1))
-  if ! [[ $line =~ ^([0-9a-f]{64})\ \ ([A-Za-z0-9._-]+(/[A-Za-z0-9._-]+)*)$ ]]; then
-    fail "$sums_file, line $line_number: \"$line\" is not \"<sha256>  <path under $vendor/>\"."
+  if ! [[ $line =~ ^([0-9a-f]{64})\ \ ((gateway-api|envoy-gateway)/[A-Za-z0-9._-]+\.yaml)$ ]]; then
+    fail "$sums_file, line $line_number: \"$line\" is not \"<sha256>  (gateway-api|envoy-gateway)/<name>.yaml\"."
     continue
   fi
   sum="${BASH_REMATCH[1]}"
   file="${BASH_REMATCH[2]}"
-  case "/$file/" in
-    */../* | */./*)
-      fail "$sums_file, line $line_number: $file leaves $vendor/."
-      continue
-      ;;
-  esac
   listed="$listed$file"$'\n'
   if [ ! -f "$vendor/$file" ]; then
     fail "$sums_file, line $line_number: $vendor/$file is listed but missing."
@@ -74,7 +85,31 @@ while IFS= read -r line || [ -n "$line" ]; do
   fi
 done <"$sums_file"
 
-present="$(CDPATH='' cd -- "$vendor" && find . -type f ! -path ./SHA256SUMS | sed 's|^\./||' | LC_ALL=C sort)"
+# Everything under local/vendor/ but its directories: a path of the form
+# (gateway-api|envoy-gateway)/<name>.yaml, an ordinary file under the cap.
+present="$(CDPATH='' cd -- "$vendor" && find . ! -type d ! -path ./SHA256SUMS | sed 's|^\./||' | LC_ALL=C sort)"
+while IFS= read -r file; do
+  [ -n "$file" ] || continue
+  if ! [[ $file =~ ^(gateway-api|envoy-gateway)/[A-Za-z0-9._-]+\.yaml$ ]]; then
+    fail "$vendor/$file is not of the form (gateway-api|envoy-gateway)/<name>.yaml."
+  elif [ -L "$vendor/$file" ] || [ ! -f "$vendor/$file" ]; then
+    fail "$vendor/$file is not an ordinary file (a symbolic link or a special file)."
+  elif [ "$(wc -c <"$vendor/$file" | tr -d ' ')" -gt "$max_bytes" ]; then
+    fail "$vendor/$file is above $max_bytes bytes (MAX_VENDOR_FILE_BYTES of platform.sh)."
+  fi
+done < <(printf '%s\n' "$present")
+if [ -L "$sums_file" ]; then
+  fail "$sums_file is a symbolic link."
+fi
+# The Git modes: an ordinary file is 100644 or 100755; 120000 is a symbolic link.
+if command -v git >/dev/null 2>&1 && git rev-parse --git-dir >/dev/null 2>&1; then
+  while IFS=' ' read -r mode _; do
+    case "$mode" in
+      100644 | 100755 | "") ;;
+      *) fail "a file of $vendor/ has the Git mode $mode: ordinary files only (100644, 100755)." ;;
+    esac
+  done < <(git ls-files -s -- "$vendor")
+fi
 if [ -z "$present" ]; then
   fail "$vendor/ holds no manifest besides SHA256SUMS."
 fi
@@ -129,6 +164,40 @@ while IFS= read -r file; do
 done < <(command_files)
 [ -z "$problems" ] || fail "$problems"
 
+# --- No Kustomization from a URL ------------------------------------------------
+
+if ! command -v conftest >/dev/null 2>&1; then
+  echo "conftest is not installed: run tests/tools/install.sh <dir>, then put <dir> on PATH." >&2
+  exit 1
+fi
+kustomizations=()
+while IFS= read -r file; do
+  kustomizations+=("$file")
+done < <(find k8s local \( -name 'kustomization.y*ml' -o -name Kustomization \) -type f | LC_ALL=C sort)
+if [ "${#kustomizations[@]}" -eq 0 ]; then
+  fail "no kustomization.yaml under k8s/ and local/: the common layer is not written yet (spec 001, T060)."
+else
+  conftest verify --no-color --policy policy --namespace kustomize_sources || fail "the tests of policy/kustomize_sources.rego fail."
+  conftest test --no-color --combine --policy policy --namespace kustomize_sources \
+    "${kustomizations[@]}" || fail "a kustomization.yaml takes a resource, a component, a base or a patch file from a URL."
+fi
+# A failing case: one remote resource, in a copy of the layout.
+mkdir -p "$samples/remote/k8s/overlays/bad"
+printf '%s\n' \
+  'apiVersion: kustomize.config.k8s.io/v1beta1' \
+  'kind: Kustomization' \
+  'resources:' \
+  '  - github.com/org/repo//dir?ref=v1.0.0' >"$samples/remote/k8s/overlays/bad/kustomization.yaml"
+if remote_out="$(conftest test --no-color --combine --policy policy --namespace kustomize_sources \
+  "$samples/remote/k8s/overlays/bad/kustomization.yaml" 2>&1)"; then
+  fail "a kustomization.yaml with a remote resource passed policy/kustomize_sources.rego."
+else
+  case "$remote_out" in
+    *"resources[0]"*) ;;
+    *) fail "the refusal of a remote resource does not name resources[0]: $remote_out" ;;
+  esac
+fi
+
 # --- The sums are checked before kubectl is called ---------------------------------
 
 if [ ! -f "$platform_script" ]; then
@@ -147,6 +216,10 @@ copy() {
   mkdir -p "$samples/layer/local"
   cp -R local/scripts local/vendor local/platform "$samples/layer/local/"
   cp platform.yaml "$samples/layer/"
+}
+# add_sum PATH: lists PATH, a file of the copy, with its right SHA-256.
+add_sum() {
+  printf '%s  %s\n' "$(sha256_of "$samples/layer/$vendor/$1")" "$1" >>"$samples/layer/$vendor/SHA256SUMS"
 }
 mkdir -p "$samples/bin"
 ln -s "$root/$fake_kubectl" "$samples/bin/kubectl"
@@ -194,6 +267,30 @@ for action in check up; do
   rm -f "$samples/layer/$vendor/$target"
   run_platform "listed file gone" "$action"
   expect_refused "listed file gone" "$action" "$target"
+
+  # Files whose sum is listed and right, but which are not of the accepted
+  # form: another folder, another extension, a nested folder, a symbolic
+  # link, a file above the cap.
+  for odd in extra/x.yaml envoy-gateway/x.txt envoy-gateway/sub/x.yaml; do
+    copy
+    mkdir -p "$samples/layer/$vendor/${odd%/*}"
+    printf 'kind: Namespace\n' >"$samples/layer/$vendor/$odd"
+    add_sum "$odd"
+    run_platform "path $odd" "$action"
+    expect_refused "path $odd" "$action" "$odd"
+  done
+
+  copy
+  ln -s gateway-helm.yaml "$samples/layer/$vendor/envoy-gateway/alias.yaml"
+  add_sum envoy-gateway/alias.yaml
+  run_platform "symbolic link" "$action"
+  expect_refused "symbolic link" "$action" "envoy-gateway/alias.yaml"
+
+  copy
+  head -c "$((max_bytes + 1))" /dev/zero | tr '\0' '#' >"$samples/layer/$vendor/envoy-gateway/big.yaml"
+  add_sum envoy-gateway/big.yaml
+  run_platform "file above the cap" "$action"
+  expect_refused "file above the cap" "$action" "envoy-gateway/big.yaml"
 done
 
 if [ "$failures" -gt 0 ]; then
