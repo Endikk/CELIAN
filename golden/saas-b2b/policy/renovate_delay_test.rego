@@ -160,6 +160,117 @@ test_s23_rejects_the_package_manager_delay_of_a_manager if {
 	denied_with(checked(renovate), "[\"npm\", \"minimumReleaseAgePackageManager\"] is an experimental option")
 }
 
+# Legacy containers whose content Renovate moves into packageRules, out of
+# reach of the checks of the entries (lib/config/migration.ts, lines 140 to
+# 191; lib/config/migrations/custom/, Renovate 44.247.1). Each one carries
+# here a setting that the entries of S23 reserve to themselves.
+
+widened := {"allowedVersions": "/.*/"}
+
+legacy_container(key) := sprintf("[\"%s\"] is a legacy key", [key])
+
+test_s23_rejects_legacy_path_rules if {
+	renovate := with_value(valid_config, "pathRules", [{"paths": ["**"], "allowedVersions": "/.*/"}])
+	denied_with(checked(renovate), legacy_container("pathRules"))
+}
+
+test_s23_rejects_legacy_packages if {
+	renovate := with_value(valid_config, "packages", [{"matchPackageNames": ["*"], "allowedVersions": "/.*/"}])
+	denied_with(checked(renovate), legacy_container("packages"))
+}
+
+test_s23_rejects_legacy_package_files if {
+	renovate := with_value(valid_config, "packageFiles", [{"packageFile": "Dockerfile", "allowedVersions": "/.*/"}])
+	denied_with(checked(renovate), legacy_container("packageFiles"))
+}
+
+test_s23_rejects_legacy_dependencies if {
+	denied_with(checked(with_value(valid_config, "dependencies", widened)), legacy_container("dependencies"))
+}
+
+test_s23_rejects_legacy_dev_dependencies if {
+	denied_with(checked(with_value(valid_config, "devDependencies", widened)), legacy_container("devDependencies"))
+}
+
+test_s23_rejects_legacy_optional_dependencies if {
+	denied_with(checked(with_value(valid_config, "optionalDependencies", widened)), legacy_container("optionalDependencies"))
+}
+
+test_s23_rejects_legacy_peer_dependencies if {
+	denied_with(checked(with_value(valid_config, "peerDependencies", widened)), legacy_container("peerDependencies"))
+}
+
+test_s23_rejects_legacy_engines if {
+	denied_with(checked(with_value(valid_config, "engines", widened)), legacy_container("engines"))
+}
+
+test_s23_rejects_legacy_dep_types if {
+	renovate := with_value(valid_config, "depTypes", [{"depType": "dependencies", "groupName": "dependencies"}])
+	denied_with(checked(renovate), legacy_container("depTypes"))
+}
+
+test_s23_rejects_the_legacy_docker_object if {
+	denied_with(checked(with_value(valid_config, "docker", widened)), legacy_container("docker"))
+}
+
+test_s23_rejects_the_legacy_dotnet_object if {
+	denied_with(checked(with_value(valid_config, "dotnet", widened)), legacy_container("dotnet"))
+}
+
+test_s23_rejects_the_legacy_golang_object if {
+	denied_with(checked(with_value(valid_config, "golang", widened)), legacy_container("golang"))
+}
+
+test_s23_rejects_the_legacy_java_object if {
+	denied_with(checked(with_value(valid_config, "java", widened)), legacy_container("java"))
+}
+
+test_s23_rejects_the_legacy_js_object if {
+	denied_with(checked(with_value(valid_config, "js", widened)), legacy_container("js"))
+}
+
+test_s23_rejects_the_legacy_node_object if {
+	denied_with(checked(with_value(valid_config, "node", widened)), legacy_container("node"))
+}
+
+test_s23_rejects_the_legacy_php_object if {
+	denied_with(checked(with_value(valid_config, "php", widened)), legacy_container("php"))
+}
+
+test_s23_rejects_the_legacy_python_object if {
+	denied_with(checked(with_value(valid_config, "python", widened)), legacy_container("python"))
+}
+
+test_s23_rejects_the_legacy_ruby_object if {
+	denied_with(checked(with_value(valid_config, "ruby", widened)), legacy_container("ruby"))
+}
+
+test_s23_rejects_the_legacy_rust_object if {
+	denied_with(checked(with_value(valid_config, "rust", widened)), legacy_container("rust"))
+}
+
+test_s23_rejects_a_legacy_container_inside_an_entry if {
+	rule := {"matchDatasources": ["docker"], "docker": widened}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"docker\"] is a legacy key")
+}
+
+test_s23_rejects_package_rules_nested_in_an_entry if {
+	rule := {"matchDatasources": ["docker"], "packageRules": [{"matchPackageNames": ["*"], "allowedVersions": "/.*/"}]}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"packageRules\"] nests packageRules")
+}
+
+# The objects of current managers stay allowed: both renovate.json files set
+# pre-commit and regex.
+test_s23_accepts_the_objects_of_current_managers if {
+	renovate := object.union(valid_config, {
+		"pre-commit": {"enabled": true},
+		"regex": {"ignorePaths": ["**/node_modules/**"]},
+		"dockerfile": {"description": "Images of the Dockerfiles."},
+		"github-actions": {"description": "Actions of the workflows."},
+	})
+	accepted(checked(renovate))
+}
+
 # Registries without a release date (ADR-016): one entry, the block of the
 # ADR to the letter, description aside.
 
