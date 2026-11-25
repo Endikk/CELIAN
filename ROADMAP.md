@@ -1,7 +1,7 @@
 # Feuille de route
 
-Mise à jour le 24/11/2026, pendant la session 5, reprise le même soir après
-la pause. Le DSI tient ce fichier à jour à la fin de chaque session.
+Mise à jour le 25/11/2026, en fin de session 5. Le DSI tient ce fichier à jour
+à la fin de chaque session.
 
 ## Phase en cours : 2, golden repo SaaS B2B
 
@@ -15,8 +15,7 @@ la main dans `golden/saas-b2b/`, spécifié par Spec Kit
 1. Spec Kit : spec 001 (PR #29, amendée par #39), plan (#37) et tâches (#40)
    fusionnés. Reste `/speckit-implement`, étape par étape.
 2. Prérequis : BENCH-010 à BENCH-013 rendus, ADR-011 à ADR-014 acceptés.
-   BENCH-014 (cache) : lectures et test de fumée faits, série coupée par la
-   veille, à refaire sur secteur, puis ADR-015.
+   BENCH-014 (cache) rendu (#66), ADR-015 écrit (#67).
 3. Squelette : couches commune, `local` et `gcp`, Taskfile, kind, conventions
    Git.
 4. Application d'exemple : API .NET et front React.
@@ -103,7 +102,34 @@ standard, avec le temps et le volume mesurés (R-04).
     des agents dans le ticket du tableau de bord ; R-38 ouvert ;
   - règles du golden repo appliquées par le Renovate de CELIAN, Task et
     conftest suivis par Renovate, S23 durci après la relecture [SECU] (#55) ;
-  - étape 3 du golden repo, API .NET, en PR (#54) ; R-39 ouvert.
+  - étape 3 du golden repo, API .NET, ouverte en PR (#54) ; R-39 ouvert.
+- Phase 2, fin de la session 5 (25/11/2026), PR #54 à #70, fusionnées dans
+  l'ordre :
+  - golden repo, étape 5 (#57) : contrôles préalables de `task up`, soit le
+    moteur local joint par socket unix seulement, les versions, la mémoire et
+    le profil, les ports, et un kubeconfig ignoré ;
+  - écarts relevés par les tâches reportés dans le plan, Trivy seul dans le
+    PRD (US-009) (#58) ;
+  - gitleaks daté par Renovate sur Docker Hub mais tiré de ghcr.io par le même
+    condensat (#59) ; R-40 ouvert, gitleaks étant en maintenance ;
+  - `CDPATH` ignoré dans tous les scripts, avec une garde (#60) ;
+  - S23 refuse les entrées Renovate qui coupent, séparent ou détournent une
+    mise à jour surveillée, et les gestionnaires maison hors des deux connus
+    (#61) ;
+  - étape 6 (#65) : cluster kind et miroir zot, job `e2e-lite` en CI ;
+  - BENCH-014 (#66) : Valkey 9.1.4 à 86 contre Redis 7.2.17 à 69 ;
+  - ADR-015 (#67), accepté par le DSI sur délégation de Lucas : Valkey sur `local`, Memorystore for Valkey sur `gcp`, avec
+    un jeton pour le MVP ; dérogation datée à ENF-03 pour `valkey/valkey` ;
+    R-41 ouvert ;
+  - étape 3, API .NET (#54), fusionnée à 18 h 46 à Paris (17:46 UTC), quand les condensats .NET
+    ont atteint 7 jours ; R-39 ouvert sur `cloudsqlsuperuser` ;
+  - étape 13 (#64) : couche GCP écrite en OpenTofu, validée sans aucune action
+    cloud ;
+  - bits d'exécution de cinq scripts rétablis (#69) ;
+  - cinq points `pending` du catalogue fermés (#70).
+- Restent ouvertes en fin de session : #62 (étape 4, front React), #63
+  (durcissement de S20, empilée sur #62), #68 (étape 7, Gateway API et Envoy
+  Gateway, relecture [SECU] en cours) et #22 (release-please).
 
 ### Décisions de Lucas
 
@@ -161,6 +187,12 @@ standard, avec le temps et le volume mesurés (R-04).
   relue au plus tard le 2027-02-24 ; tableau de bord lu chaque semaine et sur
   alerte de [SECU] ; gitleaks tiré de Docker Hub, à essayer dans une PR à
   part.
+- 25/11/2026 : BENCH-014 lancé quand le Mac était sur secteur ; benchmark des
+  scanners de secrets (gitleaks, Betterleaks, TruffleHog, Kingfisher au
+  moins) après le golden repo, avant la mise en template, et au plus tard le
+  2027-03-21 ; gitleaks daté sur Docker Hub, tiré de ghcr.io ; feu vert aux
+  étapes 6 et 13, puis délégation complète au DSI pendant son absence,
+  fusions comprises, avec le choix du modèle des agents selon la tâche.
 
 ### Décisions du DSI pendant l'absence de Lucas, confirmées à la GATE 1
 
@@ -212,24 +244,44 @@ standard, avec le temps et le volume mesurés (R-04).
   (données d'audit NuGet injoignables) reste un avertissement.
 - Étape 4 lancée sur la branche de l'étape 3 ; sa PR s'ouvre après la fusion
   de #54.
+- 25/11/2026 :
+  - les étapes fusionnent dans l'ordre des dates où leurs images atteignent
+    7 jours ; les écarts des tâches sont renumérotés à chaque rebase ;
+  - S23 reste strict pour le projet généré aussi : un groupe ou un registre de
+    plus passe par une PR relue ;
+  - S29 : un `.npmrc` ou un `nuget.config` ne nomme que le registre
+    officiel ;
+  - `KIND_EXPERIMENTAL_PROVIDER` et `KIND_EXPERIMENTAL_DOCKER_NETWORK` sont
+    refusés ;
+  - les leurres de E22 se créent par `docker container create` ;
+  - T110 vit dans une racine séparée, `gcp/budget/`, pour qu'aucun rôle Owner
+    ni Editor n'aille à l'identité de la racine principale ;
+  - Cloud SQL plafonné à 2 vCPU, journaux de flux à 15 minutes et 10 %, Trivy
+    sans requête sortante et avec ses règles embarquées ;
+  - arbitrage de BENCH-014 : un jeton pour Memorystore, pas de deuxième palier
+    de volume, le majorant pour la note et le pod pour le dimensionnement ;
+  - le ticket chez `valkey-container` est laissé à Lucas ;
+  - `local/vendor/` sort des hooks `no-em-dash` et de taille : ce sont des
+    octets de tiers, vérifiés par `SHA256SUMS` ;
+  - étape 7 lancée par délégation.
 
 ### Prochain
 
-1. Étape 3, API .NET (#54) : fusion par Lucas à partir du 2026-11-25 à
-   17 h 45 UTC, quand les condensats .NET ont 7 jours.
-2. Étape 4, front React : en cours, PR après #54, puis relecture [SECU].
-   Ensuite l'étape 5 (contrôles préalables). L'étape 13 (GCP sans
-   Memorystore) est prête.
-3. BENCH-014 : série sur secteur, capot ouvert (script d'attente en place),
-   puis rapport, relectures [SECU] et [FINOPS], arbitrage et ADR-015. Il
-   débloque 57 tâches du golden repo.
-4. Suites de Renovate : gitleaks tiré de Docker Hub, dans une PR à part
-   vérifiée par [OPS] et [SECU] ; deux trous de S23 à fermer, une entrée `*`
-   avec `enabled: false` et kind séparé de son image de nœud par un glob.
+1. Étape 4, front React (#62) : fusion à partir du 2026-11-26 à 01:50 UTC,
+   délai de nginx. Puis #63, le durcissement de S20, empilée sur #62.
+2. Étape 7, Gateway API et Envoy Gateway (#68) : finir après la relecture
+   [SECU], qui est en cours.
+3. Ensuite l'étape 8 (secrets et données), l'étape 19 (cache local, débloquée
+   par l'ADR-015), l'étape 9 (profil lite de bout en bout), l'étape 18 (SBOM
+   et scan) et l'étape 14.
+4. Benchmark des scanners de secrets (gitleaks, Betterleaks, TruffleHog,
+   Kingfisher au moins) après le golden repo et avant la mise en template, au
+   plus tard le 2027-03-21 (R-40).
 5. Image `aspnet` chiseled pour l'API, qui retirerait 97 paquets Ubuntu :
-   benchmark et ADR.
-6. Petite PR pour reporter dans le plan les écarts relevés par les tâches ;
-   reporter dans le PRD le choix de Trivy pour le SBOM.
+   benchmark et ADR, après l'étape 9.
+6. Suites de Renovate : la règle des presets qui lisent `registryUrl` dans
+   les commentaires ; le registre `registry.opentofu.org`, que S23 empêche
+   aujourd'hui de déclarer (`registryUrls` refusé) : à trancher.
 
 La PR release-please « release 0.1.0 » (#22) reste ouverte : pas de release
 tant qu'il n'y a rien à publier.
@@ -242,8 +294,10 @@ HTTPS local ; le TLS vers la base et le cache ; le propriétaire de la base
 
 Actions de Lucas, hors GATE :
 
-- lire les grilles tarifaires de GKE, Cloud SQL, Memorystore, du réseau et de
-  Cloud Monitoring pour la région choisie, avant la GATE 2 (R-05) ;
+- lire les grilles tarifaires de GKE, Cloud SQL, Memorystore, Config Sync, du
+  réseau et de Cloud Monitoring pour la région choisie, avant la GATE 2
+  (R-05) ;
+- décider du ticket chez `valkey-container` (ADR-015) ;
 - révoquer l'ancien jeton classique et terminer le passage au jeton fin
   (R-07), point de sécurité le plus urgent ; puis essayer le jeton des agents
   sur un ticket de test, qui doit recevoir un 403 en REST et en GraphQL
@@ -251,11 +305,11 @@ Actions de Lucas, hors GATE :
 - installer l'app GitHub Renovate, seulement après ces deux points ; Pixel
   Agents ;
 - mettre Claude Code en 2.1.324 ou plus pour figer les marketplaces (R-02) ;
-- garder le Mac branché et le capot ouvert pendant les séries de mesure : la
-  veille capot fermé coupe les séries (BENCH-012, BENCH-014) ;
-- lancer `scripts/github/apply-settings.sh` après la fusion de #54, pour
-  rendre le job `unit` requis, puis quand le scan des images entrera dans les
-  contrôles requis de `main` (étape 18 du plan).
+- garder le Mac branché et le capot ouvert pendant les étapes qui lancent
+  kind : la veille capot fermé coupe les séries (BENCH-012, BENCH-014) ;
+- lancer `scripts/github/apply-settings.sh`, pour rendre les jobs `unit` et
+  `e2e-lite` requis sur `main`, puis de nouveau quand le scan des images
+  entrera dans les contrôles requis (étape 18 du plan).
 
 ## Les six phases du MVP
 
