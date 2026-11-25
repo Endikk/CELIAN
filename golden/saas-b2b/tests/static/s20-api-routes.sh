@@ -12,8 +12,8 @@
 # standalone copy (X01) has no such file. Step 4 adds the front part (T029).
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$root"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+CDPATH='' cd -- "$root"
 
 routes_file="tests/static/s20-contract-routes.yaml"
 inputs="src/Api/openapi.json $routes_file"
@@ -41,7 +41,7 @@ contract_routes() {
   sed -n -e 's/^## `\([A-Z][A-Z]* \/[^`?]*\)[^`]*`[[:space:]]*$/\1/p' "$1" | LC_ALL=C sort
 }
 
-celian_root="$(cd "$root/../.." && pwd)"
+celian_root="$(CDPATH='' cd -- "$root/../.." && pwd)"
 contract="$celian_root/specs/001-golden-repo-saas-b2b/contracts/http-api.md"
 if [ "$celian_root/golden/saas-b2b" = "$root" ] && [ -f "$contract" ]; then
   listed="$(listed_routes)"

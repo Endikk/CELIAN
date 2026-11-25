@@ -15,8 +15,8 @@
 # Neither runs the tests: run the script again without option, then commit.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$root"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+CDPATH='' cd -- "$root"
 
 dockerfile="src/Api/Dockerfile"
 context="src"

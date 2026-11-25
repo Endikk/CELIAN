@@ -9,8 +9,8 @@
 # manifests (T086).
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$root"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+CDPATH='' cd -- "$root"
 
 if ! command -v conftest >/dev/null 2>&1; then
   echo "conftest is not installed: run tests/tools/install.sh <dir>, then put <dir> on PATH." >&2
