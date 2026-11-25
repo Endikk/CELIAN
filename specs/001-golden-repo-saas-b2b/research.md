@@ -662,15 +662,15 @@ Décision : `task up` écrit le kubeconfig du cluster dans un fichier propre au 
 
 Pourquoi : ADR-004, condition 9 ; FR-019 ; décision de la GATE 1 (aucun contexte GKE sur le poste avant la GATE 2). Un fichier dédié évite aussi qu'un contexte cloud courant reçoive une commande par erreur.
 
-À trancher avec [SECU] à l'étape 6 : l'emplacement exact du fichier, au regard de R-07 (ce kubeconfig lit tous les Secrets du cluster).
+Tranché avec [SECU] à l'étape 6 (voir plus bas) : l'emplacement exact du fichier, au regard de R-07 (ce kubeconfig lit tous les Secrets du cluster).
 
-### Relevé et proposition du 2026-11-25 (T039), à trancher avec [SECU]
+### Relevé et proposition du 2026-11-25 (T039), tranchés par [SECU]
 
 Fait par [OPS], dans le code de kind au tag v0.33.0, lu par `gh api`. T039 nomme [DEV] et [SECU] ; [OPS] écrit la proposition, et la décision reste à [SECU].
 
-Ce que fait kind. `kind create cluster` prend `--name`, `--config`, `--kubeconfig` (« sets kubeconfig path instead of $KUBECONFIG or $HOME/.kube/config ») et `--wait` (`pkg/cmd/kind/create/cluster/createcluster.go`, lignes 57 à 92) ; `kind delete cluster` et `kind export kubeconfig` prennent `--name` et `--kubeconfig`. Avec `--kubeconfig`, kind ne lit et n'écrit que ce fichier, sans fusion ; sans lui, il prend `KUBECONFIG`, puis `$HOME/.kube/config` (`pkg/cluster/internal/kubeconfig/internal/kubeconfig/paths.go`, lignes 30 à 57). Chaque appel de kind des scripts passe donc `--kubeconfig` et `--name`, et chaque appel de kubectl `--kubeconfig` et `--context` (S19) : un `KUBECONFIG` de l'utilisateur n'est ni lu ni modifié (E24).
+Ce que fait kind. `kind create cluster` prend `--name`, `--config`, `--kubeconfig` (« sets kubeconfig path instead of $KUBECONFIG or $HOME/.kube/config ») et `--wait` (`pkg/cmd/kind/create/cluster/createcluster.go`, lignes 57 à 92) ; `kind delete cluster` et `kind export kubeconfig` prennent `--name` et `--kubeconfig`. Avec `--kubeconfig`, kind ne lit et n'écrit que ce fichier, mais il y fusionne : `WriteMerged` (`merge.go`) ajoute ses entrées à celles que le fichier contient déjà, et `RemoveKIND` (`remove.go`) retire les siennes et laisse le reste. Le fichier du projet ne tient que l'entrée du cluster `saas-b2b`, et `task down` le supprime en entier après le cluster, parce qu'il est propre au projet ; sans `--kubeconfig`, il prend `KUBECONFIG`, puis `$HOME/.kube/config` (`pkg/cluster/internal/kubeconfig/internal/kubeconfig/paths.go`, lignes 30 à 57). Chaque appel de kind des scripts passe donc `--kubeconfig` et `--name`, et chaque appel de kubectl `--kubeconfig` et `--context` (S19) : un `KUBECONFIG` de l'utilisateur n'est ni lu ni modifié (E24).
 
-Proposition : `$HOME/.kube/kind-saas-b2b`, fichier en mode 600 dans un dossier en 700, écrits sous `umask 077`. Le chemin vit dans `local/scripts/lib/local-env.sh`.
+Proposition : `$HOME/.kube/kind-saas-b2b`, fichier en mode 600 dans un dossier en 700, écrits sous `umask 077`. Le chemin vit dans `local/scripts/lib/local-env.sh`. Tranché par [SECU] à la relecture de la PR #65, le 2026-11-25 : cet emplacement est validé.
 
 - Hors du dépôt : ce fichier lit tous les Secrets du cluster. Dans l'arborescence, il tomberait dans une copie du dépôt (X01), une archive ou un contexte de `docker build` trop large, et ne serait qu'à un `.gitignore` près d'entrer dans Git. `.gitignore` garde ses motifs `kubeconfig*` et `*.kubeconfig` pour une copie laissée par erreur.
 - Sous `~/.kube/`, dossier des kubeconfigs de kubectl, que kubectl ne lit pas d'office à un autre nom que `config` : le fichier n'entre dans aucune fusion par défaut.
@@ -684,6 +684,8 @@ Les tests sur kind tournent avec un `HOME` à eux (`local/tests/e2e/run.sh`) : i
 | <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cmd/kind/create/cluster/createcluster.go> | 2026-11-25 | Options `--name`, `--config` (et `-` pour l'entrée standard), `--kubeconfig`, `--wait` |
 | <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cmd/kind/delete/cluster/deletecluster.go> | 2026-11-25 | Options `--name`, `--kubeconfig` |
 | <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cmd/kind/export/kubeconfig/kubeconfig.go> | 2026-11-25 | Options `--name`, `--kubeconfig` |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/kubeconfig/internal/kubeconfig/merge.go> | 2026-11-25 | `WriteMerged` : fusion des entrées de kind dans le fichier cible |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/kubeconfig/internal/kubeconfig/remove.go> | 2026-11-25 | `RemoveKIND` : retrait des seules entrées du cluster |
 | <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/cluster/internal/kubeconfig/internal/kubeconfig/paths.go> | 2026-11-25 | Lignes 30 à 57 : `--kubeconfig` seul fichier lu et écrit, sinon `KUBECONFIG`, sinon `$HOME/.kube/config` |
 
 ## RS-22. Outil du SBOM et du scan, format du SBOM
