@@ -6,6 +6,8 @@
 #   (ADR-012, condition 5);
 # - the kind node image stays on the kubernetes_minor of platform.yaml, and
 #   kind and its node image share one group (ADR-004, version rule, point 5);
+# - the cache image stays on the patches of the cache_engine_line of
+#   platform.yaml, in the Alpine variant (ADR-015, conditions 2, 9 and 16);
 # - the charts and the controller image of Envoy Gateway share one group
 #   (ADR-005, updates, point 2);
 # - no other entry, manager or top setting decides the branch of an update,
@@ -13,9 +15,9 @@
 # - Task and conftest, pinned in tests/tools/install.sh next to
 #   platform.yaml, and kind, pinned in local/scripts/lib/preflight-checks.sh,
 #   keep their custom manager; the node image of local/kind/cluster.yaml,
-#   the zot image of local/tasks/, the Postgres image of local/data/ and the
-#   proxy image of local/platform/ keep theirs; customManagers holds only
-#   those two and the one of the
+#   the zot image of local/tasks/, the images of local/data/ and the proxy
+#   image of local/platform/ keep theirs; customManagers holds only those two
+#   and the one of the
 #   _IMAGE variables of the workflows, and the regex managers see tests/,
 #   which config:recommended hides (research RS-17).
 #
@@ -42,7 +44,9 @@ label_kind := "S23 (FR-013; ADR-004, version rule, point 5)"
 
 label_envoy := "S23 (FR-013; ADR-005, updates, point 2)"
 
-label_versions := "S23 (FR-013; ADR-004, version rule, point 5; ADR-012, condition 5)"
+label_versions := "S23 (FR-013; ADR-004, version rule, point 5; ADR-012, condition 5; ADR-015, condition 2)"
+
+label_cache := "S23 (FR-013; ADR-015, conditions 2, 9 and 16)"
 
 label_tools := "S23 (FR-013; research RS-17)"
 
@@ -65,7 +69,9 @@ envoy_names := {
 	"docker.io/envoyproxy/gateway-crds-helm",
 }
 
-watched_names := (postgres_names | kind_pair_names) | envoy_names
+cache_names := {"valkey/valkey", "docker.io/valkey/valkey"}
+
+watched_names := ((postgres_names | kind_pair_names) | envoy_names) | cache_names
 
 platform_files contains file if {
 	some file in input
@@ -90,6 +96,12 @@ expected_postgres := sprintf("/^%s\\./", [platform.postgres_major]) if {
 
 expected_node := sprintf("/^v%s\\./", [replace(platform.kubernetes_minor, ".", "\\.")]) if {
 	is_string(platform.kubernetes_minor)
+}
+
+# The cache image: the patches of the line, Alpine variant alone (ADR-015,
+# conditions 2 and 9): "/^9\\.1\\.[0-9]+-alpine$/" for cache_engine_line "9.1".
+expected_cache := sprintf("/^%s\\.[0-9]+-alpine$/", [replace(platform.cache_engine_line, ".", "\\.")]) if {
+	is_string(platform.cache_engine_line)
 }
 
 # Shape of the input.
@@ -195,9 +207,13 @@ postgres_entry(rule) if guard_rule(rule, postgres_names, expected_postgres)
 
 node_entry(rule) if guard_rule(rule, node_names, expected_node)
 
+cache_entry(rule) if guard_rule(rule, cache_names, expected_cache)
+
 guard_entry(rule) if postgres_entry(rule)
 
 guard_entry(rule) if node_entry(rule)
+
+guard_entry(rule) if cache_entry(rule)
 
 group_rule(rule, names) if {
 	plain(rule, group_keys, names)
@@ -209,14 +225,14 @@ group_rule(rule, names) if {
 
 # catches() reads neither globs nor matchDepNames, so a later entry could
 # take an image back through them, such as {"matchPackageNames": ["*"],
-# "allowedVersions": "/.*/"}. Only the two entries of S23 set allowedVersions;
+# "allowedVersions": "/.*/"}. Only the three entries of S23 set allowedVersions;
 # Renovate reads it in packageRules only (lib/config/options/index.ts).
 deny contains msg if {
 	some i, rule in rules
 	is_object(rule)
 	"allowedVersions" in object.keys(rule)
 	not guard_entry(rule)
-	msg := sprintf("%s: packageRules[%v] sets allowedVersions; only the postgres and node entries set it, with no other key than %s, and only regexes or their own names as patterns", [label_versions, i, concat(", ", guard_keys)])
+	msg := sprintf("%s: packageRules[%v] sets allowedVersions; only the postgres, node and cache entries set it, with no other key than %s, and only regexes or their own names as patterns", [label_versions, i, concat(", ", guard_keys)])
 }
 
 # An entry that turns updates off is refused in package renovate_delay,
@@ -367,6 +383,32 @@ deny contains msg if {
 	msg := sprintf("%s: no packageRules entry without matchDatasources puts %s in one groupName, with no other key than %s, and only regexes or these names as patterns, so that kind and its node image move in one PR", [label_kind, concat(", ", kind_pair_names), concat(", ", group_keys)])
 }
 
+# The cache: the patches of the line of platform.yaml, Alpine variant alone.
+# A minor or a major moves by hand with cache_engine_line, when Memorystore
+# serves another line by default (ADR-015, condition 16); the Debian
+# variant would add 26.0 MB to the first task up (condition 9).
+
+cache_rule_found if {
+	some rule in rules
+	cache_entry(rule)
+}
+
+deny contains msg if {
+	is_object(config)
+	is_object(platform)
+	not cache_rule_found
+	msg := sprintf("%s: no packageRules entry keeps the cache image on allowedVersions %s, the patches of the cache_engine_line of platform.yaml in the Alpine variant, with matchPackageNames catching %s, no other key than %s, and only regexes or these names as patterns", [label_cache, expected_cache, concat(", ", cache_names), concat(", ", guard_keys)])
+}
+
+deny contains msg if {
+	some i, rule in rules
+	is_object(rule)
+	catches_any(rule, cache_names)
+	value := rule.allowedVersions
+	value != expected_cache
+	msg := sprintf("%s: packageRules[%v] sets allowedVersions %v for the cache image; only %s is allowed", [label_cache, i, value, expected_cache])
+}
+
 # Envoy Gateway: the charts and the controller image in one group.
 
 envoy_group_found if {
@@ -430,12 +472,12 @@ images_manager := {
 
 # The manager of the images of the local layer, written once as well: the
 # node image of local/kind/cluster.yaml, under the key image, the zot image
-# of the Taskfile of the layer, under MIRROR_IMAGE, the Postgres image of
-# local/data/ and the proxy image of local/platform/, under the key image
-# (ADR-004, version rule, point 5; ADR-005, complement of 2026-11-26;
-# ADR-011, condition 8; ADR-012, condition 5; ADR-016). All are pinned by tag and
-# digest, so the expression is the one of the _IMAGE variables, with the key
-# image as well.
+# of the Taskfile of the layer, under MIRROR_IMAGE, the images of the
+# manifests of local/data/ and the proxy image of local/platform/, under the
+# key image (ADR-004, version rule, point 5; ADR-005, complement of
+# 2026-11-26; ADR-011, condition 8; ADR-012, condition 5; ADR-015, condition
+# 2; ADR-016). All are pinned by tag and digest, so the expression is the one
+# of the _IMAGE variables, with the key image as well.
 local_manager := {
 	"customType": "regex",
 	"managerFilePatterns": [
@@ -527,5 +569,5 @@ deny contains msg if {
 	is_object(config)
 	is_string(tools_prefix)
 	not local_manager_found
-	msg := sprintf("%s: no customManagers entry is the manager of the images of %slocal/kind/cluster.yaml, %slocal/tasks/, %slocal/data/ and %slocal/platform/, to the letter apart from its description (regex, docker, key image or <NAME>_IMAGE, tag and digest); without it, Renovate never updates the node image of kind, the zot image and the Postgres image", [label_kind, tools_prefix, tools_prefix, tools_prefix, tools_prefix])
+	msg := sprintf("%s: no customManagers entry is the manager of the images of %slocal/kind/cluster.yaml, %slocal/tasks/, %slocal/data/ and %slocal/platform/, to the letter apart from its description (regex, docker, key image or <NAME>_IMAGE, tag and digest); without it, Renovate never updates the node image of kind, the zot image and the images of the data layer", [label_kind, tools_prefix, tools_prefix, tools_prefix, tools_prefix])
 }

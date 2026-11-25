@@ -15,7 +15,7 @@ set -uo pipefail
 must_succeed up || e2e_finish
 
 values=""
-for secret in $E2E_SECRETS; do
+for secret in $E2E_PASSWORD_SECRETS; do
   if ! value="$(secret_value "$secret" password)" || [ -z "$value" ]; then
     fail "the Secret $secret has no readable password after task up"
     continue

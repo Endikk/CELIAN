@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # control: E04
-# carries: FR-004, FR-005; SC-004; ADR-007, condition 1; ADR-012, condition 10
+# carries: FR-004, FR-005; SC-004; ADR-007, condition 1; ADR-012, condition 10; ADR-015, condition 19
 #
 # Two new environments share no password: task down, task up, read the
-# passwords of db-auth and db-superuser; task down, task up, read them
+# passwords of db-auth, db-superuser and cache-auth; task down, task up, read them
 # again. Each password is 32 characters at least and none of the known
 # values (root, admin, postgres, password, changeme, mysecretpassword,
-# foobared, password123, the empty value); the two passwords of one
+# foobared, password123, the empty value); the three passwords of one
 # environment differ; no password of the first environment comes back in the
 # second. username is fixed by construction and stays out of the comparison
 # (ADR-012, condition 10). The values stay in the memory of the test: no
@@ -17,12 +17,12 @@ set -uo pipefail
 . "$(dirname -- "${BASH_SOURCE[0]}")/lib/e2e.sh"
 
 # read_passwords: sets PASSWORDS to the passwords of the Secrets of
-# E2E_SECRETS, one per line, in that order; checks each against the rules,
+# E2E_PASSWORD_SECRETS, one per line, in that order; checks each against the rules,
 # and fails the test on a break, in this shell.
 read_passwords() {
   local secret value known
   PASSWORDS=""
-  for secret in $E2E_SECRETS; do
+  for secret in $E2E_PASSWORD_SECRETS; do
     if ! value="$(secret_value "$secret" password)"; then
       fail "the Secret $secret has no readable key password after task up"
       continue
@@ -46,16 +46,16 @@ must_succeed down || e2e_finish
 must_succeed up || e2e_finish
 read_passwords
 first="$PASSWORDS"
-if [ "$(distinct_count "$first")" -ne 2 ]; then
-  fail "the two passwords of the first environment are not two distinct values"
+if [ "$(distinct_count "$first")" -ne 3 ]; then
+  fail "the three passwords of the first environment are not three distinct values"
 fi
 
 must_succeed down || e2e_finish
 must_succeed up || e2e_finish
 read_passwords
 second="$PASSWORDS"
-if [ "$(distinct_count "$second")" -ne 2 ]; then
-  fail "the two passwords of the second environment are not two distinct values"
+if [ "$(distinct_count "$second")" -ne 3 ]; then
+  fail "the three passwords of the second environment are not three distinct values"
 fi
 
 common="$(LC_ALL=C comm -12 <(printf '%s' "$first" | LC_ALL=C sort -u) <(printf '%s' "$second" | LC_ALL=C sort -u) | grep -c . || true)"

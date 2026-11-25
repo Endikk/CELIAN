@@ -1,7 +1,7 @@
 # Tests of S21 (platform_values.rego), run by `conftest verify`.
 package platform_values
 
-valid_values := {"kubernetes_minor": "1.36", "postgres_major": "18"}
+valid_values := {"kubernetes_minor": "1.36", "postgres_major": "18", "cache_engine_line": "9.1"}
 
 combined(path, contents) := [{"path": path, "contents": contents}]
 
@@ -83,7 +83,7 @@ test_s21_rejects_a_major_with_a_minor if {
 test_s21_names_its_requirements_in_each_message if {
 	files := combined("platform.yaml", {"kubernetes_minor": 1.36})
 	msgs := deny with input as files
-	count(msgs) == 2
+	count(msgs) == 3
 	every msg in msgs {
 		startswith(msg, "S21 (FR-010, FR-017;")
 	}
@@ -240,4 +240,56 @@ test_s21_reads_the_postgres_image_under_the_golden_repo_of_celian if {
 		{"path": "golden/saas-b2b/local/data/statefulset.yaml", "contents": postgres_statefulset(pg18)},
 	]
 	denied_with(files, "platform.yaml says postgres_major 17")
+}
+
+# The cache of the local layer (ADR-015, condition 16): each image of
+# local/data/cache/ on the cache_engine_line of platform.yaml.
+test_s21_rejects_a_missing_cache_engine_line if {
+	denied_with(combined("platform.yaml", {"kubernetes_minor": "1.36", "postgres_major": "18"}), "has no cache_engine_line key")
+}
+
+test_s21_rejects_a_cache_engine_line_with_a_patch_number if {
+	denied_with(combined("platform.yaml", object.union(valid_values, {"cache_engine_line": "9.1.4"})), "cache_engine_line in platform.yaml is '9.1.4'")
+}
+
+cache_image(tag) := sprintf("docker.io/valkey/valkey:%s@sha256:56729e68bdda139cbd3f6a2538683dc3523325fc5711ea1a379938f1b37893f0", [tag])
+
+pod_with(path, init_image, image) := {"path": path, "contents": {
+	"kind": "Deployment",
+	"spec": {"template": {"spec": {
+		"initContainers": [{"name": "config", "image": init_image}],
+		"containers": [{"name": "cache", "image": image}],
+	}}},
+}}
+
+with_cache(init_image, image) := [
+	{"path": "platform.yaml", "contents": valid_values},
+	pod_with("local/data/cache/deployment.yaml", init_image, image),
+]
+
+test_s21_accepts_cache_images_on_the_platform_line if {
+	accepted(with_cache(cache_image("9.1.4-alpine"), cache_image("9.1.4-alpine")))
+}
+
+test_s21_accepts_the_cache_files_under_the_golden_repo_of_celian if {
+	accepted([
+		{"path": "golden/saas-b2b/platform.yaml", "contents": valid_values},
+		pod_with("golden/saas-b2b/local/data/cache/probe/job.yaml", cache_image("9.1.5-alpine"), cache_image("9.1.5-alpine")),
+	])
+}
+
+test_s21_rejects_a_cache_image_on_another_line if {
+	denied_with(with_cache(cache_image("9.1.4-alpine"), cache_image("9.2.0-alpine")), "container cache in local/data/cache/deployment.yaml runs the line 9.2, platform.yaml says cache_engine_line 9.1")
+}
+
+test_s21_rejects_an_init_image_on_another_line if {
+	denied_with(with_cache(cache_image("8.1.4-alpine"), cache_image("9.1.4-alpine")), "container config in local/data/cache/deployment.yaml runs the line 8.1")
+}
+
+test_s21_rejects_a_cache_image_without_a_version_tag if {
+	denied_with(with_cache(cache_image("9.1.4-alpine"), "docker.io/valkey/valkey:latest"), "has no X.Y.Z-alpine tag to compare with cache_engine_line")
+}
+
+test_s21_does_not_take_a_line_prefix_for_the_line if {
+	denied_with(with_cache(cache_image("9.1.4-alpine"), cache_image("9.11.0-alpine")), "runs the line 9.11")
 }

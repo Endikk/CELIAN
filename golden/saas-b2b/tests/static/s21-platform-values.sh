@@ -1,21 +1,23 @@
 #!/usr/bin/env bash
 # control: S21
-# carries: FR-010, FR-017; ADR-004, version rule; ADR-012, condition 5
+# carries: FR-010, FR-017; ADR-004, version rule; ADR-012, condition 5; ADR-015, condition 16
 #
-# The Kubernetes minor and the Postgres major have one value each, in
-# platform.yaml, and every file that repeats them agrees with it. Runs the
-# tests of policy package platform_values, then the policy on the real files.
-# Step 1 gave it platform.yaml alone; step 6 (T041) added the kind
-# configuration, step 8 (T065) the Postgres image of local/data/, and step
-# 13 (T105) the OpenTofu layer. The OpenTofu files join when the gcp layer
-# is there: a project rendered for the local target alone has no gcp/
-# folder.
+# The Kubernetes minor, the Postgres major and the line of the cache engine
+# have one value each, in platform.yaml, and every file that repeats them
+# agrees with it. Runs the tests of policy package platform_values, then the
+# policy on the real files.
+# Step 1 gave it platform.yaml alone; step 6 (T041) adds the kind
+# configuration; T065 and T105 add the Postgres manifests and the OpenTofu
+# layer to "inputs"; step 19 adds the images of the cache layer (ADR-015,
+# condition 16). The OpenTofu files join when the gcp layer is there: a
+# project rendered for the local target alone has no gcp/ folder.
 set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 CDPATH='' cd -- "$root"
 
 inputs="platform.yaml local/kind/cluster.yaml local/data/statefulset.yaml"
+inputs="$inputs local/data/cache/deployment.yaml local/data/cache/probe/job.yaml"
 
 if [ -d gcp ]; then
   set -- gcp/tofu/*.tf

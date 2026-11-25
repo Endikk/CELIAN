@@ -104,3 +104,15 @@ test_s06_rejects_a_mirror_host if {
 	configmap := {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "app-config"}, "data": {"registry": "saas-b2b-mirror.zot:5000"}}
 	denied_with(rendered([configmap]), "names a tool or a provider")
 }
+
+# ADR-015, condition 17: the common layer names neither the cache engine of
+# the local layer nor the managed cache of the gcp layer.
+test_s06_rejects_the_cache_engine if {
+	configmap := {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "app-config"}, "data": {"CACHE_HOST": "valkey.saas-b2b.svc"}}
+	denied_with(rendered([configmap]), "names a tool or a provider")
+}
+
+test_s06_rejects_the_managed_cache if {
+	configmap := {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "app-config"}, "data": {"note": "Memorystore endpoint"}}
+	denied_with(rendered([configmap]), "names a tool or a provider")
+}

@@ -36,6 +36,13 @@ E2E_SECRETS="db-auth db-superuser"
 E2E_SECRET_KEYS="password username"
 E2E_SECRET_TYPE="kubernetes.io/basic-auth"
 E2E_APP_USER="app"
+# cache-auth (ADR-015, conditions 5 and 19; contracts/secrets.md): Opaque, the
+# key password alone. The cache keeps nothing, so it has no volume to check.
+E2E_CACHE_SECRET="cache-auth"
+E2E_CACHE_SECRET_KEYS="password"
+E2E_CACHE_SECRET_TYPE="Opaque"
+# Every Secret that holds a drawn password.
+E2E_PASSWORD_SECRETS="$E2E_SECRETS $E2E_CACHE_SECRET"
 # The volume of the database: the PVC of the StatefulSet postgres.
 E2E_DATA_VOLUME="data-postgres-0"
 # A password is 32 characters at least, and none of the known values of
