@@ -1,0 +1,9 @@
+# The local environment, neutral towards the tool and the provider
+# (contracts/layers.md; ADR-010, condition 1): its settings join here when
+# an environment needs its own. The local target layer composes this
+# overlay with its component in local/k8s/lite/, from step 8 (research
+# RS-01).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base

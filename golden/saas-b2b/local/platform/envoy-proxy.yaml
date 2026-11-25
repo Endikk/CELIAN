@@ -1,0 +1,28 @@
+# The EnvoyProxy of the local layer (ADR-005, "Répartition par couche"):
+# Envoy Gateway publishes the proxy through a NodePort Service with fixed
+# node ports, which the extraPortMappings of local/kind/cluster.yaml reach
+# on 127.0.0.1. The patch is a strategic merge on the ports of the Service,
+# keyed by port (research RS-02). It fixes port 80, the HTTP listener of the
+# Gateway; port 443 joins with the HTTPS listener, in the second PR of step
+# 7 (T074): a port that the Service lacks would enter it without a name.
+# S05 checks that each nodePort below is the containerPort of an
+# extraPortMappings. Only the local layer names gateway.envoyproxy.io
+# (ADR-005, condition 2; S06).
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: saas-b2b
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: NodePort
+        patch:
+          type: StrategicMerge
+          value:
+            spec:
+              ports:
+                - port: 80
+                  nodePort: 30080

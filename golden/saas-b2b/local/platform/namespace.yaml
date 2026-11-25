@@ -1,0 +1,14 @@
+# The namespace of Envoy Gateway. The vendored render of gateway-helm goes
+# there (helm template -n envoy-gateway-system) without declaring it, as
+# helm install --create-namespace did in BENCH-004 (research RS-02).
+# Applied by local/scripts/platform.sh before the controller.
+#
+# Pod Security Admission enforces the restricted profile on the controller,
+# certgen and the proxy pods (label pod-security.kubernetes.io/enforce;
+# S22 wants restricted or baseline, E03 reads it on the live namespace).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: envoy-gateway-system
+  labels:
+    pod-security.kubernetes.io/enforce: restricted

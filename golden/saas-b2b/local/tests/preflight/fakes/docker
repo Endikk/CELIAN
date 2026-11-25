@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 # Simulated docker CLI of the preflight tests P01 to P05. It answers only the
-# two calls of local/scripts/preflight.sh, the way the docker 29.8.2 CLI does
-# (spec 001, research RS-08):
+# calls of local/scripts/preflight.sh, the way the docker 29.8.2 CLI does
+# (spec 001, research RS-08 and RS-20):
 #   docker context inspect --format <template>
 #   docker info --format <template>
+#   docker container ls --all --filter label=io.x-k8s.kind.cluster=saas-b2b
+#     --format {{.Names}}
+#   docker container inspect --format <port bindings template> <node>
 # The template is rendered with the values below. Any other call is logged
 # as UNEXPECTED and fails, so a test sees at once a command that would
 # create, change or remove something.
@@ -30,6 +33,12 @@
 # FAKE_DOCKER_SERVER_VERSION  ServerVersion, default 29.8.2
 # FAKE_DOCKER_MEM_TOTAL       MemTotal in bytes, default 2415919104 (2304 MiB,
 #                             between the lite and standard thresholds)
+#
+# Nodes of the kind cluster of the project, read for the host ports:
+# FAKE_KIND_NODES             names of the node containers, separated by
+#                             spaces; default none, no cluster
+# FAKE_NODE_PORT_BINDINGS     what the port bindings template renders for
+#                             each node: "<ip>:<port> " per binding
 # FAKE_LOG                    file that receives one line per call
 set -euo pipefail
 
@@ -117,6 +126,30 @@ info() {
       ;;
   esac
 }
+
+# The template of the port bindings of a node, as preflight-checks.sh writes
+# it; any other template is not simulated.
+# shellcheck disable=SC2016 # a docker template, not a shell expansion
+bindings_template='{{range $port, $list := .HostConfig.PortBindings}}{{range $list}}{{.HostIp}}:{{.HostPort}} {{end}}{{end}}'
+
+if [ "$*" = "container ls --all --filter label=io.x-k8s.kind.cluster=saas-b2b --format {{.Names}}" ]; then
+  for node in ${FAKE_KIND_NODES:-}; do
+    printf '%s\n' "$node"
+  done
+  exit 0
+fi
+if [ "$#" -eq 5 ] && [ "$1 $2 $3" = "container inspect --format" ]; then
+  [ "$4" = "$bindings_template" ] || unexpected "$@"
+  case " ${FAKE_KIND_NODES:-} " in
+    *" $5 "*) ;;
+    *)
+      printf 'Error response from daemon: No such container: %s\n' "$5" >&2
+      exit 1
+      ;;
+  esac
+  printf '%s\n' "${FAKE_NODE_PORT_BINDINGS:-}"
+  exit 0
+fi
 
 call="$*"
 if [ "$#" -eq 4 ] && [ "$1" = context ] && [ "$2" = inspect ]; then

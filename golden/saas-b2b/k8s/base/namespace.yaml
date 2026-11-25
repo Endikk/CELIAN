@@ -1,0 +1,10 @@
+# The namespace of the application; Postgres joins it with step 8 (ADR-012,
+# condition 9). Pod Security Admission enforces the restricted profile on
+# every pod of it (label pod-security.kubernetes.io/enforce, research
+# RS-02).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: saas-b2b
+  labels:
+    pod-security.kubernetes.io/enforce: restricted

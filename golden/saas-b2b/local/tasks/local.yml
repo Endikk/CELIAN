@@ -14,28 +14,49 @@ vars:
   # Renovate no date: each update waits for the approval of ADR-016.
   # renovate: datasource=docker depName=ghcr.io/project-zot/zot
   MIRROR_IMAGE: ghcr.io/project-zot/zot:v2.1.23@sha256:9d3de83ac2099e6f4843045b4c9b65b7e8baf40f92d28f54906dee9d4d390fd7
+  # The host ports of the gateway, on 127.0.0.1 (research RS-20): HTTP, and
+  # HTTPS for the listener of the second PR of step 7. local/kind/cluster.yaml
+  # publishes them, the preflight checks test them; S05 keeps both in step.
+  GATEWAY_HTTP_PORT: "18080"
+  GATEWAY_HTTPS_PORT: "18443"
+  # Envoy Gateway, one release (ADR-005, "Versions et condensats"; research
+  # RS-02): the controller image and the OCI artifacts of its two charts, by
+  # tag and digest. local/vendor/envoy-gateway/ holds the render of these
+  # charts; platform.sh and S22 refuse a render of another release. Renovate
+  # proposes the three in one PR (group "Envoy Gateway" of renovate.json),
+  # and the render and its sums are redone by hand in that PR, with the
+  # commands of research RS-02.
+  # renovate: datasource=docker depName=docker.io/envoyproxy/gateway
+  ENVOY_GATEWAY_IMAGE: docker.io/envoyproxy/gateway:v1.10.0@sha256:c2243d43518bed91d3ed8c2db849a4b7a14ac9b96eb019f2ab104bb1ca8572b1
+  # renovate: datasource=docker depName=docker.io/envoyproxy/gateway-helm
+  ENVOY_GATEWAY_HELM_IMAGE: docker.io/envoyproxy/gateway-helm:v1.10.0@sha256:dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7
+  # renovate: datasource=docker depName=docker.io/envoyproxy/gateway-crds-helm
+  ENVOY_GATEWAY_CRDS_HELM_IMAGE: docker.io/envoyproxy/gateway-crds-helm:v1.10.0@sha256:475c39aad3a05e3974a29fb80cfefe882b743e45e2ec0f751790ff0cb83bfa5d
 
 tasks:
-  # Preflight checks first, before anything is created (contracts/task-cli.md);
-  # then the cluster and the mirror (plan, "Ce que fait task up", points 2
-  # and 3). PROFILE forces the profile, given either way: PROFILE=lite task
-  # up, or task up PROFILE=lite. Task does not export a command-line variable
-  # to the commands, hence env; a PROFILE already in the environment wins
-  # over it (research RS-08). The host ports join the call with step 7
-  # (T059). The platform and the application arrive with steps 7 to 9. The
-  # checks of the mirror come before the cluster is created: a container or a
-  # volume that is not the project's stops task up at once; only the network
-  # kind, which kind creates, is checked after (mirror.sh up).
+  # Preflight checks first, before anything is created (contracts/task-cli.md),
+  # with the host ports of the gateway; then the cluster, the mirror and the
+  # platform (plan, "Ce que fait task up", points 2 to 4). PROFILE forces
+  # the profile, given either way: PROFILE=lite task up, or task up
+  # PROFILE=lite. Task does not export a command-line variable to the
+  # commands, hence env; a PROFILE already in the environment wins over it
+  # (research RS-08). The secrets, the data and the application arrive with
+  # steps 8 and 9. The checks of the mirror and of the vendored platform come
+  # before the cluster is created: a foreign container or volume, or a
+  # vendored file that differs from its SHA-256, stops task up at once; only
+  # the network kind, which kind creates, is checked after (mirror.sh up).
   up:
     silent: true
     env:
       PROFILE: '{{.PROFILE}}'
     cmds:
-      - bash local/scripts/preflight.sh
+      - bash local/scripts/preflight.sh '{{.GATEWAY_HTTP_PORT}}' '{{.GATEWAY_HTTPS_PORT}}'
       - bash local/scripts/mirror.sh check '{{.MIRROR_IMAGE}}'
+      - bash local/scripts/platform.sh check '{{.ENVOY_GATEWAY_IMAGE}}'
       - bash local/scripts/cluster.sh up
       - bash local/scripts/mirror.sh up '{{.MIRROR_IMAGE}}'
-      - echo 'task up stops after the cluster and the mirror. The platform and the application arrive with steps 7 to 9 of spec 001.'
+      - bash local/scripts/platform.sh up '{{.ENVOY_GATEWAY_IMAGE}}'
+      - echo 'task up stops after the platform. The secrets, the data and the application arrive with steps 8 and 9 of spec 001.'
 
   # The mirror container first, so that nothing stays on the network kind
   # when the cluster goes (ADR-011), then the cluster; the mirror volume

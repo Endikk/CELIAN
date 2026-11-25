@@ -23,6 +23,13 @@ E2E_KUBECONFIG="${HOME:?}/.kube/kind-$E2E_CLUSTER"
 # kind labels each node container with its cluster (kind v0.33.0,
 # pkg/cluster/internal/providers/docker/constants.go).
 E2E_NODE_FILTER="label=io.x-k8s.kind.cluster=$E2E_CLUSTER"
+# The host ports of the gateway, as local/tasks/local.yml and
+# local/kind/cluster.yaml set them (research RS-20), and the Gateway of the
+# common layer, in the namespace of the application (contracts/layers.md).
+E2E_GATEWAY_HTTP_PORT=18080
+E2E_GATEWAY_HTTPS_PORT=18443
+E2E_APP_NAMESPACE="saas-b2b"
+E2E_GATEWAY="saas-b2b"
 
 E2E_FAILURES=0
 OUTPUT=""
@@ -91,6 +98,12 @@ volume_exists() {
 
 cluster_exists() {
   kind get clusters 2>/dev/null | grep -qx "$E2E_CLUSTER"
+}
+
+# kube_e2e ARG...: kubectl on the cluster of the project, through its
+# kubeconfig and its context, as the tasks do (S19).
+kube_e2e() {
+  kubectl --kubeconfig "$E2E_KUBECONFIG" --context "$E2E_CONTEXT" "$@"
 }
 
 # The zot image of the project, as local/tasks/local.yml pins it. The decoys

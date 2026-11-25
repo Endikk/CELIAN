@@ -15,6 +15,16 @@ on:
 permissions:
   contents: read
 
+# The kubectl of the jobs: static renders the common layer with its
+# Kustomize (S06, research RS-01), e2e-lite drives the cluster.
+env:
+  # renovate: datasource=github-releases depName=kubernetes/kubernetes
+  KUBECTL_VERSION: v1.36.6
+  # SHA-256 of kubectl linux/amd64, from kubectl.sha256 of the release
+  # (research RS-18). No manager updates it: a PR of Renovate on
+  # KUBECTL_VERSION fails here until the new sum is written by hand.
+  KUBECTL_SHA256: 29818b6729dc9262b692307470d0558d027725e738be5dd47c760261868a2634
+
 concurrency:
   group: golden-saas-b2b-${{ github.ref }}
   cancel-in-progress: true
@@ -38,6 +48,14 @@ jobs:
         run: |
           bash tests/tools/install.sh "$RUNNER_TEMP/golden-tools"
           echo "$RUNNER_TEMP/golden-tools" >> "$GITHUB_PATH"
+
+      # S06 renders the common layer with kubectl kustomize: the kubectl of
+      # e2e-lite, checked against its SHA-256, before the one of the runner.
+      - name: Install kind and kubectl
+        working-directory: .
+        run: |
+          bash scripts/ci/install-kind-kubectl.sh "$RUNNER_TEMP/kind-tools"
+          echo "$RUNNER_TEMP/kind-tools" >> "$GITHUB_PATH"
 
       - name: Run the static checks
         run: task check
@@ -102,8 +120,9 @@ jobs:
       - name: Check a standalone copy of the golden repo (X01)
         run: bash golden/saas-b2b/tests/export/x01-standalone-copy.sh
 
-  # Tests on kind of the lite profile (spec 001, T051): E19, E22, E24 and the
-  # parts of E03 and E08 that step 6 delivers; the steps after it add theirs.
+  # Tests on kind of the lite profile (spec 001, T051, T061): E19, E22, E24
+  # and the parts of E03 and E08 that steps 6 and 7 deliver; the steps after
+  # them add theirs.
   # kind and kubectl come checked against their SHA-256 (ADR-004, condition
   # 5; research RS-18), Task from tests/tools/install.sh. The standard
   # profile is refused until step 12, hence PROFILE=lite (tasks.md, gap 14).
@@ -113,13 +132,6 @@ jobs:
     name: e2e-lite
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    env:
-      # renovate: datasource=github-releases depName=kubernetes/kubernetes
-      KUBECTL_VERSION: v1.36.6
-      # SHA-256 of kubectl linux/amd64, from kubectl.sha256 of the release
-      # (research RS-18). No manager updates it: a PR of Renovate on
-      # KUBECTL_VERSION fails here until the new sum is written by hand.
-      KUBECTL_SHA256: 29818b6729dc9262b692307470d0558d027725e738be5dd47c760261868a2634
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:

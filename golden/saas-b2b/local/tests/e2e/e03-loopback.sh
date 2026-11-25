@@ -1,16 +1,32 @@
 #!/usr/bin/env bash
 # control: E03
-# carries: FR-003; ADR-004, condition 1; ADR-011, condition 2; R-34
+# carries: FR-002, FR-003; ADR-004, condition 1; ADR-006, condition 3; ADR-011, conditions 1 and 2; R-34
 #
-# Part of E03 that step 6 can check (tasks.md, gap 2): what the cluster and
-# the mirror publish. Step 7 adds the two host ports of the gateway (T056).
+# Part of E03 that steps 6 and 7 can check (tasks.md, gaps 2, 20 and 21):
 # - every port that a node of the cluster publishes listens on 127.0.0.1,
 #   in the bindings of the engine and in the listening sockets of the
 #   machine (ss on Linux, lsof on macOS): nothing on 0.0.0.0, [::] or *;
+#   the two host ports of the gateway are among them (T056);
 # - the mirror publishes no port, and joins the network kind alone: it has
 #   no authentication (R-34);
 # - the engine reports the hardening of the mirror: CapDrop ALL, no CapAdd,
-#   ReadonlyRootfs, SecurityOpt no-new-privileges, not privileged.
+#   ReadonlyRootfs, SecurityOpt no-new-privileges, not privileged;
+# - the gateway answers on 127.0.0.1 (FR-002). Until step 8 applies the
+#   application layer in task up (T070), E03 applies the common overlay
+#   k8s/overlays/local itself, then removes it. Once the Gateway is
+#   Programmed, GET / and GET /api/healthz on the HTTP port must get an
+#   HTTP answer other than 404, the answer of Envoy when no route matches:
+#   the HTTPRoutes match. Their Services arrive with step 9, and Gateway API
+#   wants a 500 meanwhile (research RS-02);
+# - the node pulled the image of the proxy through the mirror: the log of
+#   zot shows a GET in 200 of its manifest by digest, with ns=docker.io
+#   (tasks.md, gap 20; ADR-011, condition 1). The proxy runs from the first
+#   Gateway on: E03 expects a node that has not pulled it yet, as run.sh
+#   gives it.
+# - the namespace envoy-gateway-system enforces Pod Security (restricted or
+#   baseline) and Pod Security refused none of its pods.
+# What a pod reaches of the mirror needs an image with a shell: it waits for
+# the Postgres image of step 8 (tasks.md, gaps 21 and 30).
 set -uo pipefail
 # shellcheck disable=SC1091 # lib/e2e.sh is checked on its own
 . "$(dirname -- "${BASH_SOURCE[0]}")/lib/e2e.sh"
@@ -37,6 +53,12 @@ for node in $nodes; do
       *) fail "the node $node publishes $binding, not on 127.0.0.1" ;;
     esac
   done
+done
+for port in "$E2E_GATEWAY_HTTP_PORT" "$E2E_GATEWAY_HTTPS_PORT"; do
+  case "$host_ports " in
+    *" $port "*) ;;
+    *) fail "no node publishes the host port $port of the gateway on 127.0.0.1" ;;
+  esac
 done
 
 # The listening sockets of each published port.
@@ -103,5 +125,96 @@ security_opt="$(inspect_mirror '{{json .HostConfig.SecurityOpt}}')"
 [ "$security_opt" = '["no-new-privileges=true"]' ] || fail "the mirror has SecurityOpt $security_opt, [\"no-new-privileges=true\"] expected"
 privileged="$(inspect_mirror '{{.HostConfig.Privileged}}')"
 [ "$privileged" = false ] || fail "the mirror runs privileged (Privileged=$privileged)"
+
+# The gateway, end to end, on the HTTP port. The Gateway waits for the proxy,
+# whose image the node pulls through the mirror, from Docker Hub on a new
+# mirror volume.
+readonly GATEWAY_WAIT_SECONDS=300
+readonly ANSWER_SECONDS=60
+readonly ANSWER_PAUSE_SECONDS=2
+readonly READ_SECONDS=5
+readonly PROXY_REPOSITORY="envoyproxy/envoy"
+overlay="$E2E_ROOT/k8s/overlays/local"
+
+applied=no
+remove_overlay() {
+  if [ "$applied" = yes ]; then
+    kube_e2e delete -k "$overlay" --ignore-not-found --wait=false >/dev/null 2>&1 ||
+      printf 'E03: could not delete the objects of k8s/overlays/local.\n'
+  fi
+}
+trap remove_overlay EXIT
+
+if kube_e2e apply -k "$overlay" >/dev/null; then
+  applied=yes
+else
+  fail "kubectl apply -k k8s/overlays/local failed"
+  e2e_finish
+fi
+if ! kube_e2e -n "$E2E_APP_NAMESPACE" wait --for=condition=Programmed \
+  --timeout="${GATEWAY_WAIT_SECONDS}s" "gateway/$E2E_GATEWAY" >/dev/null; then
+  fail "the Gateway $E2E_GATEWAY is not Programmed within $GATEWAY_WAIT_SECONDS s"
+  kube_e2e -n "$E2E_APP_NAMESPACE" get gateway "$E2E_GATEWAY" --output yaml || :
+  e2e_finish
+fi
+
+# Pod Security on the namespace of Envoy Gateway: the label is on the live
+# namespace (restricted or baseline), and no pod of the controller, of certgen
+# or of the proxy was refused for it, the Gateway being Programmed.
+readonly CONTROLLER_NAMESPACE="envoy-gateway-system"
+pod_security="$(kube_e2e get namespace "$CONTROLLER_NAMESPACE" \
+  --output 'jsonpath={.metadata.labels.pod-security\.kubernetes\.io/enforce}' 2>/dev/null)"
+case "$pod_security" in
+  restricted | baseline) printf 'note: %s enforces Pod Security %s.\n' "$CONTROLLER_NAMESPACE" "$pod_security" ;;
+  *) fail "the namespace $CONTROLLER_NAMESPACE has no pod-security.kubernetes.io/enforce of restricted or baseline (found \"$pod_security\")" ;;
+esac
+refused="$(kube_e2e -n "$CONTROLLER_NAMESPACE" get events --field-selector reason=FailedCreate \
+  --output 'jsonpath={range .items[*]}{.message}{"\n"}{end}' 2>/dev/null | grep -F 'violates PodSecurity' || true)"
+if [ -n "$refused" ]; then
+  fail "Pod Security refused a pod of $CONTROLLER_NAMESPACE: $refused"
+fi
+
+# http_status PORT PATH: the status code that GET PATH gets on
+# 127.0.0.1:PORT, read by bash itself through /dev/tcp; fails without an
+# HTTP answer.
+http_status() {
+  local line
+  line="$(
+    exec 3<>"/dev/tcp/127.0.0.1/$1" || exit 1
+    printf 'GET %s HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n' "$2" >&3
+    IFS= read -r -t "$READ_SECONDS" first <&3 || exit 1
+    printf '%s' "$first"
+  )" 2>/dev/null || return 1
+  [[ $line =~ ^HTTP/1\.[01]\ ([0-9][0-9][0-9]) ]] || return 1
+  printf '%s' "${BASH_REMATCH[1]}"
+}
+
+for path in / /api/healthz; do
+  waited=0
+  while :; do
+    code="$(http_status "$E2E_GATEWAY_HTTP_PORT" "$path")" || code=""
+    case "$code" in
+      "" | 404) ;;
+      *) break ;;
+    esac
+    [ "$waited" -lt "$ANSWER_SECONDS" ] || break
+    sleep "$ANSWER_PAUSE_SECONDS"
+    waited=$((waited + ANSWER_PAUSE_SECONDS))
+  done
+  case "$code" in
+    "") fail "no HTTP answer on 127.0.0.1:$E2E_GATEWAY_HTTP_PORT$path within $ANSWER_SECONDS s" ;;
+    404) fail "127.0.0.1:$E2E_GATEWAY_HTTP_PORT$path answers 404: no HTTPRoute matches it" ;;
+    *) printf 'note: 127.0.0.1:%s%s answers %s through the gateway.\n' "$E2E_GATEWAY_HTTP_PORT" "$path" "$code" ;;
+  esac
+done
+
+# The log of zot: one JSON line per request, with method, path and
+# statusCode (zot v2.1.23, pkg/api/session.go, lines 128 to 136).
+pulls="$(docker logs "$E2E_MIRROR" 2>&1 | grep -F '"method":"GET"' |
+  grep -F "\"path\":\"/v2/$PROXY_REPOSITORY/manifests/sha256:" | grep -F 'ns=docker.io' |
+  grep -F '"statusCode":200' || true)"
+if [ -z "$pulls" ]; then
+  fail "the log of the mirror shows no GET in 200 of a manifest of $PROXY_REPOSITORY with ns=docker.io: the node did not pull the proxy through the mirror"
+fi
 
 e2e_finish

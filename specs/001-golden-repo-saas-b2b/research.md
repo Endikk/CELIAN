@@ -18,6 +18,26 @@ Alternatives : `blueprints/saas-b2b/{common,local,gcp}` reproduit dans le golden
 
 Sources : constitution 1.2.0, principe II ; ADR-006, « Répartition par couche » ; ADR-010, « Répartition par couche » et condition 1 ; CLAUDE.md, arborescence.
 
+### Relevé du 2026-11-25 : composants de Kustomize (T052, étape 7)
+
+Fait par [OPS]. Guide de Kustomize, code de son API et `go.mod` de Kubernetes lus par `gh api` ou WebFetch, puis un essai sur le poste.
+
+Les composants tiennent, et la composition par ressources n'est pas nécessaire. Le guide des composants donne leur forme : un dossier dont le `kustomization.yaml` déclare `apiVersion: kustomize.config.k8s.io/v1alpha1` et `kind: Component`, cité par le champ `components:` d'un overlay ; « As of `v3.7.0` Kustomize supports a special type of kustomization ». Ses exemples montrent un composant qui génère des objets et corrige ceux de la base, ce que fera le composant de cible. Le code de l'API au tag `api/v0.21.1` fixe ces deux valeurs (`api/types/kustomization.go`, lignes 20 et 21), le champ `Components` (ligne 127), et refuse un autre `apiVersion` pour un composant (ligne 331).
+
+Version embarquée : le `go.mod` de Kubernetes v1.36.6, le kubectl de la CI, comme celui de v1.37.1, le kubectl du poste, requiert `sigs.k8s.io/kustomize/kustomize/v5 v5.8.1` et `sigs.k8s.io/kustomize/api v0.21.1` ; `kubectl version --client` du poste affiche « Kustomize Version: v5.8.1 ».
+
+Essai sur le poste, hors du dépôt, avec ce kubectl : une base qui déclare une Gateway et son `namespace`, un overlay qui la reprend, un composant qui remplace `spec.gatewayClassName` par un correctif JSON et génère un ConfigMap, et une composition `resources: [../overlay]` plus `components: [../component]`. `kubectl kustomize` rend la Gateway corrigée et le ConfigMap. Deux points pour l'étape 8 : le ConfigMap généré porte un suffixe de hachage, et il ne reçoit pas le `namespace` de la base, posé dans un autre dossier ; le composant ou la composition doit donc nommer le namespace, et `app-config` désactiver le suffixe s'il doit garder son nom.
+
+Effet : l'étape 7 écrit `k8s/base/` et `k8s/overlays/local/`, sans composant. L'étape 8 écrit `local/k8s/component/` en composant et `local/k8s/lite/` en composition (T070).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://kubectl.docs.kubernetes.io/guides/config_management/components/> | 2026-11-25 | Forme d'un composant, champ `components:`, prise en charge depuis Kustomize 3.7.0 |
+| <https://github.com/kubernetes-sigs/kustomize/blob/api/v0.21.1/api/types/kustomization.go> | 2026-11-25 | Lignes 20, 21, 127 et 331 : `ComponentVersion`, `ComponentKind`, `Components`, `apiVersion` exigé |
+| <https://github.com/kubernetes/kubernetes/blob/v1.36.6/go.mod> | 2026-11-25 | Kustomize v5.8.1 et son API v0.21.1, dans kubectl v1.36.6 |
+| <https://github.com/kubernetes/kubernetes/blob/v1.37.1/go.mod> | 2026-11-25 | Les mêmes versions dans kubectl v1.37.1 |
+| `kubectl kustomize`, kubectl v1.37.1 sur le poste | 2026-11-25 | Composant appliqué au-dessus d'un overlay ; suffixe et namespace du ConfigMap généré |
+
 ## RS-02. Routage sous une seule origine
 
 Décision : une Gateway à deux écouteurs (HTTP et HTTPS) et deux HTTPRoute. Le préfixe `/api` va à l'API, `/` au front. L'API sert ses routes sous `/api` elle-même. Le front appelle des chemins relatifs.
@@ -27,6 +47,81 @@ Pourquoi : une seule origine supprime CORS et toute configuration d'adresse dans
 Alternatives : deux noms d'hôte (`api.` et front), écarté parce que la résolution de noms locaux dépend du système du poste et n'a pas été relevée ; deux Gateway, refusé par l'ADR-005 (une seule Gateway, et chacune crée un équilibreur facturé sur GKE).
 
 Sources : ADR-005, décision, condition 5 et réserves de [FINOPS] ; `tests/bench/bench-004-gateway.sh`, lignes 400 à 470.
+
+### Relevé du 2026-11-25 : préfixe de chemin, chez Gateway API et chez GKE (T053, étape 7)
+
+Fait par [OPS]. Code de Gateway API au tag v1.7.0, lu par `gh api`, et page des capacités des GatewayClass de GKE, lue par WebFetch.
+
+Cœur de Gateway API. `apis/v1/httproute_types.go` au tag v1.7.0 range `PathPrefix` dans le cœur : « "Exact" - Core », « "PathPrefix" - Core », « "RegularExpression" - Implementation Specific » (lignes 504 à 506), et le champ `path` de la correspondance porte « Support: Core (Exact, PathPrefix) » (ligne 568), `PathPrefix` par défaut. La correspondance se fait élément par élément : « the paths `/abc`, `/abc/`, and `/abc/def` would all match the prefix `/abc`, but the path `/abcd` would not » (lignes 529 à 536). `/api` ne prend donc pas `/apiary`, et `/` prend tout le reste. Une règle dont toutes les `backendRefs` sont invalides, un Service absent par exemple, répond 500 (lignes 279 à 290) ; E03 s'en sert à l'étape 7, avant que les Services existent. `allowedRoutes` d'un écouteur est du cœur, et vaut par défaut `{namespaces: {from: Same}}` (`apis/v1/gateway_types.go`, lignes 480 et 481).
+
+GKE. La page des capacités donne pour `gke-l7-global-external-managed`, champ `spec.rules` des HTTPRoute, `path.type` « Exact, PathPrefix, RegularExpression », et « Prefix, exact match or regular expression » pour le routage par hôte et chemin. Elle donne Gateway API 1.5.0 à partir de GKE 1.35.2-gke.1842000, comme l'ADR-005. La page n'affiche pas de date de mise à jour.
+
+Conclusion : la HTTPRoute `api` sur le préfixe `/api` et la HTTPRoute `front` sur `/` n'emploient que des champs du cœur que GKE sert. S07 et S08 le reverront sur le rendu `gcp` (étapes 9 et 14).
+
+Namespace de l'application (T060). La page de Pod Security Admission donne le gabarit `pod-security.kubernetes.io/<MODE>: <LEVEL>`, `<MODE>` parmi `enforce`, `audit` et `warn`, `<LEVEL>` parmi `privileged`, `baseline` et `restricted` ; l'étiquette `<MODE>-version` est facultative, et prend une mineure de Kubernetes ou `latest`. `k8s/base/namespace.yaml` pose `pod-security.kubernetes.io/enforce: restricted`, sans version.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/kubernetes-sigs/gateway-api/blob/v1.7.0/apis/v1/httproute_types.go> | 2026-11-25 | Lignes 504 à 506 et 568 : `PathPrefix` du cœur ; lignes 529 à 536 : élément par élément ; lignes 279 à 290 : 500 sur une `backendRef` invalide |
+| <https://github.com/kubernetes-sigs/gateway-api/blob/v1.7.0/apis/v1/gateway_types.go> | 2026-11-25 | Lignes 480 et 481 : `allowedRoutes` du cœur, `Same` par défaut |
+| <https://docs.cloud.google.com/kubernetes-engine/docs/how-to/gatewayclass-capabilities> | 2026-11-25 | `gke-l7-global-external-managed` : `Exact`, `PathPrefix`, `RegularExpression` ; Gateway API 1.5.0 à partir de 1.35.2-gke.1842000 |
+| <https://kubernetes.io/docs/concepts/security/pod-security-admission/> | 2026-11-25 | Étiquettes `pod-security.kubernetes.io/<MODE>` et `<MODE>-version`, niveaux et modes |
+
+### Relevé du 2026-11-25 : Gateway API et Envoy Gateway vendorés (T058, étape 7)
+
+Fait par [OPS]. API des releases et code d'`envoyproxy/gateway` et de `kubernetes-sigs/gateway-api`, lus par `gh api` ; API de Docker Hub, lue par WebFetch ; `docker buildx imagetools inspect`, buildx 0.37.2, en lecture seule ; Helm v4.3.2 sur le poste, la version de BENCH-004.
+
+Versions. Les valeurs du tableau « Versions et condensats » de l'ADR-005 tiennent. Envoy Gateway n'a publié aucune release 1.10.x après 1.10.0 (2026-11-06) ; la plus récente reste 1.9.4 (2026-11-17), d'une mineure antérieure. Gateway API v1.7.0 (2026-10-29, release immuable) reste la dernière. Sur Docker Hub, `tag_last_pushed` donne 2026-11-06 pour `envoyproxy/gateway:v1.10.0`, `envoyproxy/gateway-helm:v1.10.0` et `envoyproxy/gateway-crds-helm:v1.10.0`, et 2026-10-27 pour `envoyproxy/envoy:distroless-v1.40.2` : plus de 7 jours le 2026-11-25 (principe VI). CVE-2026-97054 reste sans release corrigée.
+
+CVE-2026-97054, relevé de [SECU] du 2026-11-25 : la base de Trivy la classe désormais MEDIUM (Red Hat, CVSS 5,9), et non plus HIGH comme à la rédaction de l'ADR-005. Au seuil `HIGH` de RS-23, le scan ne la relève donc plus, et l'exception que l'ADR-005 attendait n'a plus lieu d'être tant que la classe ne remonte pas. Ni l'ADR-005 ni RS-23 ne sont modifiés ici : [SECU] relit la classe au premier passage du scan (T118).
+
+Relecture [SECU] de la PR de l'étape 7, relevé du 2026-11-25 : l'étiquette `pod-security.kubernetes.io/enforce: restricted` sur `envoy-gateway-system` tient. `PROFILE=lite task test:e2e` sur kind (Docker 29.8.2, nœud v1.36.4) passe avec elle : le contrôleur, certgen et le proxy sont admis, la Gateway devient `Programmed` et E03 ne relève aucun événement `FailedCreate` « violates PodSecurity ». `baseline` n'est donc pas retenu. Les champs du réglage `watch` du contrôleur (écart 43) viennent de <https://raw.githubusercontent.com/envoyproxy/gateway/v1.10.0/api/v1alpha1/envoygateway_types.go>, lu le 2026-11-25.
+
+Sommes et condensats, relus le 2026-11-25 :
+
+| Élément | Lu | Égal à l'ADR-005 |
+| --- | --- | --- |
+| `standard-install.yaml` de v1.7.0, par `gh release download` | SHA-256 `4e2602c4cbe1afbc394d86f4ac6522e1a5263b01133bba1e40a6d1a549e753a1` | oui |
+| `gateway-helm-v1.10.0.tgz`, par `helm pull oci://docker.io/envoyproxy/gateway-helm --version v1.10.0` | SHA-256 `0f72c9050c33dbaab39b865e8cb5ed77f263720b22368eda4ce687077649e659` ; manifeste OCI `sha256:dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7`, le même que Docker Hub | oui |
+| `gateway-crds-helm-v1.10.0.tgz`, de même | SHA-256 `cc213d9059d0391d69d70bef7c041fb1c1e45270c84a65988229bd88639d0aa5` ; manifeste OCI `sha256:475c39aad3a05e3974a29fb80cfefe882b743e45e2ec0f751790ff0cb83bfa5d`, le même que Docker Hub | oui |
+| `docker.io/envoyproxy/gateway:v1.10.0` | index `sha256:c2243d43518bed91d3ed8c2db849a4b7a14ac9b96eb019f2ab104bb1ca8572b1`, linux/amd64 et linux/arm64 | oui |
+| `docker.io/envoyproxy/envoy:distroless-v1.40.2` | index `sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded`, linux/amd64 et linux/arm64 ; `DefaultEnvoyProxyImage` de `api/v1alpha1/shared_types.go` au tag v1.10.0 (ligne 30), par condensat | oui |
+
+Rendu. Méthode de `tests/bench/bench-004-gateway.sh` (lignes 226 à 246 et 620 à 633), Helm dans des dossiers temporaires (`HELM_CACHE_HOME`, `HELM_CONFIG_HOME`, `HELM_DATA_HOME`), chaque archive vérifiée avant usage :
+
+- `helm template eg-crds gateway-crds-helm-v1.10.0.tgz --set crds.envoyGateway.enabled=true --set crds.gatewayAPI.enabled=false` ;
+- `helm template eg gateway-helm-v1.10.0.tgz -n envoy-gateway-system --set crds.enabled=false --set global.images.envoyGateway.image=<image du contrôleur par condensat>`. BENCH-004 installait ce chart par `helm install` ; le golden repo en garde le rendu, que `kubectl apply` applique.
+
+Avec `--kube-version v1.36.4` ou sans, les deux rendus sont identiques octet pour octet. Le premier ne contient que 8 CRD du groupe `gateway.envoyproxy.io`, aucune de `gateway.networking.k8s.io`. Le second ne contient aucune CRD ; ses conteneurs (contrôleur, certgen) et le `shutdownManager` de sa configuration portent l'image du contrôleur par condensat. `standard-install.yaml` porte 10 CRD du groupe `gateway.networking.k8s.io`, chacune annotée `bundle-version: v1.7.0` et `channel: standard`, plus une `ValidatingAdmissionPolicy` et sa liaison.
+
+Ce que le rendu change par rapport à `helm install` :
+
+- Les objets marqués `helm.sh/hook` (comptes et droits de certgen, Job certgen, `MutatingWebhookConfiguration` de l'injecteur de topologie) sont appliqués avec les autres, dans l'ordre du fichier, où Helm les place après le reste. Le Job tourne sous un contexte du profil `restricted` et se supprime 30 s après sa fin (`ttlSecondsAfterFinished`) : chaque `task up` le recrée. `envoy-gateway certgen` ne remplace pas des certificats déjà présents sans `--overwrite`, absent par défaut (`internal/cmd/certgen.go`, lignes 60 et 117 à 137, au tag v1.10.0) : relancé, il ne change rien. Il écrit le `caBundle` de la `MutatingWebhookConfiguration`, que `kubectl apply --server-side` laisse à son gestionnaire. Le webhook a `failurePolicy: Ignore`.
+- Aucun objet `Namespace` : la couche `local` déclare `envoy-gateway-system` à part, comme `--create-namespace` le faisait.
+- La configuration du contrôleur (ConfigMap `envoy-gateway-config`) nomme `docker.io/envoyproxy/ratelimit:5ae0682e` par tag, sous `rateLimitDeployment`. Cette image ne tourne que si la limitation de débit est activée, par une clé `rateLimit` de cette configuration, absente du rendu. La condition 1 de l'ADR-005 demande de la figer « s'il active la limitation de débit » : S22 refuse le rendu si `rateLimit` apparaît sans image par condensat.
+
+EnvoyProxy. `KubernetesServiceSpec` au tag v1.10.0 (`api/v1alpha1/shared_types.go`, lignes 329 à 400) accepte `type: NodePort` et un `patch` ; un `patch` sans `type` est une fusion stratégique (lignes 591 à 600). Aucun champ ne fixe un `nodePort` : le correctif de fusion le fait, comme dans BENCH-004. La fusion se fait sur la clé `port` de la liste des ports du Service (`patchMergeKey:"port"`), et un port absent du Service s'y ajouterait sans nom, alors qu'un Service à plusieurs ports doit les nommer tous (`staging/src/k8s.io/api/core/v1/types.go` de Kubernetes v1.36.6, lignes 5988 et 6231 à 6235). Tant que la Gateway n'a que l'écouteur HTTP, l'EnvoyProxy ne corrige donc que le port 80, et le port 443 entre avec l'écouteur HTTPS (seconde PR, T074). Le drapeau `EnvoyProxyPatch` qui applique ces correctifs est actif par défaut (`api/v1alpha1/envoygateway_types.go`, lignes 195 à 201) ; la documentation de `KubernetesPatchSpec` avertit que quiconque écrit l'EnvoyProxy peut poser n'importe quel champ sur une ressource que le contrôleur applique. La GatewayClass nomme `gateway.envoyproxy.io/gatewayclass-controller`, le `controllerName` de la configuration rendue.
+
+Ce que les hooks du dépôt refusent. Le rendu des CRD fait 2,86 Mo et contient un tiret cadratin dans la description d'une CRD (`clienttrafficpolicies.gateway.envoyproxy.io`) ; `standard-install.yaml` a deux lignes qui finissent par une espace. Ce sont des octets de tiers, que `SHA256SUMS` vérifie : `local/vendor/` sort des hooks qui réécrivent, de `check-added-large-files` et de `no-em-dash`, à la racine de CELIAN et dans le golden repo (T057).
+
+Suivi par Renovate. Renovate cherche les charts Helm d'un registre OCI par la source `docker` (`lib/modules/manager/helmv3/readme.md`, ligne 85, au tag 44.247.1). Les trois références, contrôleur et charts, sont écrites par tag et condensat dans `local/tasks/local.yml`, sous un commentaire `# renovate:` que lit le gestionnaire des images de la couche `local`, et entrent dans le groupe « Envoy Gateway » des deux `renovate.json`. Aucun gestionnaire nouveau, donc S23 ne change pas. Aucun Renovate n'a tourné sur ces lignes.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://api.github.com/repos/envoyproxy/gateway/releases?per_page=10> | 2026-11-25 | Aucune 1.10.x après 1.10.0 ; 1.9.4 la plus récente |
+| <https://api.github.com/repos/kubernetes-sigs/gateway-api/releases?per_page=8> | 2026-11-25 | v1.7.0 dernière release, immuable |
+| <https://hub.docker.com/v2/repositories/envoyproxy/gateway/tags/v1.10.0> | 2026-11-25 | Condensat `c2243d43`, poussé le 2026-11-06 |
+| <https://hub.docker.com/v2/repositories/envoyproxy/gateway-helm/tags/v1.10.0> | 2026-11-25 | Condensat `dcb82a14`, poussé le 2026-11-06 |
+| <https://hub.docker.com/v2/repositories/envoyproxy/gateway-crds-helm/tags/v1.10.0> | 2026-11-25 | Condensat `475c39aa`, poussé le 2026-11-06 |
+| <https://hub.docker.com/v2/repositories/envoyproxy/envoy/tags/distroless-v1.40.2> | 2026-11-25 | Condensat `09ca6f21`, poussé le 2026-10-27 |
+| `docker buildx imagetools inspect` sur les deux images | 2026-11-25 | Index et plateformes |
+| <https://github.com/envoyproxy/gateway/blob/v1.10.0/api/v1alpha1/shared_types.go> | 2026-11-25 | Ligne 30 : image du proxy ; ligne 38 : `ratelimit` par condensat dans le binaire ; lignes 329 à 400 et 591 à 600 : Service et correctif |
+| <https://github.com/envoyproxy/gateway/blob/v1.10.0/api/v1alpha1/envoyproxy_types.go> | 2026-11-25 | Ligne 676 : `envoyService` |
+| <https://github.com/envoyproxy/gateway/blob/v1.10.0/api/v1alpha1/envoygateway_types.go> | 2026-11-25 | Lignes 195 à 201 : `EnvoyProxyPatch` actif par défaut |
+| <https://github.com/envoyproxy/gateway/blob/v1.10.0/internal/cmd/certgen.go> | 2026-11-25 | Lignes 60 et 117 à 172 : pas de remplacement sans `--overwrite` ; `caBundle` du webhook |
+| Archive `gateway-helm-v1.10.0.tgz`, `values.yaml` et `templates/` | 2026-11-25 | `global.images.ratelimit.image` par tag ; hooks ; webhook |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/modules/manager/helmv3/readme.md> | 2026-11-25 | Ligne 85 : charts OCI par la source `docker` |
+| <https://github.com/kubernetes/kubernetes/blob/v1.36.6/staging/src/k8s.io/api/core/v1/types.go> | 2026-11-25 | Ligne 5988 : ports d'un Service fusionnés sur `port` ; lignes 6231 à 6235 : nom obligatoire au-delà d'un port |
 
 ## RS-03. Exemple applicatif
 
@@ -898,6 +993,22 @@ Décision : la démo de l'étape 17 reprend la méthode des scripts de BENCH pou
 Décision : deux ports de l'hôte, HTTP et HTTPS, en `listenAddress: "127.0.0.1"`, valeurs fixées à l'étape 7 et vérifiées libres avant toute création (P04). Ils se fixent à la création du cluster : la configuration les déclare d'emblée.
 
 Sources : ADR-004, condition 1 et conséquences ; ADR-005, portée ; spec, cas limites.
+
+### Relevé du 2026-11-25 : valeurs des ports (T059, étape 7)
+
+Fait par [OPS]. Code de kind au tag v0.33.0 lu par `gh api`, page des Services de Kubernetes lue par WebFetch.
+
+Valeurs retenues par [OPS] : 18080 pour HTTP et 18443 pour HTTPS sur l'hôte, en 127.0.0.1 ; 30080 et 30443 pour les NodePort du proxy, dans le nœud. Ce sont les ports que BENCH-004 a mesurés (M7, M8), et ceux que P04 essaie déjà. Un port pris sur le poste arrête `task up` avant toute création (P04). Les valeurs vivent dans `local/kind/cluster.yaml` et sous `vars:` dans `local/tasks/local.yml` ; S05 les garde d'accord, et vérifie que chaque `nodePort` de l'EnvoyProxy est le `containerPort` d'un `extraPortMappings` (écart 10 de tasks.md).
+
+Champs de kind v0.33.0 : `containerPort`, `hostPort`, `listenAddress` et `protocol` d'un `extraPortMappings` (`pkg/apis/config/v1alpha4/types.go`, lignes 278 à 291). NodePort : « the Kubernetes control plane allocates a port from a range specified by `--service-node-port-range` flag (default: 30000-32767) », et un `nodePort` demandé doit tenir dans cette plage ; deux Services ne peuvent pas le prendre ensemble (page des Services, « Choosing your own port »). Le cluster de kind garde la plage par défaut.
+
+Un environnement repris tient lui-même ses ports : au second `task up`, les deux ports répondent, et la sonde de P04 les dirait pris. Les contrôles préalables lisent donc d'abord les nœuds du cluster du projet (`docker container ls --all --filter label=io.x-k8s.kind.cluster=saas-b2b`, étiquette relevée en RS-13), puis leurs `HostConfig.PortBindings`. Sans nœud, chaque port doit être libre ; avec un nœud, chaque port doit y être publié en 127.0.0.1, ou `task up` s'arrête et demande `task down` : un cluster créé avant l'étape 7 n'a pas ces ports, et `local/scripts/cluster.sh` ne fait que réutiliser un cluster existant.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/kubernetes-sigs/kind/blob/v0.33.0/pkg/apis/config/v1alpha4/types.go> | 2026-11-25 | Lignes 278 à 291 : champs d'un `extraPortMappings` |
+| <https://kubernetes.io/docs/concepts/services-networking/service/> | 2026-11-25 | Plage 30000-32767 par défaut ; `nodePort` choisi dans la plage, collisions à la charge de qui le choisit |
+| `tests/bench/bench-004-gateway.sh`, lignes 108 à 111 | 2026-11-25 | 18080, 18443, 30080 et 30443 mesurés par BENCH-004 |
 
 ## RS-21. Kubeconfig et contexte
 

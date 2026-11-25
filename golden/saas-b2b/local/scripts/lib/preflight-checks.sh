@@ -7,14 +7,18 @@
 #   2. versions: kind exactly, kubectl within one minor of the cluster,
 #      Docker Engine 28.0.0 or later on Linux;
 #   3. the memory that the engine declares picks the profile;
-#   4. the host ports are free on 127.0.0.1.
+#   4. the host ports are free on 127.0.0.1, unless the kind cluster of the
+#      project exists: its node then holds them, and must publish each on
+#      127.0.0.1 (research RS-20).
 # The inputs, PROFILE and the ports, are validated first, before any call.
 #
 # It only reads: "docker context inspect" (the local store of contexts),
 # "docker info", "kind version", "kubectl version --client" (which reads no
-# kubeconfig), "uname -s", platform.yaml, and a TCP connect to each port.
-# It creates nothing and touches no kubeconfig. The source of each command
-# and of each output format is in research RS-08 of spec 001.
+# kubeconfig), "uname -s", platform.yaml, "docker container ls" and "docker
+# container inspect" on the nodes of the project, and a TCP connect to each
+# port. It creates nothing and touches no kubeconfig. The source of each
+# command and of each output format is in research RS-08 and RS-20 of spec
+# 001.
 #
 # Library of local/scripts/preflight.sh, which sources it, then runs main
 # with no condition: run or sourced, the script checks. The preflight tests
@@ -77,9 +81,16 @@ esac
 # the path would come out on two lines.
 PLATFORM_FILE="$(CDPATH='' cd -- "$preflight_lib_dir/../../.." && pwd)/platform.yaml"
 readonly PLATFORM_FILE
+# CLUSTER_NAME and NODE_LABEL, the names of the kind cluster of the project.
+# shellcheck disable=SC1091 # local-env.sh is checked on its own
+. "$preflight_lib_dir/local-env.sh"
+# The port bindings of a node, "<address>:<port> " each, from the API of the
+# engine (HostConfig.PortBindings, research RS-13), as E03 reads them.
+# shellcheck disable=SC2016 # a docker template, not a shell expansion
+readonly NODE_PORTS_FORMAT='{{range $port, $list := .HostConfig.PortBindings}}{{range $list}}{{.HostIp}}:{{.HostPort}} {{end}}{{end}}'
 
-# Set by read_engine, cluster_minor, choose_profile, scan_output and
-# port_in_use.
+# Set by read_engine, cluster_minor, choose_profile, scan_output,
+# port_in_use and read_project_nodes.
 ENGINE_VERSION_FOUND=""
 ENGINE_MEMORY=0
 CLUSTER_MAJOR=""
@@ -87,6 +98,7 @@ CLUSTER_MINOR=""
 PROFILE_RETAINED=""
 SCAN_MESSAGE=""
 PORT_PROBE_MESSAGE=""
+PROJECT_NODES=""
 
 refuse() {
   printf 'task up: %s Nothing was created.\n' "$1" >&2
@@ -410,9 +422,70 @@ port_in_use() {
   return 2
 }
 
+# read_project_nodes: sets PROJECT_NODES to the names of the node containers
+# of the kind cluster of the project, one per line, empty when it has none.
+# kind finds its clusters by the same label. Called in the shell of the
+# checks, never in a command substitution, so that a refusal ends it.
+read_project_nodes() {
+  local out status=0
+  out="$(run_bounded "$DOCKER_TIMEOUT_SECONDS" \
+    docker container ls --all --filter "label=$NODE_LABEL" --format '{{.Names}}' 2>&1)" || status=$?
+  if [ "$status" -eq 124 ]; then
+    refuse "the container engine gave no answer to \"docker container ls\" within $DOCKER_TIMEOUT_SECONDS s. Restart the engine, then run task up again ($README_REF)."
+  fi
+  if [ "$status" -ne 0 ]; then
+    refuse "the nodes of the cluster $CLUSTER_NAME cannot be listed with \"docker container ls\": $(printable "${out%%$'\n'*}"). Check the container engine, then run task up again ($README_REF)."
+  fi
+  PROJECT_NODES="$out"
+}
+
+# check_cluster_ports NODES PORT...: the cluster of the project exists, so
+# its node holds the host ports, which a probe would find in use. Each must
+# be published on LOOPBACK by a node; a cluster created before a port
+# joined local/kind/cluster.yaml lacks it, and only a new cluster gets it.
+check_cluster_ports() {
+  local nodes="$1" node out status published="" port missing=""
+  shift
+  for node in $nodes; do
+    status=0
+    out="$(run_bounded "$DOCKER_TIMEOUT_SECONDS" \
+      docker container inspect --format "$NODE_PORTS_FORMAT" "$node" 2>&1)" || status=$?
+    if [ "$status" -ne 0 ]; then
+      refuse "the node $(printable "$node") of the cluster $CLUSTER_NAME cannot be read with \"docker container inspect\": $(printable "${out%%$'\n'*}"). Run task down, then task up again."
+    fi
+    published="$published ${out//$'\n'/ }"
+  done
+  for port in "$@"; do
+    case " $published " in
+      *" $LOOPBACK:$port "*) ;;
+      *) missing="$missing $port" ;;
+    esac
+  done
+  missing="${missing# }"
+  case "$missing" in
+    "") ;;
+    *" "*) refuse "the cluster $CLUSTER_NAME exists, but does not publish host ports $missing on $LOOPBACK: it was created before them. Run task down, then task up again." ;;
+    *) refuse "the cluster $CLUSTER_NAME exists, but does not publish host port $missing on $LOOPBACK: it was created before it. Run task down, then task up again." ;;
+  esac
+  printf 'Host ports %s: held by the cluster %s on %s, which task up reuses.\n' "$*" "$CLUSTER_NAME" "$LOOPBACK"
+}
+
+# check_ports PORT...: with no port, nothing to read. With a cluster of the
+# project, its node must hold every port; without one, every port must be
+# free.
+check_ports() {
+  [ "$#" -gt 0 ] || return 0
+  read_project_nodes
+  if [ -n "$PROJECT_NODES" ]; then
+    check_cluster_ports "$PROJECT_NODES" "$@"
+    return 0
+  fi
+  probe_ports "$@"
+}
+
 # The result of port_in_use is read through "|| status=$?", never through
 # "if": an "if" would take 2, a probe that tells neither, for a free port.
-check_ports() {
+probe_ports() {
   local port status taken="" unknown="" message=""
   for port in "$@"; do
     status=0
