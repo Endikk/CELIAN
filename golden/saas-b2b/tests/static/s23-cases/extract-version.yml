@@ -1,0 +1,6 @@
+# Failing case of S23: extractVersion in a renovate comment.
+# expect: sets extractVersion
+
+env:
+  # renovate: datasource=github-releases depName=helm/helm extractVersion=^evil-(?<version>.*)$
+  EXAMPLE_VERSION: "1.0.0"

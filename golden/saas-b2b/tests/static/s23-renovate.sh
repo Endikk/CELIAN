@@ -50,3 +50,10 @@ done
 # manager itself).
 bash tests/tools/check-renovate-comments.sh tests/tools/install.sh
 bash tests/tools/check-renovate-comments.sh local/scripts/lib/preflight-checks.sh
+
+# The "# renovate:" comments of the workflows, which the preset
+# customManagers:githubActionsVersions reads and this control does not see:
+# no packageName, lookupName, registryUrl, extractVersion or versioning, and
+# only the datasources in use. The failing cases are in tests/static/s23-cases/.
+bash tests/tools/check-renovate-workflow-comments.sh .github/workflows/*.yml
+bash tests/tools/check-renovate-workflow-comments.sh --cases tests/static/s23-cases
