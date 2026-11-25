@@ -97,4 +97,49 @@ run_mirror_case "unknown command: refused" -- start "$MIRROR_TEST_IMAGE"
 expect_refused
 expect_no_change
 
+# mirror.sh check: the same checks as up, before the cluster exists, so task up
+# refuses at once and not after 30 to 75 s of cluster creation. It creates
+# nothing, removes nothing, and leaves the network to up: kind creates it.
+run_mirror_case "check, nothing in the way: passes before the network exists" FAKE_KIND_NETWORK=absent \
+  -- check "$MIRROR_TEST_IMAGE"
+expect_ok
+expect_no_change
+expect_not_called "docker network"
+
+run_mirror_case "check, old mirror of the project: passes, removes nothing" FAKE_MIRROR_CONTAINER=ours \
+  -- check "$MIRROR_TEST_IMAGE"
+expect_ok
+expect_no_change
+
+run_mirror_case "check, foreign container: refused before the cluster, network not read" \
+  FAKE_MIRROR_CONTAINER=foreign-label FAKE_KIND_NETWORK=absent -- check "$MIRROR_TEST_IMAGE"
+expect_refused
+expect_output "is not the mirror of this project"
+expect_output "Nothing was created"
+expect_no_change
+expect_not_called "docker network"
+
+run_mirror_case "check, container of another image: refused" FAKE_MIRROR_CONTAINER=foreign-image \
+  -- check "$MIRROR_TEST_IMAGE"
+expect_refused
+expect_output "is not the mirror of this project"
+expect_no_change
+
+run_mirror_case "check, volume without the label: refused" FAKE_MIRROR_VOLUME=foreign \
+  -- check "$MIRROR_TEST_IMAGE"
+expect_refused
+expect_output "volume saas-b2b-mirror"
+expect_no_change
+
+run_mirror_case "check, configuration missing: refused" --without local/mirror/zot/config.json \
+  -- check "$MIRROR_TEST_IMAGE"
+expect_refused
+expect_output "local/mirror/zot/config.json"
+expect_no_change
+
+run_mirror_case "check, image by tag only: refused" -- check "ghcr.io/project-zot/zot:v2.1.23"
+expect_refused
+expect_output "by tag and digest"
+expect_no_change
+
 finish

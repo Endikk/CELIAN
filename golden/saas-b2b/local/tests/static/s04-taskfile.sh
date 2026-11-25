@@ -55,6 +55,7 @@ printf '%s\n' \
   'docker volume create --label a=b "$VOLUME"' \
   'kind delete cluster --name "$CLUSTER_NAME" \' \
   '  --kubeconfig "$KUBECONFIG_FILE"' \
+  'kind delete clusters --all' \
   '# docker volume rm in a comment' \
   'docker volume inspect --format x "$VOLUME"' \
   'echo "run task down first"' >"$samples/sample.sh"
@@ -62,7 +63,8 @@ expected="$(printf '%s\n' \
   "$samples/sample.sh: docker run" \
   "$samples/sample.sh: docker container rm" \
   "$samples/sample.sh: docker volume create" \
-  "$samples/sample.sh: kind delete cluster")"
+  "$samples/sample.sh: kind delete cluster" \
+  "$samples/sample.sh: kind delete clusters")"
 got="$(found_commands "$samples/sample.sh")"
 if [ "$got" != "$expected" ]; then
   echo "the detection of the changing commands found, on its samples:" >&2

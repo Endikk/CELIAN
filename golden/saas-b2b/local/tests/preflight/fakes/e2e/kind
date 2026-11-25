@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# Simulated kind CLI of P07, the guard of local/tests/e2e/run.sh. It answers
+# "kind get clusters" and logs each call on a line of FAKE_LOG; any other call
+# is logged as UNEXPECTED and fails.
+# FAKE_E2E_CLUSTER  present: the cluster saas-b2b and another one; absent
+#                   (default): none, kind says so on stderr; neighbour: only
+#                   saas-b2b-other; broken: kind cannot reach the engine
+set -euo pipefail
+
+if [ -n "${FAKE_LOG:-}" ]; then
+  printf "kind %s\n" "$*" >>"$FAKE_LOG"
+fi
+
+if [ "$*" != "get clusters" ]; then
+  if [ -n "${FAKE_LOG:-}" ]; then
+    printf "UNEXPECTED kind %s\n" "$*" >>"$FAKE_LOG"
+  fi
+  printf "fake kind: unexpected call: kind %s\n" "$*" >&2
+  exit 99
+fi
+case "${FAKE_E2E_CLUSTER:-absent}" in
+  present) printf "other\nsaas-b2b\n" ;;
+  absent) printf "No kind clusters found.\n" >&2 ;;
+  neighbour) printf "saas-b2b-other\n" ;;
+  broken)
+    printf "ERROR: failed to list clusters: command \"docker ps -a\" failed\n" >&2
+    exit 1
+    ;;
+esac

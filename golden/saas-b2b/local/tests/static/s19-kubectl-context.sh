@@ -79,6 +79,10 @@ printf '%s\n' \
   'kubectl --kubeconfig "$KUBECONFIG_FILE" --context "$KUBE_CONTEXT" port-forward --address 0.0.0.0,127.0.0.1 svc/api 8080:80' \
   'kind create cluster --name "$CLUSTER_NAME" --config local/kind/cluster.yaml' \
   'kind delete cluster --kubeconfig "$KUBECONFIG_FILE"' \
+  'kind delete clusters --all' \
+  'docker --context prod rm x' \
+  'docker -H tcp://192.0.2.1:2375 run x' \
+  'docker --host=tcp://192.0.2.1:2375 volume rm x' \
   'export KUBECONFIG=/tmp/x' \
   '  - kubectl apply -k k8s/overlays/local' >"$samples/bad.sh"
 printf '%s\n' \
@@ -90,10 +94,14 @@ printf '%s\n' \
   'kind create cluster --name "$CLUSTER_NAME" --config local/kind/cluster.yaml --kubeconfig "$KUBECONFIG_FILE"' \
   'echo "kubectl.kubernetes.io/last-applied-configuration"' \
   'if ! command -v kubectl >/dev/null 2>&1; then' \
-  'refuse "kubectl is not installed: install kubectl 1.36 (README.md)."' >"$samples/good.sh"
+  'refuse "kubectl is not installed: install kubectl 1.36 (README.md)."' \
+  'docker info --format "{{.MemTotal}}"' \
+  'docker context inspect --format "{{.Name}}"' \
+  'if ! command -v docker >/dev/null 2>&1; then' \
+  'echo "docker --context is refused"' >"$samples/good.sh"
 bad_found="$(check_file "$samples/bad.sh" | wc -l | tr -d ' ')"
-if [ "$bad_found" != 9 ]; then
-  echo "the rule caught $bad_found of the 9 bad samples:" >&2
+if [ "$bad_found" != 14 ]; then
+  echo "the rule caught $bad_found of the 14 findings of the 13 bad samples:" >&2
   check_file "$samples/bad.sh" >&2
   exit 1
 fi

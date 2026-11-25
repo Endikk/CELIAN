@@ -6,7 +6,7 @@
 # a name close to the mirror's, or with the label of the project under
 # another name; and a container that holds the very name of the mirror
 # without the label of the project is left alone by task down and makes
-# task up stop, without removing it.
+# task up stop before it creates the cluster, without removing it.
 #
 # The decoys are created by docker create, never started, on the network
 # none, from the zot image that task up already pulled (--pull never): no
@@ -67,6 +67,11 @@ if [ "$STATUS" -eq 0 ]; then
 fi
 container_exists "$E2E_MIRROR" || fail "task up removed $E2E_MIRROR, which has not the label of the project"
 expect_output "is not the mirror of this project"
+# The check of the mirror comes before the creation of the cluster: the
+# refusal costs no cluster, which task down removed just above.
+if cluster_exists; then
+  fail "task up created the cluster $E2E_CLUSTER before it refused the container $E2E_MIRROR"
+fi
 labels="$(docker container inspect --format '{{json .Config.Labels}}' "$E2E_MIRROR" 2>/dev/null)"
 case "$labels" in
   *invalid.saas-b2b.role*) fail "task up replaced the decoy $E2E_MIRROR with its own container" ;;

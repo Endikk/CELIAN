@@ -8,7 +8,9 @@
 #   in the bindings of the engine and in the listening sockets of the
 #   machine (ss on Linux, lsof on macOS): nothing on 0.0.0.0, [::] or *;
 # - the mirror publishes no port, and joins the network kind alone: it has
-#   no authentication (R-34).
+#   no authentication (R-34);
+# - the engine reports the hardening of the mirror: CapDrop ALL, no CapAdd,
+#   ReadonlyRootfs, SecurityOpt no-new-privileges, not privileged.
 set -uo pipefail
 # shellcheck disable=SC1091 # lib/e2e.sh is checked on its own
 . "$(dirname -- "${BASH_SOURCE[0]}")/lib/e2e.sh"
@@ -80,5 +82,26 @@ networks="$(docker container inspect --format '{{range $name, $settings := .Netw
 if [ "$networks" != "kind " ]; then
   fail "the mirror joins the networks \"$networks\"; kind alone is expected"
 fi
+
+# The hardening, read back from the engine and not from the command line: no
+# capability, no extra one, no privilege gained, a read-only root
+# filesystem, no privileged mode (ADR-011, condition 7; S13 checks the
+# command).
+inspect_mirror() {
+  docker container inspect --format "$1" "$E2E_MIRROR" 2>/dev/null
+}
+cap_drop="$(inspect_mirror '{{json .HostConfig.CapDrop}}')"
+[ "$cap_drop" = '["ALL"]' ] || fail "the mirror drops the capabilities $cap_drop, [\"ALL\"] expected"
+cap_add="$(inspect_mirror '{{json .HostConfig.CapAdd}}')"
+case "$cap_add" in
+  null | "[]") ;;
+  *) fail "the mirror adds the capabilities $cap_add" ;;
+esac
+read_only="$(inspect_mirror '{{.HostConfig.ReadonlyRootfs}}')"
+[ "$read_only" = true ] || fail "the mirror has a writable root filesystem (ReadonlyRootfs=$read_only)"
+security_opt="$(inspect_mirror '{{json .HostConfig.SecurityOpt}}')"
+[ "$security_opt" = '["no-new-privileges=true"]' ] || fail "the mirror has SecurityOpt $security_opt, [\"no-new-privileges=true\"] expected"
+privileged="$(inspect_mirror '{{.HostConfig.Privileged}}')"
+[ "$privileged" = false ] || fail "the mirror runs privileged (Privileged=$privileged)"
 
 e2e_finish

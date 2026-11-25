@@ -82,6 +82,23 @@ for part in --detach "--network kind" "--name $mirror_name" "--label invalid.saa
   "--mount type=volume,src=saas-b2b-mirror,dst=/var/lib/registry" "$MIRROR_TEST_IMAGE serve /etc/zot/config.json"; do
   expect_run_has "$part"
 done
+# The hardening: no capability, no privilege gained, a read-only root
+# filesystem (ADR-011, condition 7). E03 reads the same three back from the
+# engine.
+for part in "--cap-drop ALL" "--security-opt no-new-privileges=true" --read-only; do
+  expect_run_has "$part"
+done
+# No user override (zot runs as the user of its image), no extra privilege,
+# whatever the form: --user X, --user=X, -u X, -uX, --privileged[=true],
+# --cap-add; and one --security-opt only.
+expect_run_lacks "--user*"
+expect_run_lacks "-u"
+expect_run_lacks "-u*"
+expect_run_lacks "--privileged*"
+expect_run_lacks "--cap-add*"
+if [ "$(run_line | grep -o -- '--security-opt' | wc -l | tr -d ' ')" != 1 ]; then
+  fail_case "the mirror has one --security-opt, no-new-privileges: $(run_line)"
+fi
 # No published port, no other network, no restart policy, no bind mount but
 # the configuration, read-only, and no anonymous volume.
 expect_run_lacks "-p"
@@ -93,8 +110,6 @@ expect_run_lacks "--net=*"
 expect_run_lacks "--restart*"
 expect_run_lacks "-v"
 expect_run_lacks "--volume*"
-expect_run_lacks "--privileged"
-expect_run_lacks "--user=0*"
 if [ "$(run_line | grep -o -- '--network' | wc -l | tr -d ' ')" != 1 ]; then
   fail_case "the mirror joins one network, kind: $(run_line)"
 fi
@@ -102,6 +117,18 @@ mounts="$(run_line | grep -o -- '--mount [^ ]*' || true)"
 if [ "$(printf '%s\n' "$mounts" | grep -c 'type=bind')" != 1 ] ||
   ! printf '%s\n' "$mounts" | grep -q "type=bind,src=$PROJECT/local/mirror/zot/config.json,dst=/etc/zot/config.json,readonly\$"; then
   fail_case "the only bind mount is the configuration, read-only: $mounts"
+fi
+
+# Task up checks the mirror (image, configuration, container, volume) before
+# it creates the cluster: a foreign container must not cost the 30 to 75 s of
+# a cluster creation (contracts/task-cli.md, checks before creation).
+# shellcheck disable=SC2034 # CASE is read by fail_case of the harness
+CASE="task up checks the mirror before the cluster"
+CASES=$((CASES + 1))
+check_line="$(grep -n "^ *- bash local/scripts/mirror.sh check " local/tasks/local.yml | head -1 | cut -d: -f1)"
+cluster_line="$(grep -n "^ *- bash local/scripts/cluster.sh up" local/tasks/local.yml | head -1 | cut -d: -f1)"
+if [ -z "$check_line" ] || [ -z "$cluster_line" ] || [ "$check_line" -ge "$cluster_line" ]; then
+  fail_case "local/tasks/local.yml must call mirror.sh check before cluster.sh up (check at line ${check_line:-none}, cluster at line ${cluster_line:-none})"
 fi
 
 finish
