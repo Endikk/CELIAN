@@ -162,11 +162,22 @@ legacy_container_keys := {
 	"rust",
 }
 
+# constraints and constraintsVersioning name the tool versions that Renovate
+# runs with, by tool name, as in configuration-options.md ("constraints":
+# {"node": "^18.0.0"}). Those names are not the legacy objects above: a string
+# value under either key, at the top, is accepted.
+tool_constraint_path(path, value) if {
+	count(path) == 2
+	path[0] in {"constraints", "constraintsVersioning"}
+	is_string(value)
+}
+
 deny contains msg if {
 	is_object(config)
-	walk(config, [path, _])
+	walk(config, [path, value])
 	count(path) > 0
 	path[count(path) - 1] in legacy_container_keys
+	not tool_constraint_path(path, value)
 	msg := sprintf("%s: %v is a legacy key that Renovate moves into packageRules, out of reach of the checks of the entries; entries are written in packageRules only", [label, path])
 }
 
@@ -190,6 +201,14 @@ deny contains msg if {
 #   (lib/config/options/index.ts, lines 1534 to 1570); ignoreNodeModules
 #   becomes ignorePaths
 #   (lib/config/migrations/custom/ignore-node-modules-migration.ts, line 8).
+# - customDatasources defines a datasource of its own; npmrc, npmrcMerge,
+#   registryAliases and hostRules change the registry, the credentials or the
+#   host that a lookup meets; extractVersion and versioning change which
+#   releases count and how they sort; updatePinnedDependencies,
+#   constraintsFiltering and the four replacement keys skip pinned
+#   dependencies, filter releases or name another package or version. The
+#   Template keys of a custom manager (extractVersionTemplate,
+#   versioningTemplate) are other keys, and stay.
 # Neither renovate.json sets them, apart from the ignorePaths of the regex
 # object, which package renovate_rules fixes to the letter. Of the presets of
 # extends, only :ignoreModulesAndTests sets one, ignorePaths at the top and
@@ -207,6 +226,19 @@ lookup_keys := {
 	"includePaths",
 	"ignorePaths",
 	"ignoreNodeModules",
+	"customDatasources",
+	"npmrc",
+	"npmrcMerge",
+	"registryAliases",
+	"hostRules",
+	"extractVersion",
+	"versioning",
+	"updatePinnedDependencies",
+	"replacementName",
+	"replacementNameTemplate",
+	"replacementVersion",
+	"replacementVersionTemplate",
+	"constraintsFiltering",
 }
 
 allowed_lookup_path(path) if path == ["regex", "ignorePaths"]

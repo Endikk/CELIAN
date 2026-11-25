@@ -11,7 +11,8 @@
 # - no other entry, manager or top setting decides the branch of an update,
 #   so that nothing splits those two pairs;
 # - Task and conftest, pinned in tests/tools/install.sh next to
-#   platform.yaml, keep their custom manager, and the regex managers see
+#   platform.yaml, keep their custom manager, customManagers holds only that
+#   one and the one of the _IMAGE variables, and the regex managers see
 #   tests/, which config:recommended hides (research RS-17).
 #
 # Input: renovate.json and platform.yaml, given to `conftest test --combine`,
@@ -398,6 +399,54 @@ tools_manager_found if {
 	some manager in object.get(config, "customManagers", [])
 	is_object(manager)
 	object.remove(manager, {"description"}) == tools_manager
+}
+
+# The manager of the _IMAGE variables of the workflows, written once as well,
+# to the letter apart from its description. It reads the workflows of the
+# project, and in CELIAN those of the golden repo too, so its patterns follow
+# tools_prefix.
+workflows_pattern(prefix) := sprintf("/^%s\\.github/workflows/.+\\.ya?ml$/", [replace(prefix, ".", "\\.")])
+
+images_patterns := [workflows_pattern("")] if tools_prefix == ""
+
+images_patterns := [workflows_pattern(""), workflows_pattern(tools_prefix)] if tools_prefix != ""
+
+images_manager := {
+	"customType": "regex",
+	"managerFilePatterns": images_patterns,
+	"matchStrings": [`# renovate: datasource=(?<datasource>docker) depName=(?<depName>\S+)\s+[A-Z0-9_]+_IMAGE\s*:\s*\S+?:(?<currentValue>[^\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)`],
+}
+
+known_manager(manager) if {
+	is_object(manager)
+	object.remove(manager, {"description"}) == images_manager
+}
+
+known_manager(manager) if {
+	is_object(manager)
+	object.remove(manager, {"description"}) == tools_manager
+}
+
+# A template of an entry of customManagers wins over what its expression
+# captures, and picks the datasource, the package name and the registry
+# (lib/modules/manager/custom/regex/utils.ts, lines 55 to 74, Renovate
+# 44.247.1), hence who dates a release. Only the two known managers stay.
+deny contains msg if {
+	is_object(config)
+	is_string(tools_prefix)
+	managers := object.get(config, "customManagers", [])
+	not is_array(managers)
+	msg := sprintf("%s: customManagers must be a list", [label_tools])
+}
+
+deny contains msg if {
+	is_object(config)
+	is_string(tools_prefix)
+	managers := object.get(config, "customManagers", [])
+	is_array(managers)
+	some i, manager in managers
+	not known_manager(manager)
+	msg := sprintf("%s: customManagers[%v] is not one of the two known managers, to the letter apart from the description: the _IMAGE variables of the workflows and %stests/tools/install.sh; a template of another entry picks the datasource, the package and the registry, hence who dates the release", [label_tools, i, tools_prefix])
 }
 
 deny contains msg if {
