@@ -1023,7 +1023,7 @@ quay.io et mcr.microsoft.com, Lucas a choisi l'approbation manuelle : chaque
 mise à jour attend qu'il coche sa case sur le tableau de bord de Renovate,
 après avoir lu la date amont du condensat. Quatre images sont concernées :
 zot, les contrôleurs de Flux, Keycloak et les images .NET de l'API. gitleaks
-en est sorti le 25/11/2026 : il est tiré de Docker Hub, que Renovate date
+en est sorti le 25/11/2026 : Renovate le date sur Docker Hub, et l'image se tire de ghcr.io par le même condensat
 (ADR-016, question 3). Une absence retarde un correctif. Une date mal lue
 fait entrer un condensat de moins de 7 jours. Aucune alerte automatique ne
 couvre ces images : ni `osvVulnerabilityAlerts` ni la base d'avis de GitHub
@@ -1062,14 +1062,23 @@ patches only », et son auteur passe à Betterleaks. Le principe VI range
 « projet archivé ou en maintenance » parmi les critères éliminatoires.
 gitleaks n'a jamais été comparé : il est entré à la phase 0 pour la CI de
 CELIAN, puis a été recopié dans le golden repo (workflow `secrets.yml` et hook
-pre-commit). Chaque projet généré en hérite.
+pre-commit). Chaque projet généré en hérite. Relevé par [SECU] le
+25/11/2026 : aucune release depuis v8.30.1, publiée le 21/03/2026 ; aucun
+avis de sécurité publié ; depuis mai, `master` ne reçoit que des montées
+d'actions. Le critère « aucune release depuis 12 mois » du principe VI tombe
+le 21/03/2027 si rien ne sort d'ici là.
 
 Probabilité forte : le statut est annoncé par l'auteur. Impact moyen : les
-correctifs de sécurité continuent, mais les nouveaux formats de secrets ne
-seront plus détectés, et le principe IX repose sur ce scanner.
+correctifs de sécurité sont promis, mais aucun n'est sorti depuis
+l'annonce ; les nouveaux formats de secrets ne seront plus détectés, et le
+principe IX repose sur ce scanner.
 
 Mitigation : gitleaks garde son rôle tant qu'un benchmark n'a pas tranché ;
-tiré de Docker Hub, il reçoit ses correctifs par Renovate avec le délai de
-7 jours ; un benchmark des scanners de secrets (gitleaks, Betterleaks,
-TruffleHog au moins), ouvert après le golden repo et avant la mise en
-template de la phase 3 (décision de Lucas du 25/11/2026).
+daté par Renovate sur Docker Hub et tiré de ghcr.io par le même condensat
+(ADR-016, question 3), il reçoit ses correctifs avec le délai de 7 jours ;
+à la lecture mensuelle des avis, [SECU] compare la dernière release GitHub au
+dernier tag de Docker Hub, pour voir une release que Renovate ne verrait
+pas ; un benchmark des scanners de secrets (gitleaks, Betterleaks,
+TruffleHog, Kingfisher au moins), ouvert après le golden repo et avant la
+mise en template de la phase 3 (décision de Lucas du 25/11/2026), et au plus
+tard avant le 21/03/2027.
