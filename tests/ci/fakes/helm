@@ -1,0 +1,37 @@
+#!/usr/bin/env bash
+# Stand-in for helm, used by tests/ci/check-envoy-gateway-render-test.sh. It
+# renders nothing: its output is a function of the arguments it gets, so the
+# test pins the exact commands and options of research RS-02.
+#   helm version --template <t>   prints $FAKE_HELM_VERSION (default v4.3.2)
+#   helm pull <ref> --destination <dir>
+#                                 writes <dir>/fake-chart.tgz holding the ref
+#   helm template <name> <chart> <options>...
+#                                 prints the name, the chart file, the options
+set -euo pipefail
+
+case "${1:-}" in
+  version)
+    echo "${FAKE_HELM_VERSION:-v4.3.2}"
+    ;;
+  pull)
+    ref="$2"
+    shift 2
+    [ "${1:-}" = "--destination" ] || {
+      echo "fake helm: pull wants --destination <dir>" >&2
+      exit 2
+    }
+    printf 'chart:%s\n' "$ref" >"$2/fake-chart.tgz"
+    ;;
+  template)
+    name="$2"
+    chart="$3"
+    shift 3
+    printf 'render %s\n' "$name"
+    cat "$chart"
+    printf 'options:%s\n' "$*"
+    ;;
+  *)
+    echo "fake helm: unexpected command: $*" >&2
+    exit 2
+    ;;
+esac

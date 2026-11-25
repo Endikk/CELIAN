@@ -1,0 +1,6 @@
+# Failing case of S23: a datasource that no workflow uses today.
+# expect: datasource=git-refs
+
+env:
+  # renovate: datasource=git-refs depName=https://evil.invalid/repo.git
+  EXAMPLE_VERSION: "1.0.0"

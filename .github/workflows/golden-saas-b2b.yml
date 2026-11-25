@@ -24,6 +24,15 @@ env:
   # (research RS-18). No manager updates it: a PR of Renovate on
   # KUBECTL_VERSION fails here until the new sum is written by hand.
   KUBECTL_SHA256: 29818b6729dc9262b692307470d0558d027725e738be5dd47c760261868a2634
+  # The Helm of the envoy-render job: the version that rendered
+  # local/vendor/envoy-gateway/ (research RS-02, relevé du 2026-11-25), and the
+  # SHA-256 of helm-v4.3.2-linux-amd64.tar.gz from get.helm.sh, equal to the
+  # one in the notes of the release (read on 2026-11-25). No manager updates
+  # the sum: a PR of Renovate on HELM_VERSION fails here until it is written by
+  # hand, and the render is redone with that Helm in the same PR.
+  # renovate: datasource=github-releases depName=helm/helm
+  HELM_VERSION: v4.3.2
+  HELM_SHA256: d1c0278d46beab79582d7e50f5b3dc206944ba8e577cde618513fd07daa53983
 
 concurrency:
   group: golden-saas-b2b-${{ github.ref }}
@@ -154,3 +163,33 @@ jobs:
         env:
           PROFILE: lite
         run: task test:e2e
+
+  # Gap 44 of spec 001 (tasks.md): the render of Envoy Gateway in
+  # local/vendor/envoy-gateway/ is redone with helm template from the OCI
+  # artifacts that local/tasks/local.yml names by digest, with the commands of
+  # research RS-02, and compared byte for byte. S02 and S22 compare the
+  # vendored files to their own sums and to references: they would pass a
+  # render edited by hand and a SHA256SUMS redone. Not a required check of
+  # the ruleset of main yet: the DSI decides once it has run on main.
+  # Pulls from docker.io, anonymously; no credential.
+  envoy-render:
+    name: envoy-render
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Helm checked against its SHA-256 before it is extracted, like kubectl.
+      - name: Install Helm
+        run: |
+          bash scripts/ci/install-helm.sh "$RUNNER_TEMP/helm-tools"
+          echo "$RUNNER_TEMP/helm-tools" >> "$GITHUB_PATH"
+
+      # The check on its own failing cases, with a stand-in helm.
+      - name: Test the render check
+        run: bash tests/ci/check-envoy-gateway-render-test.sh
+
+      - name: Redo the render of Envoy Gateway and compare it
+        run: bash scripts/ci/check-envoy-gateway-render.sh

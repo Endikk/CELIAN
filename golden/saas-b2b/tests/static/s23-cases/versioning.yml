@@ -1,0 +1,6 @@
+# Failing case of S23: versioning in a renovate comment.
+# expect: sets versioning
+
+env:
+  # renovate: datasource=github-releases depName=helm/helm versioning=loose
+  EXAMPLE_VERSION: "1.0.0"

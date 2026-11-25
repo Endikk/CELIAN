@@ -1,0 +1,6 @@
+# Failing case of S23: registryUrl in a renovate comment.
+# expect: sets registryUrl
+
+env:
+  # renovate: datasource=docker depName=docker.io/library/alpine registryUrl=https://evil.invalid
+  EXAMPLE_VERSION: "1.0.0"

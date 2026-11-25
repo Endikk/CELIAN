@@ -1,0 +1,6 @@
+# Failing case of S23: packageName in a renovate comment.
+# expect: sets packageName
+
+env:
+  # renovate: datasource=docker depName=docker.io/library/alpine packageName=evil.invalid/alpine
+  EXAMPLE_VERSION: "1.0.0"
