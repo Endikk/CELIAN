@@ -58,11 +58,14 @@ GKE. La page des capacités donne pour `gke-l7-global-external-managed`, champ `
 
 Conclusion : la HTTPRoute `api` sur le préfixe `/api` et la HTTPRoute `front` sur `/` n'emploient que des champs du cœur que GKE sert. S07 et S08 le reverront sur le rendu `gcp` (étapes 9 et 14).
 
+Namespace de l'application (T060). La page de Pod Security Admission donne le gabarit `pod-security.kubernetes.io/<MODE>: <LEVEL>`, `<MODE>` parmi `enforce`, `audit` et `warn`, `<LEVEL>` parmi `privileged`, `baseline` et `restricted` ; l'étiquette `<MODE>-version` est facultative, et prend une mineure de Kubernetes ou `latest`. `k8s/base/namespace.yaml` pose `pod-security.kubernetes.io/enforce: restricted`, sans version.
+
 | Source | Lue le | Ce qu'on y prend |
 | --- | --- | --- |
 | <https://github.com/kubernetes-sigs/gateway-api/blob/v1.7.0/apis/v1/httproute_types.go> | 2026-11-25 | Lignes 504 à 506 et 568 : `PathPrefix` du cœur ; lignes 529 à 536 : élément par élément ; lignes 279 à 290 : 500 sur une `backendRef` invalide |
 | <https://github.com/kubernetes-sigs/gateway-api/blob/v1.7.0/apis/v1/gateway_types.go> | 2026-11-25 | Lignes 480 et 481 : `allowedRoutes` du cœur, `Same` par défaut |
 | <https://docs.cloud.google.com/kubernetes-engine/docs/how-to/gatewayclass-capabilities> | 2026-11-25 | `gke-l7-global-external-managed` : `Exact`, `PathPrefix`, `RegularExpression` ; Gateway API 1.5.0 à partir de 1.35.2-gke.1842000 |
+| <https://kubernetes.io/docs/concepts/security/pod-security-admission/> | 2026-11-25 | Étiquettes `pod-security.kubernetes.io/<MODE>` et `<MODE>-version`, niveaux et modes |
 
 ### Relevé du 2026-11-25 : Gateway API et Envoy Gateway vendorés (T058, étape 7)
 

@@ -2,7 +2,7 @@
 # et adresses"), with fields of the core of Gateway API only (research
 # RS-02). gatewayClassName names a class that each target layer provides:
 # the local layer declares a GatewayClass of this name, the gcp layer sets
-# the class of GKE instead (tasks.md, gap 31).
+# the class of GKE instead (tasks.md, gap 35).
 #
 # One HTTP listener for now; the HTTPS listener and its certificate, the
 # Secret gateway-tls, join with the second PR of step 7 (tasks.md, gap 3).
