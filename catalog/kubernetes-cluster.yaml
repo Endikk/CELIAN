@@ -68,11 +68,14 @@ targets:
       body: Google
       detail: Service managé de Google Cloud, implémentation managée de Kubernetes.
     status: active
-    verified_on: "2026-11-20"
+    verified_on: "2026-11-25"
     standards: [kubernetes-api]
     decisions:
       adr: [ADR-004, ADR-008]
     sources:
+      - url: https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/container_cluster.html.markdown
+        read_on: "2026-11-25"
+        establishes: Bloc release_channel de google_container_cluster, channel obligatoire, valeurs RAPID, REGULAR, STABLE ou UNSPECIFIED (provider google 8.12.0).
       - url: https://docs.cloud.google.com/kubernetes-engine/docs/concepts/kubernetes-engine-overview
         read_on: "2026-11-20"
         establishes: GKE, « a managed implementation of the Kubernetes open source container orchestration platform » ; modes Autopilot, recommandé par la page, et Standard.
@@ -85,11 +88,8 @@ targets:
       - url: https://docs.cloud.google.com/kubernetes-engine/docs/release-notes-regular
         read_on: "2026-11-20"
         establishes: Nouvelles versions dans le canal Regular les 2026-11-10 et 2026-11-13 ; 1.36.4-gke.2377000 annoncée le 2026-11-10 comme version par défaut à la création.
-    pending:
-      - topic: release-channel
-        owner: OPS
-        note: Canal du cluster, que l'ADR-008 laisse à OPS. Regular sert de référence à la règle de version de l'ADR-004 tant que ce choix n'est pas fait.
     notes: >-
       Le mode Autopilot vient de l'ADR-008, qui le retient sans que la grille
-      de BENCH-008 l'ait noté. La mineure de Kubernetes suit la règle de
-      version de l'ADR-004 et n'est pas tenue ici.
+      de BENCH-008 l'ait noté. Le canal est REGULAR, fixé par OPS dans la
+      couche gcp du golden repo (release_channel). La mineure de Kubernetes
+      suit la règle de version de l'ADR-004 et n'est pas tenue ici.
