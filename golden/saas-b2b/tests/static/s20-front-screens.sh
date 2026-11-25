@@ -16,8 +16,8 @@
 # a literal fails the check. Comment lines are skipped.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$root"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+CDPATH='' cd -- "$root"
 
 front="src/front"
 sources="$front/src"

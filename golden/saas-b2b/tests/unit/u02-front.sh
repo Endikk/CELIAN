@@ -17,8 +17,8 @@
 #   commit.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$root"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+CDPATH='' cd -- "$root"
 
 dockerfile="src/front/Dockerfile"
 context="src/front"
