@@ -16,8 +16,8 @@
 # of Renovate reads it in X01.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$root"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+CDPATH='' cd -- "$root"
 
 inputs="renovate.json platform.yaml"
 packages="renovate_delay renovate_rules"

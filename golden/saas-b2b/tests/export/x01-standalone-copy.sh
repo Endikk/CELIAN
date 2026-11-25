@@ -16,7 +16,7 @@
 # export of .github/workflows/golden-saas-b2b.yml.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 
 fail() {
   printf 'X01: %s\n' "$1" >&2
@@ -53,7 +53,7 @@ done < <(git -C "$root" ls-files -z --cached --others --exclude-standard -- .)
 [ "$copied" -gt 0 ] || fail "no file to copy from $root."
 printf '%s files copied.\n' "$copied"
 
-cd "$copy"
+CDPATH='' cd -- "$copy"
 git init -q
 git config user.name "X01"
 git config user.email "x01@saas-b2b.invalid"

@@ -149,18 +149,18 @@ run_case() {
   STATUS=0
   case "$mode" in
     stub)
-      OUTPUT="$(cd "$SANDBOX" && env -i HOME="$SANDBOX/home" PATH="$SANDBOX/bin" \
+      OUTPUT="$(CDPATH='' cd -- "$SANDBOX" && env -i HOME="$SANDBOX/home" PATH="$SANDBOX/bin" \
         FAKE_LOG="$CALLS" FAKE_TAKEN_PORTS="$taken" FAKE_UNDECIDABLE_PORTS="$undecidable" \
         ${vars[@]+"${vars[@]}"} \
         "$BASH" -c "$STUB_RUNNER" preflight "$PREFLIGHT_LIB" "$@" 2>&1)" || STATUS=$?
       ;;
     sourced)
-      OUTPUT="$(cd "$SANDBOX" && env -i HOME="$SANDBOX/home" PATH="$SANDBOX/bin" \
+      OUTPUT="$(CDPATH='' cd -- "$SANDBOX" && env -i HOME="$SANDBOX/home" PATH="$SANDBOX/bin" \
         FAKE_LOG="$CALLS" ${vars[@]+"${vars[@]}"} \
         "$BASH" -c "$SOURCED_RUNNER" preflight "$PREFLIGHT" "$@" 2>&1)" || STATUS=$?
       ;;
     *)
-      OUTPUT="$(cd "$SANDBOX" && env -i HOME="$SANDBOX/home" PATH="$SANDBOX/bin" \
+      OUTPUT="$(CDPATH='' cd -- "$SANDBOX" && env -i HOME="$SANDBOX/home" PATH="$SANDBOX/bin" \
         FAKE_LOG="$CALLS" ${vars[@]+"${vars[@]}"} \
         "$BASH" "$PREFLIGHT" "$@" 2>&1)" || STATUS=$?
       ;;

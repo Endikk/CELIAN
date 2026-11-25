@@ -9,8 +9,8 @@
 # configuration, the Postgres manifests and the OpenTofu layer to "inputs".
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$root"
+root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
+CDPATH='' cd -- "$root"
 
 inputs="platform.yaml"
 

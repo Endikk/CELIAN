@@ -127,7 +127,7 @@ readonly CLUSTER_TIMEOUT=300
 readonly INSTALL_TIMEOUT=300
 readonly PROBE_TIMEOUT=200
 
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
 readonly MANIFESTS="$SCRIPT_DIR/bench-013"
 
 OPTIONS="${OPTIONS:-mailpit maildev smtp4dev}"
@@ -632,7 +632,7 @@ main() {
   else
     TRIAL_DIR=$(mktemp -d)
   fi
-  TRIAL_DIR=$(cd "$TRIAL_DIR" && pwd)
+  TRIAL_DIR=$(CDPATH='' cd -- "$TRIAL_DIR" && pwd)
   LOGS="$TRIAL_DIR/logs"
   mkdir -p "$LOGS"
   export KUBECONFIG="$TRIAL_DIR/kubeconfig"

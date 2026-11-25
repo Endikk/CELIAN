@@ -5,7 +5,7 @@
 set -euo pipefail
 
 repo="${1:-$(gh repo view --json nameWithOwner --jq .nameWithOwner)}"
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+root="$(CDPATH='' cd -- "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 ruleset_file="$root/.github/rulesets/main.json"
 
 echo "Repository: $repo"

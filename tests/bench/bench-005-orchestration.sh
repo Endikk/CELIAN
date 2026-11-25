@@ -137,7 +137,7 @@ TILT_PORT="${TILT_PORT:-10355}"
 BENCH_LOCK="${BENCH_LOCK:-}"
 readonly OPTIONS RUNS COLD COLD_REMOVE IDLE_WAIT LOOP_ITER CLUSTER_IDLE ASPIRE_BIN TILT_PORT BENCH_LOCK
 
-SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+SCRIPT_DIR=$(CDPATH='' cd -- "$(dirname "$0")" && pwd)
 readonly STACK="$SCRIPT_DIR/bench-005/stack"
 readonly RUNFILE_DIR="$HOME/Library/Application Support/dotnet/runfile"
 
@@ -1124,7 +1124,7 @@ main() {
   else
     TRIAL_DIR=$(mktemp -d)
   fi
-  TRIAL_DIR=$(cd "$TRIAL_DIR" && pwd)
+  TRIAL_DIR=$(CDPATH='' cd -- "$TRIAL_DIR" && pwd)
   LOGS="$TRIAL_DIR/logs"
   mkdir -p "$LOGS"
 

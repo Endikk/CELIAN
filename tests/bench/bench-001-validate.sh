@@ -24,7 +24,7 @@ readonly SCORE_COMPOSE_VERSION="0.50.0"
 # Git blob of score-v1b1.json at tag 0.4.1 of score-spec/spec.
 readonly SCORE_SCHEMA_BLOB="9acd54435984be59d653fb73b37980713d9b4d1e"
 
-ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bench-001"
+ROOT="$(CDPATH='' cd -- "$(dirname "${BASH_SOURCE[0]}")" && pwd)/bench-001"
 readonly ROOT
 readonly SCORE_SCHEMA="$ROOT/vendor/score-spec/score-v1b1.json"
 readonly RUNS="${1:-5}"

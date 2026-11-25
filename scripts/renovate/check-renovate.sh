@@ -20,8 +20,8 @@
 # installs it, its archive checked against a SHA-256, then put <dir> on PATH.
 set -euo pipefail
 
-root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-cd "$root"
+root="$(CDPATH='' cd -- "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+CDPATH='' cd -- "$root"
 
 policy_dir="golden/saas-b2b/policy"
 inputs="renovate.json golden/saas-b2b/platform.yaml"
