@@ -3,9 +3,17 @@
 # or gcp/tasks/, or to a script. A task not delivered yet fails with a
 # sentence that says so.
 #
-# Inventory of the commands that create or remove a container, a network or
-# a volume (ADR-011, condition 11), reviewed by [SECU]:
-#   none yet; step 6 adds the kind cluster and the zot mirror.
+# Inventory of the commands that create or remove a container, a network, a
+# volume or a cluster (ADR-011, condition 11), reviewed by [SECU]. One line
+# per command and file, checked by S04 (local/tests/static/s04-taskfile.sh).
+# Each removal is preceded by a check of the name and the label, and of the
+# image for a container: nothing that is not the project's is removed.
+#   local/scripts/cluster.sh: kind create cluster
+#   local/scripts/cluster.sh: kind delete cluster
+#   local/scripts/mirror.sh: docker volume create
+#   local/scripts/mirror.sh: docker container rm
+#   local/scripts/mirror.sh: docker run
+#   local/scripts/mirror.sh: docker volume rm
 
 version: '3'
 
@@ -31,6 +39,11 @@ tasks:
     cmds:
       - task: local:down
 
+  mirror:purge:
+    desc: Remove the mirror volume; the next task up needs the network.
+    cmds:
+      - task: local:mirror-purge
+
   reload:
     desc: Rebuild and redeploy the API and the front, without touching the data.
     cmds:
@@ -47,3 +60,8 @@ tasks:
     cmds:
       - echo 'task test is not delivered yet. The unit tests arrive with steps 3 and 4 of spec 001.' >&2
       - exit 1
+
+  test:e2e:
+    desc: Run the tests on kind of the current profile; the cluster is created, then deleted.
+    cmds:
+      - task: local:test-e2e

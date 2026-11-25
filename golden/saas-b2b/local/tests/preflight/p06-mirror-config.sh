@@ -6,7 +6,7 @@
 # local/mirror/zot/config.json missing, local/scripts/mirror.sh refuses in
 # one sentence that names the file, before any call that changes the engine
 # (ADR-011, condition 7). With it, the configuration is mounted read-only at
-# the path that serve and the health check of the image read. The image
+# the path that serve reads, the command of the image. The image
 # comes by tag and digest from ghcr.io/project-zot/zot, the network kind
 # exists first (the cluster creates it), and the container or the volume
 # named after the mirror is removed or reused only when it is the
@@ -25,7 +25,7 @@ expect_output "local/mirror/zot/config.json"
 expect_output "Nothing was created"
 expect_no_change
 
-run_mirror_case "configuration present: mounted read-only where serve and the health check read it" \
+run_mirror_case "configuration present: mounted read-only where serve reads it" \
   -- up "$MIRROR_TEST_IMAGE"
 expect_ok
 for part in $config_mount serve /etc/zot/config.json; do

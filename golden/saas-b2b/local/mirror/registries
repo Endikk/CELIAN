@@ -1,0 +1,12 @@
+# Registries whose images the node of the local cluster pulls through the zot
+# mirror (ADR-011, condition 10): one line per registry, its name as images
+# write it, then the upstream that zot syncs from on demand. The hosts.toml
+# files of certs.d/ and the sync entries of zot/config.json derive from this
+# list; S13 keeps them in step.
+#
+# Steps 6 to 8 pull from docker.io only: Envoy Gateway (ADR-005) and Postgres
+# (ADR-012). The cache (ADR-015) and Flux (ghcr.io, step 12) add their
+# registry here, once the mounting with several upstreams is tried (RS-13).
+# Images that the engine pulls itself, the node image and the zot image, do
+# not go through the mirror.
+docker.io https://index.docker.io

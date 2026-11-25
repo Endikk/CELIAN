@@ -1,8 +1,9 @@
 # shellcheck shell=bash
 # Preflight checks of `task up` (spec 001, contracts/task-cli.md), run before
 # anything is created, in the order of the contract:
-#   1. docker reaches a local engine through a unix socket, and the engine
-#      answers within DOCKER_TIMEOUT_SECONDS;
+#   1. kind runs docker on the network kind; docker reaches a local engine
+#      through a unix socket, and the engine answers within
+#      DOCKER_TIMEOUT_SECONDS;
 #   2. versions: kind exactly, kubectl within one minor of the cluster,
 #      Docker Engine 28.0.0 or later on Linux;
 #   3. the memory that the engine declares picks the profile;
@@ -33,8 +34,11 @@ set -euo pipefail
 export LC_ALL=C
 
 # ADR-004, condition 2: the exact version of kind. It moves with the node
-# image of local/kind/cluster.yaml, in one PR (ADR-004, version rule, point 5).
-readonly KIND_VERSION="0.33.0"
+# image of local/kind/cluster.yaml, in one PR (ADR-004, version rule, point
+# 5): Renovate reads the comment below, and groups the two (renovate.json).
+# renovate: datasource=github-releases depName=kubernetes-sigs/kind
+KIND_VERSION="0.33.0"
+readonly KIND_VERSION
 # kubectl is supported within one minor of the API server (ADR-006,
 # condition 5; Kubernetes version skew policy). The minor of the cluster is
 # kubernetes_minor in platform.yaml.
@@ -76,7 +80,7 @@ readonly PLATFORM_FILE
 
 # Set by read_engine, cluster_minor, choose_profile, scan_output and
 # port_in_use.
-ENGINE_VERSION=""
+ENGINE_VERSION_FOUND=""
 ENGINE_MEMORY=0
 CLUSTER_MAJOR=""
 CLUSTER_MINOR=""
@@ -221,8 +225,27 @@ check_docker_context() {
   refuse "the docker context $name points at $host, not at a local unix socket: kind would create the cluster on that engine. Run docker context use default, or switch to another local context, then task up again ($README_REF)."
 }
 
+# kind reads two experimental variables (research RS-08, relevé du
+# 2026-11-25). KIND_EXPERIMENTAL_PROVIDER set to podman, nerdctl, finch or
+# nerdctl.lima makes it create the cluster with that engine, which the
+# checks below do not read; decision of the DSI of 2026-11-25: any value but
+# docker is refused, an unknown one too, and an empty one is unset, as for
+# kind. KIND_EXPERIMENTAL_DOCKER_NETWORK puts the nodes on another network
+# than kind, out of reach of the mirror (ADR-011, condition 2).
+check_kind_variables() {
+  case "${KIND_EXPERIMENTAL_PROVIDER-}" in
+    "" | docker) ;;
+    *) refuse "KIND_EXPERIMENTAL_PROVIDER=$(printable "$KIND_EXPERIMENTAL_PROVIDER") makes kind create the cluster with another engine than docker, the one these checks read. Run unset KIND_EXPERIMENTAL_PROVIDER, then task up again ($README_REF)." ;;
+  esac
+  case "${KIND_EXPERIMENTAL_DOCKER_NETWORK-}" in
+    "" | kind) ;;
+    *) refuse "KIND_EXPERIMENTAL_DOCKER_NETWORK=$(printable "$KIND_EXPERIMENTAL_DOCKER_NETWORK") puts the nodes of kind on another network than kind, where the mirror runs. Run unset KIND_EXPERIMENTAL_DOCKER_NETWORK, then task up again ($README_REF)." ;;
+  esac
+}
+
 read_engine() {
   local out status=0 pattern='^([0-9]+\.[0-9]+[^[:space:]]*) ([1-9][0-9]*)$'
+  check_kind_variables
   if ! command -v docker >/dev/null 2>&1; then
     refuse "no container engine found: the docker command is not on PATH. Install a container engine that provides it ($README_REF)."
   fi
@@ -235,7 +258,7 @@ read_engine() {
     refuse "the container engine gave no answer to \"docker info\" within $DOCKER_TIMEOUT_SECONDS s. Restart the engine, then run task up again ($README_REF)."
   fi
   if scan_output "$out" "$pattern" && [ "$status" -eq 0 ]; then
-    ENGINE_VERSION="${BASH_REMATCH[1]}"
+    ENGINE_VERSION_FOUND="${BASH_REMATCH[1]}"
     ENGINE_MEMORY="${BASH_REMATCH[2]}"
     return 0
   fi
@@ -324,8 +347,8 @@ check_engine_version() {
   if [ "$(uname -s)" != Linux ]; then
     return 0
   fi
-  if ! version_at_least "$ENGINE_VERSION" "$DOCKER_ENGINE_LINUX_MIN"; then
-    refuse "Docker Engine $(printable "$ENGINE_VERSION") found, $DOCKER_ENGINE_LINUX_MIN or later expected on Linux, where older versions let the local network reach unpublished container ports (ADR-011): update Docker Engine ($README_REF)."
+  if ! version_at_least "$ENGINE_VERSION_FOUND" "$DOCKER_ENGINE_LINUX_MIN"; then
+    refuse "Docker Engine $(printable "$ENGINE_VERSION_FOUND") found, $DOCKER_ENGINE_LINUX_MIN or later expected on Linux, where older versions let the local network reach unpublished container ports (ADR-011): update Docker Engine ($README_REF)."
   fi
 }
 

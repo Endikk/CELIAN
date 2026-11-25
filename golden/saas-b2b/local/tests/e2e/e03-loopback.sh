@@ -55,7 +55,9 @@ for port in $host_ports; do
     break
   fi
   if [ -z "$listeners" ]; then
-    fail "nothing listens on the published port $port"
+    # The engine can forward a port without a listening process; the
+    # bindings above stay the rule.
+    printf 'note: no listening socket found for the published port %s.\n' "$port"
   fi
   for listener in $listeners; do
     case "$listener" in

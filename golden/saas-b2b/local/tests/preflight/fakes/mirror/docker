@@ -126,13 +126,13 @@ case "$*" in
     fi
     ;;
   "container inspect --format "*)
-    [ "$#" -eq 4 ] || unexpected "$@"
-    container_inspect "$3" "$4"
+    [ "$#" -eq 5 ] || unexpected "$@"
+    container_inspect "$4" "$5"
     ;;
   "container rm --force $NAME") printf '%s\n' "$NAME" ;;
   "volume inspect --format "*)
-    [ "$#" -eq 4 ] || unexpected "$@"
-    volume_inspect "$3" "$4"
+    [ "$#" -eq 5 ] || unexpected "$@"
+    volume_inspect "$4" "$5"
     ;;
   "volume create --label $LABEL_KEY=$ROLE $NAME") printf '%s\n' "$NAME" ;;
   "volume rm $NAME") printf '%s\n' "$NAME" ;;

@@ -47,6 +47,9 @@
           },
           {
             "context": "static"
+          },
+          {
+            "context": "e2e-lite"
           }
         ]
       }

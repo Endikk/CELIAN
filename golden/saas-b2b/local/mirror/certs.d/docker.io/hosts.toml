@@ -1,0 +1,9 @@
+# Registry hosts of docker.io for the containerd of the node (containerd
+# 2.3.4, docs/hosts.md; research RS-13), derived from local/mirror/registries.
+# The zot mirror, on the network kind, is tried first, with the capability
+# pull alone: a public mirror is never trusted to resolve a tag (ADR-011,
+# condition 1). With no server line, containerd falls back to docker.io
+# itself. No credential, no certificate (ADR-011, condition 13).
+
+[host."http://saas-b2b-mirror:5000"]
+  capabilities = ["pull"]

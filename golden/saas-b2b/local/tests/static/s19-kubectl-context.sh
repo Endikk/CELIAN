@@ -28,11 +28,16 @@ kubeconfig_flag='--kubeconfig "$KUBECONFIG_FILE"'
 context_flag='--context "$KUBE_CONTEXT"'
 name_flag='--name "$CLUSTER_NAME"'
 
+# A word in the position of a command: at the start of a line, of a list of
+# tasks ("- "), after a separator, a "$(", a keyword or an assignment.
+# "command -v kubectl" and a message that names kubectl are no call.
+command_start='(^|[;&|(!{]|\$\(|(then|do|else|exec|time|-) |[A-Za-z_][A-Za-z0-9_]*=[^ ]* ) *'
+
 # check_file FILE: one line per command of FILE that breaks the rule.
 check_file() {
   local file="$1" number text
   while IFS=$'\t' read -r number text; do
-    if [[ $text =~ (^|[^A-Za-z0-9_./-])kubectl( |$) ]]; then
+    if [[ $text =~ ${command_start}kubectl( |$) ]]; then
       case "$text" in
         *"kubectl version --client"*) ;;
         *"$kubeconfig_flag"*"$context_flag"* | *"$context_flag"*"$kubeconfig_flag"*) ;;
@@ -46,7 +51,7 @@ check_file() {
         fi
         ;;
     esac
-    if [[ $text =~ (^|[^A-Za-z0-9_./-])kind\ (create\ cluster|delete\ cluster|export\ kubeconfig|get\ kubeconfig) ]]; then
+    if [[ $text =~ ${command_start}kind\ (create\ cluster|delete\ cluster|export\ kubeconfig|get\ kubeconfig) ]]; then
       case "$text" in
         *"$kubeconfig_flag"*) ;;
         *) printf '%s:%s: kind writes or removes a kubeconfig entry without %s: %s\n' "$file" "$number" "$kubeconfig_flag" "$text" ;;
@@ -83,10 +88,12 @@ printf '%s\n' \
   '  port-forward --address 127.0.0.1 svc/api 8080:80' \
   'out="$(kubectl version --client --output=json 2>/dev/null)"' \
   'kind create cluster --name "$CLUSTER_NAME" --config local/kind/cluster.yaml --kubeconfig "$KUBECONFIG_FILE"' \
-  'echo "kubectl.kubernetes.io/last-applied-configuration"' >"$samples/good.sh"
+  'echo "kubectl.kubernetes.io/last-applied-configuration"' \
+  'if ! command -v kubectl >/dev/null 2>&1; then' \
+  'refuse "kubectl is not installed: install kubectl 1.36 (README.md)."' >"$samples/good.sh"
 bad_found="$(check_file "$samples/bad.sh" | wc -l | tr -d ' ')"
-if [ "$bad_found" != 10 ]; then
-  echo "the rule caught $bad_found of the 10 bad samples:" >&2
+if [ "$bad_found" != 9 ]; then
+  echo "the rule caught $bad_found of the 9 bad samples:" >&2
   check_file "$samples/bad.sh" >&2
   exit 1
 fi

@@ -1,34 +1,63 @@
 # Tasks of the local layer, called by the public tasks of the root
 # Taskfile.yml, which includes this file as internal. They run in the folder
 # of the root Taskfile (research RS-09). Each stub below gives way to the
-# real task in the step it names (spec 001, tasks.md).
+# real task in the step it names (spec 001, tasks.md). The commands that
+# create or remove a container, a network, a volume or a cluster are listed
+# at the head of the root Taskfile.yml (ADR-011, condition 11).
 
 version: '3'
 
+vars:
+  # The zot mirror, by tag and digest (ADR-011, condition 8). A variable of
+  # this file wins over the environment and the command line (research
+  # RS-09): nobody swaps the image without changing this line. ghcr.io gives
+  # Renovate no date: each update waits for the approval of ADR-016.
+  # renovate: datasource=docker depName=ghcr.io/project-zot/zot
+  MIRROR_IMAGE: ghcr.io/project-zot/zot:v2.1.23@sha256:9d3de83ac2099e6f4843045b4c9b65b7e8baf40f92d28f54906dee9d4d390fd7
+
 tasks:
-  # Preflight checks first, before anything is created (contracts/task-cli.md).
-  # PROFILE forces the profile, given either way: PROFILE=lite task up, or
-  # task up PROFILE=lite. Task does not export a command-line variable to the
-  # commands, hence env; a PROFILE already in the environment wins over it
-  # (research RS-08). The host ports join the call with step 7 (T059). The
-  # rest of task up arrives with steps 6 to 9.
+  # Preflight checks first, before anything is created (contracts/task-cli.md);
+  # then the cluster and the mirror (plan, "Ce que fait task up", points 2
+  # and 3). PROFILE forces the profile, given either way: PROFILE=lite task
+  # up, or task up PROFILE=lite. Task does not export a command-line variable
+  # to the commands, hence env; a PROFILE already in the environment wins
+  # over it (research RS-08). The host ports join the call with step 7
+  # (T059). The platform and the application arrive with steps 7 to 9.
   up:
     silent: true
     env:
       PROFILE: '{{.PROFILE}}'
     cmds:
       - bash local/scripts/preflight.sh
-      - echo 'The preflight checks passed, but task up stops here. The cluster, the mirror and the application arrive with steps 6 to 9 of spec 001.' >&2
-      - exit 1
+      - bash local/scripts/cluster.sh up
+      - bash local/scripts/mirror.sh up '{{.MIRROR_IMAGE}}'
+      - echo 'task up stops after the cluster and the mirror. The platform and the application arrive with steps 7 to 9 of spec 001.'
 
+  # The mirror container first, so that nothing stays on the network kind
+  # when the cluster goes (ADR-011), then the cluster; the mirror volume
+  # stays. Then what is left on the machine (contracts/task-cli.md).
   down:
     silent: true
     cmds:
-      - echo 'task down is not delivered yet. It arrives with step 6 of spec 001.' >&2
-      - exit 1
+      - bash local/scripts/mirror.sh down
+      - bash local/scripts/cluster.sh down
+      - bash local/scripts/mirror.sh report '{{.MIRROR_IMAGE}}'
+
+  mirror-purge:
+    silent: true
+    cmds:
+      - bash local/scripts/mirror.sh purge
 
   reload:
     silent: true
     cmds:
       - echo 'task reload is not delivered yet. It arrives with step 9 of spec 001.' >&2
       - exit 1
+
+  # The tests on kind of the current profile; the cluster is created, then
+  # deleted (contracts/task-cli.md). Until step 12, PROFILE=lite.
+  test-e2e:
+    env:
+      PROFILE: '{{.PROFILE}}'
+    cmds:
+      - bash local/tests/e2e/run.sh
