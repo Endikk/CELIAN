@@ -7,13 +7,23 @@
 # tests of policy package platform_values, then the policy on the real files.
 # Step 1 gave it platform.yaml alone; step 6 (T041) adds the kind
 # configuration; T065 and T105 add the Postgres manifests and the OpenTofu
-# layer to "inputs".
+# layer to "inputs". The OpenTofu files join when the gcp layer is there: a
+# project rendered for the local target alone has no gcp/ folder.
 set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 CDPATH='' cd -- "$root"
 
 inputs="platform.yaml local/kind/cluster.yaml"
+
+if [ -d gcp ]; then
+  set -- gcp/tofu/*.tf
+  if [ ! -f "$1" ]; then
+    echo "gcp/ holds no OpenTofu file in gcp/tofu/: S21 cannot compare the gcp layer with platform.yaml." >&2
+    exit 1
+  fi
+  inputs="$inputs $*"
+fi
 
 if ! command -v conftest >/dev/null 2>&1; then
   echo "conftest is not installed: run tests/tools/install.sh <dir>, then put <dir> on PATH." >&2

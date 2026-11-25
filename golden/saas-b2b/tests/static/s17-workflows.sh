@@ -8,8 +8,12 @@
 # generated project (T094), and there must be at least one. When the golden
 # repo sits in CELIAN, at golden/saas-b2b/, it also checks the CELIAN
 # workflow that runs it (research RS-17); a standalone copy (X01) has no
-# such workflow. T105 adds the Taskfiles of gcp/. Arguments, if given,
-# replace the default list.
+# such workflow. Arguments, if given, replace the default list.
+#
+# T105 adds what a workflow calls: the Taskfiles, and the shell scripts of the
+# gcp layer, where the OpenTofu commands live. They get the rules of
+# principle X (no plan, apply or destroy, no Google credential, no published
+# plan); the rules on secrets, OIDC tokens and pins are for workflows only.
 set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -34,6 +38,12 @@ if [ "$#" -eq 0 ]; then
   if [ "$celian_root/golden/saas-b2b" = "$root" ] && [ -d "$celian_root/.github/workflows" ]; then
     set -- "$@" "$celian_root/.github/workflows/golden-saas-b2b.yml"
   fi
+  for file in "$root"/Taskfile.yml "$root"/local/tasks/*.yml "$root"/gcp/tasks/*.yml \
+    "$root"/gcp/tests/static/*.sh "$root"/gcp/scripts/*.sh; do
+    if [ -f "$file" ]; then
+      set -- "$@" "$file"
+    fi
+  done
 fi
 
 # Prints "<line number>:<text>" for each line of $1, YAML comments removed:
@@ -91,17 +101,22 @@ for file in "$@"; do
   forbid "$file" "${word_start}(tofu|terraform)${separator}(.*${separator})?(plan|apply|destroy)${word_end}" \
     "OpenTofu plan, apply or destroy"
   forbid "$file" "${word_start}gcp:(plan|apply|destroy)${word_end}" "task gcp:plan, gcp:apply or gcp:destroy"
-  # No cloud credential: no secret but the workflow token, no OIDC token for
-  # an identity federation, no Google authentication.
-  forbid "$file" 'secrets\.' "secret other than GITHUB_TOKEN" 'secrets\.GITHUB_TOKEN([^[:alnum:]_]|$)'
-  forbid "$file" 'id-token:[[:space:]]*write' "OIDC token requested (id-token: write)"
+  # No cloud credential: no Google authentication.
   forbid "$file" 'google-github-actions/auth|credentials_json|workload_identity_provider|GOOGLE_APPLICATION_CREDENTIALS|GOOGLE_GHA_CREDS_PATH|CLOUDSDK_AUTH' \
     "Google Cloud credential"
   forbid "$file" "${word_start}gcloud[[:space:]]+auth${word_end}" "Google Cloud credential (gcloud auth)"
   # No published plan.
   forbid "$file" "tfplan|${word_start}(tofu|terraform)[[:space:]]+show${word_end}|[[:space:]]-out[=[:space:]]" \
     "OpenTofu plan file or plan output"
-  check_pins "$file"
+  case "$file" in
+    */.github/workflows/*)
+      # In a workflow, no secret but the workflow token, and no OIDC token
+      # for an identity federation.
+      forbid "$file" 'secrets\.' "secret other than GITHUB_TOKEN" 'secrets\.GITHUB_TOKEN([^[:alnum:]_]|$)'
+      forbid "$file" 'id-token:[[:space:]]*write' "OIDC token requested (id-token: write)"
+      check_pins "$file"
+      ;;
+  esac
 done
 
 if [ "$problems" -gt 0 ]; then

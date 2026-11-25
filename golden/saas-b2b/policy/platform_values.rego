@@ -7,6 +7,9 @@
 # of platform.yaml; step 6 (T041) compares the node images of the kind
 # configuration with it; T065 and T105 add the Postgres image and the
 # OpenTofu layer.
+#
+# OpenTofu layer (T105): its .tf files read platform.yaml through a local, and
+# take the Kubernetes minor and the Postgres major from it, never a literal.
 package platform_values
 
 # Shared keys and the form of their value. Both are strings: YAML would read
@@ -104,4 +107,59 @@ deny contains msg if {
 	is_string(platform_minor)
 	minor != platform_minor
 	msg := sprintf("%s: nodes[%v].image in %s runs Kubernetes %s, platform.yaml says kubernetes_minor %s", [label, i, file.path, minor, platform_minor])
+}
+
+# OpenTofu layer. The expression that reads platform.yaml, as conftest parses
+# it, and the form each attribute must take, %s standing for the local.
+platform_expression := `${yamldecode(file("${path.module}/../../platform.yaml"))}`
+
+layer_values := {
+	"min_master_version": "${local.%s.kubernetes_minor}",
+	"database_version": "POSTGRES_${local.%s.postgres_major}",
+}
+
+tf_files contains file if {
+	some file in input
+	endswith(file.path, ".tf")
+}
+
+platform_locals contains name if {
+	some file in tf_files
+	some block in object.get(file.contents, "locals", [])
+	some name, expression in block
+	expression == platform_expression
+}
+
+layer_settings contains {"path": file.path, "where": sprintf("%s.%s", [type, name]), "attribute": attribute, "value": value} if {
+	some file in tf_files
+	some type, named in object.get(file.contents, "resource", {})
+	some name, bodies in named
+	some body in bodies
+	some attribute, _ in layer_values
+	value := body[attribute]
+}
+
+deny contains msg if {
+	count(tf_files) > 0
+	count(platform_locals) == 0
+	msg := sprintf("%s: the OpenTofu layer does not read platform.yaml; declare a local set to %s", [label, platform_expression])
+}
+
+deny contains msg if {
+	some setting in layer_settings
+	allowed := {sprintf(layer_values[setting.attribute], [name]) | some name in platform_locals}
+	not setting.value in allowed
+	msg := sprintf("%s: %s: %s.%s is '%v'; it must read platform.yaml, as %s", [label, setting.path, setting.where, setting.attribute, setting.value, sprintf(layer_values[setting.attribute], ["<local>"])])
+}
+
+deny contains msg if {
+	count(tf_files) > 0
+	some attribute, _ in layer_values
+	not attribute_set(attribute)
+	msg := sprintf("%s: no resource of the OpenTofu layer sets %s", [label, attribute])
+}
+
+attribute_set(attribute) if {
+	some setting in layer_settings
+	setting.attribute == attribute
 }
