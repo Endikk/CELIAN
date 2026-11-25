@@ -3,7 +3,12 @@
 # - every update waits 7 days (constitution, principle VI);
 # - a security fix does not wait (principle VI, constitution 1.2.0);
 # - an update from a registry that Renovate cannot date waits on the
-#   Dependency Dashboard until a person ticks it (ADR-016).
+#   Dependency Dashboard until a person ticks it (ADR-016);
+# - nothing turns updates off, security fixes included (principle VI,
+#   ADR-016), and nothing changes what Renovate reads or where it looks a
+#   package up;
+# - entries are written in packageRules at the top only, where the checks
+#   of both packages read them.
 #
 # The rules that hold for any Renovate configuration of CELIAN live here,
 # apart from the rules that follow platform.yaml, in package renovate_rules.
@@ -117,6 +122,147 @@ deny contains msg if {
 	msg := sprintf("%s: %v is a legacy key that Renovate turns into the delay, the approval, the dashboard or a preset", [label_delay, path])
 }
 
+# Legacy containers of entries. Renovate moves their content into
+# packageRules before it reads the configuration, at every depth, where the
+# checks of the entries (allowedVersions, the branch keys, the entry of
+# ADR-016) do not look for it:
+# - pathRules and packages are appended to packageRules
+#   (lib/config/migrations/custom/path-rules-migration.ts, lines 9 to 17;
+#   packages-migration.ts, lines 9 to 17);
+# - an object of packageFiles with more than its packageFile becomes an entry
+#   (package-files-migration.ts, lines 8 to 41);
+# - dependencies, devDependencies, optionalDependencies, peerDependencies,
+#   engines and depTypes become entries on matchDepTypes
+#   (dep-types-migration.ts, lines 12 to 40);
+# - an object under docker, dotnet, golang, java, js, node, php, python,
+#   ruby or rust becomes an entry on matchCategories, placed first
+#   (lib/config/migration.ts, lines 140 to 166).
+# No current option and no manager bears one of these names
+# (lib/config/options/index.ts; lib/modules/manager/api.ts), so S23 refuses
+# the name whatever its value. Entries are written in packageRules only.
+legacy_container_keys := {
+	"pathRules",
+	"packages",
+	"packageFiles",
+	"dependencies",
+	"devDependencies",
+	"optionalDependencies",
+	"peerDependencies",
+	"engines",
+	"depTypes",
+	"docker",
+	"dotnet",
+	"golang",
+	"java",
+	"js",
+	"node",
+	"php",
+	"python",
+	"ruby",
+	"rust",
+}
+
+# constraints and constraintsVersioning name the tool versions that Renovate
+# runs with, by tool name, as in configuration-options.md ("constraints":
+# {"node": "^18.0.0"}). Those names are not the legacy objects above: a string
+# value under either key, at the top, is accepted.
+tool_constraint_path(path, value) if {
+	count(path) == 2
+	path[0] in {"constraints", "constraintsVersioning"}
+	is_string(value)
+}
+
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, value])
+	count(path) > 0
+	path[count(path) - 1] in legacy_container_keys
+	not tool_constraint_path(path, value)
+	msg := sprintf("%s: %v is a legacy key that Renovate moves into packageRules, out of reach of the checks of the entries; entries are written in packageRules only", [label, path])
+}
+
+# Keys that change what Renovate reads, or where it looks a package up. Any
+# entry, manager or the top can set them, and each can stop an update,
+# security fixes included, without a word in the file:
+# - overridePackageName, overrideDatasource and overrideDepName make an entry
+#   look up another package (lib/util/package-rules/index.ts, lines 104 to
+#   130, Renovate 44.247.1);
+# - registryUrls and defaultRegistryUrls name the registries of the lookup
+#   (lib/config/options/index.ts, lines 1636 to 1670);
+# - followTag keeps only the version under a tag, and no update at all when
+#   the datasource gives no such tag
+#   (lib/workers/repository/process/lookup/index.ts, lines 249 to 267), as
+#   for Docker images, whose result holds no tags
+#   (lib/modules/datasource/docker/index.ts, lines 1282 to 1316);
+# - ignoreDeps skips the names it lists
+#   (lib/workers/repository/process/fetch.ts, line 127);
+# - enabledManagers turns off every manager it does not list, includePaths
+#   skips the files outside its paths, and ignorePaths the files inside them
+#   (lib/config/options/index.ts, lines 1534 to 1570); ignoreNodeModules
+#   becomes ignorePaths
+#   (lib/config/migrations/custom/ignore-node-modules-migration.ts, line 8).
+# - customDatasources defines a datasource of its own; npmrc, npmrcMerge,
+#   registryAliases and hostRules change the registry, the credentials or the
+#   host that a lookup meets; extractVersion and versioning change which
+#   releases count and how they sort; updatePinnedDependencies,
+#   constraintsFiltering and the four replacement keys skip pinned
+#   dependencies, filter releases or name another package or version. The
+#   Template keys of a custom manager (extractVersionTemplate,
+#   versioningTemplate) are other keys, and stay.
+# Neither renovate.json sets them, apart from the ignorePaths of the regex
+# object, which package renovate_rules fixes to the letter. Of the presets of
+# extends, only :ignoreModulesAndTests sets one, ignorePaths at the top and
+# for nuget (lib/config/presets/internal/default.preset.ts, lines 303 to
+# 325); S23 reads the file, not the presets.
+lookup_keys := {
+	"overridePackageName",
+	"overrideDatasource",
+	"overrideDepName",
+	"registryUrls",
+	"defaultRegistryUrls",
+	"followTag",
+	"ignoreDeps",
+	"enabledManagers",
+	"includePaths",
+	"ignorePaths",
+	"ignoreNodeModules",
+	"customDatasources",
+	"npmrc",
+	"npmrcMerge",
+	"registryAliases",
+	"hostRules",
+	"extractVersion",
+	"versioning",
+	"updatePinnedDependencies",
+	"replacementName",
+	"replacementNameTemplate",
+	"replacementVersion",
+	"replacementVersionTemplate",
+	"constraintsFiltering",
+}
+
+allowed_lookup_path(path) if path == ["regex", "ignorePaths"]
+
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, _])
+	count(path) > 0
+	path[count(path) - 1] in lookup_keys
+	not allowed_lookup_path(path)
+	msg := sprintf("%s: %v changes what Renovate reads, or where it looks a package up; S23 refuses the key everywhere, apart from the ignorePaths of the regex object, because it can stop an update, security fixes included", [label_undated, path])
+}
+
+# Renovate merges each entry of a nested packageRules into its parent, and
+# puts the result in place of the parent (lib/config/migration.ts, lines 167
+# to 191).
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, _])
+	count(path) > 1
+	path[count(path) - 1] == "packageRules"
+	msg := sprintf("%s: %v nests packageRules; Renovate flattens it out of reach of the checks of the entries, which are written in packageRules at the top only", [label, path])
+}
+
 # Experimental options of the delay (lib/config/options/index.ts, lines 2506
 # to 2529, Renovate 44.247.1). With the sync, Renovate passes the delay to the
 # package managers, and upstream warns that the behaviour may change.
@@ -210,6 +356,27 @@ deny contains msg if {
 	path[count(path) - 1] == "dependencyDashboardApproval"
 	not undated_rule_path(path, "dependencyDashboardApproval")
 	msg := sprintf("%s: %v sets dependencyDashboardApproval; only the entry of ADR-016 sets it", [label_undated, path])
+}
+
+# Updates turned off. Renovate applies a packageRules entry to every package
+# that its criteria let through, and an entry without criteria to all of them
+# (lib/util/package-rules/index.ts, lines 28 to 46, Renovate 44.247.1). A
+# criterion can be a glob read by minimatch, a regex, a negated pattern
+# (lib/util/string-match.ts, lines 11 to 57), matchDepNames or
+# matchDatasources: S23 cannot tell which updates such an entry turns off,
+# nor what a manager or the top turns off. A security fix does not bring the
+# update back: the entry that Renovate adds for an advisory forces the
+# settings of vulnerabilityAlerts, where enabled is not set
+# (lib/workers/repository/init/vulnerability.ts, lines 160 to 166;
+# lib/util/package-rules/index.ts, lines 79 to 103). So enabled is true
+# wherever it is written, legacy containers included.
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, value])
+	count(path) > 0
+	path[count(path) - 1] == "enabled"
+	value != true
+	msg := sprintf("%s: %v sets enabled to %v; enabled is written as true or not at all, because S23 cannot tell which updates, security fixes included, an entry, a manager or the top would turn off", [label_undated, path, value])
 }
 
 # Security exception: written out, so that a change of default upstream

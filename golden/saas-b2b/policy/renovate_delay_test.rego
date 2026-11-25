@@ -160,6 +160,191 @@ test_s23_rejects_the_package_manager_delay_of_a_manager if {
 	denied_with(checked(renovate), "[\"npm\", \"minimumReleaseAgePackageManager\"] is an experimental option")
 }
 
+# Legacy containers whose content Renovate moves into packageRules, out of
+# reach of the checks of the entries (lib/config/migration.ts, lines 140 to
+# 191; lib/config/migrations/custom/, Renovate 44.247.1). Each one carries
+# here a setting that the entries of S23 reserve to themselves.
+
+widened := {"allowedVersions": "/.*/"}
+
+legacy_container(key) := sprintf("[\"%s\"] is a legacy key", [key])
+
+test_s23_rejects_legacy_path_rules if {
+	renovate := with_value(valid_config, "pathRules", [{"paths": ["**"], "allowedVersions": "/.*/"}])
+	denied_with(checked(renovate), legacy_container("pathRules"))
+}
+
+test_s23_rejects_legacy_packages if {
+	renovate := with_value(valid_config, "packages", [{"matchPackageNames": ["*"], "allowedVersions": "/.*/"}])
+	denied_with(checked(renovate), legacy_container("packages"))
+}
+
+test_s23_rejects_legacy_package_files if {
+	renovate := with_value(valid_config, "packageFiles", [{"packageFile": "Dockerfile", "allowedVersions": "/.*/"}])
+	denied_with(checked(renovate), legacy_container("packageFiles"))
+}
+
+test_s23_rejects_legacy_dependencies if {
+	denied_with(checked(with_value(valid_config, "dependencies", widened)), legacy_container("dependencies"))
+}
+
+test_s23_rejects_legacy_dev_dependencies if {
+	denied_with(checked(with_value(valid_config, "devDependencies", widened)), legacy_container("devDependencies"))
+}
+
+test_s23_rejects_legacy_optional_dependencies if {
+	denied_with(checked(with_value(valid_config, "optionalDependencies", widened)), legacy_container("optionalDependencies"))
+}
+
+test_s23_rejects_legacy_peer_dependencies if {
+	denied_with(checked(with_value(valid_config, "peerDependencies", widened)), legacy_container("peerDependencies"))
+}
+
+test_s23_rejects_legacy_engines if {
+	denied_with(checked(with_value(valid_config, "engines", widened)), legacy_container("engines"))
+}
+
+test_s23_rejects_legacy_dep_types if {
+	renovate := with_value(valid_config, "depTypes", [{"depType": "dependencies", "groupName": "dependencies"}])
+	denied_with(checked(renovate), legacy_container("depTypes"))
+}
+
+test_s23_rejects_the_legacy_docker_object if {
+	denied_with(checked(with_value(valid_config, "docker", widened)), legacy_container("docker"))
+}
+
+test_s23_rejects_the_legacy_dotnet_object if {
+	denied_with(checked(with_value(valid_config, "dotnet", widened)), legacy_container("dotnet"))
+}
+
+test_s23_rejects_the_legacy_golang_object if {
+	denied_with(checked(with_value(valid_config, "golang", widened)), legacy_container("golang"))
+}
+
+test_s23_rejects_the_legacy_java_object if {
+	denied_with(checked(with_value(valid_config, "java", widened)), legacy_container("java"))
+}
+
+test_s23_rejects_the_legacy_js_object if {
+	denied_with(checked(with_value(valid_config, "js", widened)), legacy_container("js"))
+}
+
+test_s23_rejects_the_legacy_node_object if {
+	denied_with(checked(with_value(valid_config, "node", widened)), legacy_container("node"))
+}
+
+test_s23_rejects_the_legacy_php_object if {
+	denied_with(checked(with_value(valid_config, "php", widened)), legacy_container("php"))
+}
+
+test_s23_rejects_the_legacy_python_object if {
+	denied_with(checked(with_value(valid_config, "python", widened)), legacy_container("python"))
+}
+
+test_s23_rejects_the_legacy_ruby_object if {
+	denied_with(checked(with_value(valid_config, "ruby", widened)), legacy_container("ruby"))
+}
+
+test_s23_rejects_the_legacy_rust_object if {
+	denied_with(checked(with_value(valid_config, "rust", widened)), legacy_container("rust"))
+}
+
+test_s23_rejects_a_legacy_container_inside_an_entry if {
+	rule := {"matchDatasources": ["docker"], "docker": widened}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"docker\"] is a legacy key")
+}
+
+test_s23_rejects_package_rules_nested_in_an_entry if {
+	rule := {"matchDatasources": ["docker"], "packageRules": [{"matchPackageNames": ["*"], "allowedVersions": "/.*/"}]}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"packageRules\"] nests packageRules")
+}
+
+# Keys that change what Renovate reads, or where it looks a package up: each
+# can stop an update, security fixes included, through any entry, manager or
+# the top.
+
+changes_lookup(path) := sprintf("%s changes what Renovate reads", [path])
+
+test_s23_rejects_override_package_name if {
+	rule := {"matchPackageNames": ["kindest/node"], "overridePackageName": "example/node"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"overridePackageName\"]"))
+}
+
+test_s23_rejects_override_datasource if {
+	rule := {"matchPackageNames": ["postgres"], "overrideDatasource": "github-tags"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"overrideDatasource\"]"))
+}
+
+test_s23_rejects_override_dep_name if {
+	rule := {"matchPackageNames": ["postgres"], "overrideDepName": "example/postgres"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"overrideDepName\"]"))
+}
+
+test_s23_rejects_registry_urls if {
+	rule := {"matchPackageNames": ["postgres"], "registryUrls": ["https://registry.example.com"]}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"registryUrls\"]"))
+}
+
+test_s23_rejects_default_registry_urls if {
+	renovate := with_value(valid_config, "dockerfile", {"defaultRegistryUrls": ["https://registry.example.com"]})
+	denied_with(checked(renovate), changes_lookup("[\"dockerfile\", \"defaultRegistryUrls\"]"))
+}
+
+test_s23_rejects_follow_tag if {
+	rule := {"matchPackageNames": ["*"], "followTag": "next"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"followTag\"]"))
+}
+
+test_s23_rejects_ignore_deps if {
+	renovate := with_value(valid_config, "ignoreDeps", ["kindest/node"])
+	denied_with(checked(renovate), changes_lookup("[\"ignoreDeps\"]"))
+}
+
+test_s23_rejects_enabled_managers if {
+	renovate := with_value(valid_config, "enabledManagers", ["npm"])
+	denied_with(checked(renovate), changes_lookup("[\"enabledManagers\"]"))
+}
+
+test_s23_rejects_ignore_paths_at_the_top if {
+	renovate := with_value(valid_config, "ignorePaths", ["golden/**"])
+	denied_with(checked(renovate), changes_lookup("[\"ignorePaths\"]"))
+}
+
+test_s23_rejects_ignore_paths_in_a_manager if {
+	renovate := with_value(valid_config, "dockerfile", {"ignorePaths": ["golden/**"]})
+	denied_with(checked(renovate), changes_lookup("[\"dockerfile\", \"ignorePaths\"]"))
+}
+
+test_s23_rejects_include_paths if {
+	renovate := with_value(valid_config, "includePaths", ["src/**"])
+	denied_with(checked(renovate), changes_lookup("[\"includePaths\"]"))
+}
+
+# Renovate turns ignoreNodeModules into ignorePaths
+# (lib/config/migrations/custom/ignore-node-modules-migration.ts, line 8).
+test_s23_rejects_the_legacy_ignore_node_modules if {
+	renovate := with_value(valid_config, "ignoreNodeModules", true)
+	denied_with(checked(renovate), changes_lookup("[\"ignoreNodeModules\"]"))
+}
+
+# The ignorePaths of the regex object, which package renovate_rules fixes to
+# the letter, stays allowed.
+test_s23_accepts_the_ignore_paths_of_the_regex_object if {
+	accepted(checked(with_value(valid_config, "regex", {"ignorePaths": ["**/node_modules/**"]})))
+}
+
+# The objects of current managers stay allowed: both renovate.json files set
+# pre-commit and regex.
+test_s23_accepts_the_objects_of_current_managers if {
+	renovate := object.union(valid_config, {
+		"pre-commit": {"enabled": true},
+		"regex": {"ignorePaths": ["**/node_modules/**"]},
+		"dockerfile": {"description": "Images of the Dockerfiles."},
+		"github-actions": {"description": "Actions of the workflows."},
+	})
+	accepted(checked(renovate))
+}
+
 # Registries without a release date (ADR-016): one entry, the block of the
 # ADR to the letter, description aside.
 
@@ -304,6 +489,176 @@ test_s23_rejects_vulnerability_alerts_turned_off if {
 
 test_s23_rejects_osv_alerts_turned_off if {
 	denied_with(checked(without(valid_config, "osvVulnerabilityAlerts")), "osvVulnerabilityAlerts must be true")
+}
+
+# Updates turned off. Renovate applies an entry to every package that its
+# criteria let through, whatever they are, and an entry without criteria to
+# all of them: enabled is written as true or not at all.
+
+test_s23_rejects_a_glob_entry_that_turns_every_update_off if {
+	rule := {"matchPackageNames": ["*"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_dep_name_entry_that_turns_updates_off if {
+	rule := {"matchDepNames": ["postgres"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_regex_entry_that_turns_off_a_registry_of_adr_016 if {
+	rule := {"matchPackageNames": ["/^ghcr\\.io//"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_regex_entry_that_turns_off_postgres if {
+	rule := {"matchPackageNames": ["/postgres/"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_negated_pattern_that_turns_updates_off if {
+	rule := {"matchPackageNames": ["!react"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_datasource_entry_that_turns_updates_off if {
+	rule := {"matchDatasources": ["docker"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_an_exact_name_entry_that_turns_updates_off if {
+	rule := {"matchPackageNames": ["kindest/node"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_updates_turned_off_for_an_update_type_inside_an_entry if {
+	rule := {"matchPackageNames": ["react"], "major": {"enabled": false}}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"major\", \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_manager_turned_off if {
+	renovate := with_value(valid_config, "dockerfile", {"enabled": false})
+	denied_with(checked(renovate), "[\"dockerfile\", \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_renovate_turned_off_at_the_top if {
+	denied_with(checked(with_value(valid_config, "enabled", false)), "[\"enabled\"] sets enabled to false")
+}
+
+# Renovate moves the entries of pathRules into packageRules
+# (lib/config/migrations/custom/path-rules-migration.ts, Renovate 44.247.1).
+test_s23_rejects_updates_turned_off_by_a_legacy_path_rule if {
+	renovate := with_value(valid_config, "pathRules", [{"paths": ["**"], "enabled": false}])
+	denied_with(checked(renovate), "[\"pathRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_enabled_written_as_a_string if {
+	rule := {"matchPackageNames": ["react"], "enabled": "no"}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to no")
+}
+
+# Both renovate.json files turn the pre-commit manager on.
+test_s23_accepts_a_manager_turned_on if {
+	accepted(checked(with_value(valid_config, "pre-commit", {"enabled": true})))
+}
+
+# Keys that route a lookup elsewhere, change what the registry answers, or
+# rewrite the name or the version of a package: a custom datasource, the
+# credentials and registries of npm, a host rule, a version filter, a new
+# versioning, a replacement.
+
+test_s23_rejects_custom_datasources if {
+	renovate := with_value(valid_config, "customDatasources", {"internal": {"defaultRegistryUrlTemplate": "https://registry.example.com"}})
+	denied_with(checked(renovate), changes_lookup("[\"customDatasources\"]"))
+}
+
+test_s23_rejects_npmrc if {
+	renovate := with_value(valid_config, "npmrc", "registry=https://registry.example.com")
+	denied_with(checked(renovate), changes_lookup("[\"npmrc\"]"))
+}
+
+test_s23_rejects_npmrc_merge if {
+	renovate := with_value(valid_config, "npmrcMerge", true)
+	denied_with(checked(renovate), changes_lookup("[\"npmrcMerge\"]"))
+}
+
+test_s23_rejects_registry_aliases if {
+	renovate := with_value(valid_config, "registryAliases", {"stable": "https://registry.example.com"})
+	denied_with(checked(renovate), changes_lookup("[\"registryAliases\"]"))
+}
+
+test_s23_rejects_host_rules if {
+	renovate := with_value(valid_config, "hostRules", [{"matchHost": "ghcr.io", "enabled": true}])
+	denied_with(checked(renovate), changes_lookup("[\"hostRules\"]"))
+}
+
+test_s23_rejects_extract_version if {
+	rule := {"matchPackageNames": ["postgres"], "extractVersion": "^nothing$"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"extractVersion\"]"))
+}
+
+test_s23_rejects_versioning if {
+	rule := {"matchPackageNames": ["postgres"], "versioning": "regex:^(?<major>\\d+)$"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"versioning\"]"))
+}
+
+test_s23_rejects_update_pinned_dependencies if {
+	renovate := with_value(valid_config, "updatePinnedDependencies", false)
+	denied_with(checked(renovate), changes_lookup("[\"updatePinnedDependencies\"]"))
+}
+
+test_s23_rejects_replacement_name if {
+	rule := {"matchPackageNames": ["postgres"], "replacementName": "example/postgres"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"replacementName\"]"))
+}
+
+test_s23_rejects_replacement_name_template if {
+	rule := {"matchPackageNames": ["postgres"], "replacementNameTemplate": "example/postgres"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"replacementNameTemplate\"]"))
+}
+
+test_s23_rejects_replacement_version if {
+	rule := {"matchPackageNames": ["postgres"], "replacementVersion": "1.0.0"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"replacementVersion\"]"))
+}
+
+test_s23_rejects_replacement_version_template if {
+	rule := {"matchPackageNames": ["postgres"], "replacementVersionTemplate": "1.0.0"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"replacementVersionTemplate\"]"))
+}
+
+test_s23_rejects_constraints_filtering if {
+	renovate := with_value(valid_config, "constraintsFiltering", "strict")
+	denied_with(checked(renovate), changes_lookup("[\"constraintsFiltering\"]"))
+}
+
+# The Template keys of the tools manager are other keys than extractVersion
+# and versioning, and stay allowed.
+test_s23_accepts_the_template_keys_of_a_custom_manager if {
+	manager := {"customType": "regex", "extractVersionTemplate": "^v(?<version>.*)$", "versioningTemplate": "semver"}
+	accepted(checked(with_value(valid_config, "customManagers", [manager])))
+}
+
+# constraints names the tool versions that Renovate runs with, as in
+# configuration-options.md: "constraints": {"node": "^18.0.0"}. The names of
+# the tools there are not the legacy objects docker, node and the like.
+test_s23_accepts_the_constraints_of_the_tools if {
+	renovate := with_value(valid_config, "constraints", {"node": "^18.0.0", "docker": "^27.0.0"})
+	accepted(checked(renovate))
+}
+
+test_s23_accepts_the_constraints_versioning_of_the_tools if {
+	renovate := with_value(valid_config, "constraintsVersioning", {"node": "semver"})
+	accepted(checked(renovate))
+}
+
+test_s23_rejects_a_constraint_that_is_not_a_string if {
+	renovate := with_value(valid_config, "constraints", {"node": widened})
+	denied_with(checked(renovate), legacy_container("constraints\", \"node"))
+}
+
+test_s23_still_rejects_the_legacy_node_object_with_enabled if {
+	renovate := with_value(valid_config, "node", {"enabled": true})
+	denied_with(checked(renovate), legacy_container("node"))
 }
 
 # Messages.

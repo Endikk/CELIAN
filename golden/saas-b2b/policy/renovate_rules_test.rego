@@ -46,12 +46,19 @@ regex_object := {
 	],
 }
 
+# The manager of the _IMAGE variables, to the letter, as both renovate.json
+# files write it: the workflows of the project, and in CELIAN those of the
+# golden repo too.
+images_expression := `# renovate: datasource=(?<datasource>docker) depName=(?<depName>\S+)\s+[A-Z0-9_]+_IMAGE\s*:\s*\S+?:(?<currentValue>[^\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)`
+
 image_manager := {
 	"customType": "regex",
 	"description": "Container images in workflow env vars ending in _IMAGE",
 	"managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
-	"matchStrings": ["# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_IMAGE"],
+	"matchStrings": [images_expression],
 }
+
+celian_image_manager := with_value(image_manager, "managerFilePatterns", ["/^\\.github/workflows/.+\\.ya?ml$/", "/^golden/saas-b2b/\\.github/workflows/.+\\.ya?ml$/"])
 
 # The manager of tests/tools/install.sh, next to platform.yaml.
 golden_tools_manager := {
@@ -117,13 +124,13 @@ test_s23_accepts_the_rules_of_the_constitution_and_the_adrs if {
 
 test_s23_accepts_files_under_a_folder if {
 	accepted([
-		{"path": "golden/saas-b2b/renovate.json", "contents": config_for(valid_rules, [image_manager, celian_tools_manager])},
+		{"path": "golden/saas-b2b/renovate.json", "contents": config_for(valid_rules, [celian_image_manager, celian_tools_manager])},
 		{"path": "golden/saas-b2b/platform.yaml", "contents": valid_platform},
 	])
 }
 
 test_s23_accepts_the_layout_of_celian if {
-	accepted(in_celian(config_for(valid_rules, [image_manager, celian_tools_manager])))
+	accepted(in_celian(config_for(valid_rules, [celian_image_manager, celian_tools_manager])))
 }
 
 test_s23_accepts_a_description_on_each_entry if {
@@ -207,12 +214,6 @@ test_s23_rejects_a_later_rule_that_widens_postgres if {
 	rule := {"matchPackageNames": ["postgres"], "allowedVersions": "/.*/"}
 	renovate := config_with(array.concat(valid_rules, [rule]))
 	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions /.*/ for the postgres image")
-}
-
-test_s23_rejects_a_rule_that_turns_off_postgres if {
-	rule := {"matchPackageNames": ["/postgres/"], "enabled": false}
-	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "packageRules[4] turns off the updates")
 }
 
 # kind and its node image.
@@ -323,6 +324,121 @@ test_s23_rejects_an_envoy_group_with_a_negated_pattern if {
 	denied_with(checked(renovate, valid_platform), "no packageRules entry puts the charts and the controller image of Envoy Gateway")
 }
 
+# A pattern of an entry that S23 relies on is a regex or one of its own
+# names. Renovate reads any other string as a glob (lib/util/string-match.ts,
+# Renovate 44.247.1), which catches() does not read.
+
+test_s23_rejects_a_glob_added_to_the_postgres_entry if {
+	rule := with_value(postgres_rule, "matchPackageNames", array.concat(postgres_rule.matchPackageNames, ["*"]))
+	renovate := config_with([rule, node_rule, kind_group, envoy_group])
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps the postgres image")
+}
+
+test_s23_rejects_a_pattern_that_renovate_reads_as_an_empty_regex if {
+	rule := with_value(node_rule, "matchPackageNames", array.concat(node_rule.matchPackageNames, ["//"]))
+	renovate := config_with([postgres_rule, rule, kind_group, envoy_group])
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps the kind node image")
+}
+
+test_s23_rejects_a_glob_added_to_the_kind_group if {
+	group := with_value(kind_group, "matchPackageNames", array.concat(kind_group.matchPackageNames, ["envoyproxy/*"]))
+	renovate := config_with([postgres_rule, node_rule, group, envoy_group])
+	denied_with(checked(renovate, valid_platform), "so that kind and its node image move in one PR")
+}
+
+# Entries that split a pair. An update lands in the branch, hence the PR,
+# that its group and branch keys name; a later entry that sets one of them
+# for part of a pair splits it.
+
+later_entry_fragment(key) := sprintf("[\"packageRules\", 4, \"%s\"] sets a key that decides the branch", [key])
+
+test_s23_rejects_a_glob_entry_that_moves_the_node_image_to_another_group if {
+	rule := {"matchPackageNames": ["kindest/*"], "groupName": "kind images"}
+	renovate := config_with(array.concat(valid_rules, [rule]))
+	denied_with(checked(renovate, valid_platform), later_entry_fragment("groupName"))
+}
+
+test_s23_rejects_a_glob_entry_that_moves_the_envoy_controller_to_another_group if {
+	rule := {"matchPackageNames": ["**/gateway"], "groupName": "controllers"}
+	renovate := config_with(array.concat(valid_rules, [rule]))
+	denied_with(checked(renovate, valid_platform), later_entry_fragment("groupName"))
+}
+
+test_s23_rejects_a_dep_name_entry_that_moves_the_node_image_to_another_group if {
+	rule := {"matchDepNames": ["kindest/node"], "groupName": "kind node"}
+	renovate := config_with(array.concat(valid_rules, [rule]))
+	denied_with(checked(renovate, valid_platform), later_entry_fragment("groupName"))
+}
+
+test_s23_rejects_another_group_slug_for_the_node_image if {
+	rule := {"matchPackageNames": ["kindest/node"], "groupSlug": "kind-node"}
+	renovate := config_with(array.concat(valid_rules, [rule]))
+	denied_with(checked(renovate, valid_platform), later_entry_fragment("groupSlug"))
+}
+
+test_s23_rejects_another_branch_prefix_for_the_envoy_charts if {
+	rule := {"matchPackageNames": ["/-helm$/"], "additionalBranchPrefix": "charts-"}
+	renovate := config_with(array.concat(valid_rules, [rule]))
+	denied_with(checked(renovate, valid_platform), later_entry_fragment("additionalBranchPrefix"))
+}
+
+# Renovate renames separatePatchReleases to separateMinorPatch
+# (lib/config/migrations/migrations-service.ts, line 105).
+test_s23_rejects_a_legacy_key_that_becomes_a_branch_key if {
+	rule := {"matchPackageNames": ["kindest/node"], "separatePatchReleases": true}
+	renovate := config_with(array.concat(valid_rules, [rule]))
+	denied_with(checked(renovate, valid_platform), later_entry_fragment("separatePatchReleases"))
+}
+
+test_s23_rejects_a_group_branch_topic_set_at_the_top if {
+	renovate := with_value(valid_config, "group", {"branchTopic": "{{{depNameSanitized}}}"})
+	denied_with(checked(renovate, valid_platform), "[\"group\"] sets a key that decides the branch")
+}
+
+test_s23_rejects_an_envoy_group_that_takes_the_node_image_from_kind if {
+	group := with_value(envoy_group, "matchPackageNames", array.concat(envoy_group.matchPackageNames, ["/^(docker\\.io/)?kindest/node$/"]))
+	renovate := config_with([postgres_rule, node_rule, kind_group, group])
+	denied_with(checked(renovate, valid_platform), "[\"packageRules\", 3, \"groupName\"] sets a key that decides the branch")
+}
+
+test_s23_rejects_a_kind_group_that_takes_part_of_envoy_gateway if {
+	group := with_value(kind_group, "matchPackageNames", array.concat(kind_group.matchPackageNames, ["/^envoyproxy/gateway$/"]))
+	renovate := config_with([postgres_rule, node_rule, envoy_group, group])
+	denied_with(checked(renovate, valid_platform), "[\"packageRules\", 3, \"groupName\"] sets a key that decides the branch")
+}
+
+test_s23_accepts_a_kind_group_that_takes_all_of_envoy_gateway if {
+	group := with_value(kind_group, "matchPackageNames", array.concat(kind_group.matchPackageNames, envoy_group.matchPackageNames))
+	accepted(checked(config_with([postgres_rule, node_rule, envoy_group, group]), valid_platform))
+}
+
+# The layout of both renovate.json files: a description on each entry, the
+# entry of ADR-016 last, the pre-commit manager turned on. conftest test runs
+# both packages on the files themselves (tests/static/s23-renovate.sh,
+# scripts/renovate/check-renovate.sh).
+
+file_rules := array.concat(
+	[rule |
+		some entry in valid_rules
+		rule := with_value(entry, "description", "Why this entry exists.")
+	],
+	[renovate_delay.undated_registries_rule],
+)
+
+file_config(managers) := object.union(config_for(file_rules, managers), {"pre-commit": {"enabled": true}})
+
+test_s23_accepts_the_layout_of_the_golden_repo_in_both_packages if {
+	files := checked(file_config([image_manager, golden_tools_manager]), valid_platform)
+	accepted(files)
+	count(renovate_delay.deny) == 0 with input as files
+}
+
+test_s23_accepts_the_layout_of_celian_in_both_packages if {
+	files := in_celian(file_config([celian_image_manager, celian_tools_manager]))
+	accepted(files)
+	count(renovate_delay.deny) == 0 with input as files
+}
+
 # The manager of tests/tools/install.sh, and the regex object that lets the
 # regex managers see tests/.
 
@@ -375,6 +491,78 @@ test_s23_rejects_a_regex_object_that_is_not_an_object if {
 test_s23_accepts_a_regex_object_without_a_description if {
 	renovate := with_value(valid_config, "regex", without(regex_object, "description"))
 	accepted(checked(renovate, valid_platform))
+}
+
+# The custom managers. A template of an entry wins over what its expression
+# captures, and picks the datasource, the package and the registry, hence who
+# dates a release: customManagers holds the two known managers, to the letter
+# apart from the description, and nothing else.
+
+test_s23_rejects_one_more_custom_manager if {
+	extra := {
+		"customType": "regex",
+		"managerFilePatterns": ["/^Dockerfile$/"],
+		"matchStrings": ["FROM (?<depName>\\S+):(?<currentValue>\\S+)"],
+	}
+	renovate := config_for(valid_rules, [image_manager, extra, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[1] is not one of the two known managers")
+}
+
+test_s23_rejects_one_more_custom_manager_in_celian if {
+	extra := {"customType": "regex", "managerFilePatterns": ["/^Dockerfile$/"], "matchStrings": ["FROM (?<depName>\\S+)"]}
+	renovate := config_for(valid_rules, [celian_image_manager, celian_tools_manager, extra])
+	denied_with(in_celian(renovate), "customManagers[2] is not one of the two known managers")
+}
+
+test_s23_rejects_an_image_manager_with_a_datasource_template if {
+	manager := with_value(image_manager, "datasourceTemplate", "github-tags")
+	renovate := config_for(valid_rules, [manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_an_image_manager_with_a_registry_url_template if {
+	manager := with_value(image_manager, "registryUrlTemplate", "https://registry.example.com")
+	renovate := config_for(valid_rules, [manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_an_image_manager_with_another_expression if {
+	manager := with_value(image_manager, "matchStrings", ["(?<depName>\\S+)_IMAGE: (?<currentValue>\\S+)"])
+	renovate := config_for(valid_rules, [manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_an_image_manager_with_another_file_pattern if {
+	manager := with_value(image_manager, "managerFilePatterns", ["/.*/"])
+	renovate := config_for(valid_rules, [manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_the_image_manager_of_celian_in_the_golden_repo if {
+	renovate := config_for(valid_rules, [celian_image_manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_the_image_manager_of_the_golden_repo_in_celian if {
+	renovate := config_for(valid_rules, [image_manager, celian_tools_manager])
+	denied_with(in_celian(renovate), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_a_tools_manager_with_a_datasource_template if {
+	manager := with_value(golden_tools_manager, "datasourceTemplate", "github-tags")
+	renovate := config_for(valid_rules, [image_manager, manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[1] is not one of the two known managers")
+}
+
+test_s23_names_the_two_known_managers_in_the_message if {
+	manager := with_value(image_manager, "datasourceTemplate", "github-tags")
+	renovate := config_for(valid_rules, [manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "the _IMAGE variables of the workflows and tests/tools/install.sh")
+}
+
+test_s23_rejects_custom_managers_that_is_not_a_list if {
+	renovate := with_value(valid_config, "customManagers", image_manager)
+	denied_with(checked(renovate, valid_platform), "customManagers must be a list")
 }
 
 # Messages.
