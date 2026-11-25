@@ -561,6 +561,106 @@ test_s23_accepts_a_manager_turned_on if {
 	accepted(checked(with_value(valid_config, "pre-commit", {"enabled": true})))
 }
 
+# Keys that route a lookup elsewhere, change what the registry answers, or
+# rewrite the name or the version of a package: a custom datasource, the
+# credentials and registries of npm, a host rule, a version filter, a new
+# versioning, a replacement.
+
+test_s23_rejects_custom_datasources if {
+	renovate := with_value(valid_config, "customDatasources", {"internal": {"defaultRegistryUrlTemplate": "https://registry.example.com"}})
+	denied_with(checked(renovate), changes_lookup("[\"customDatasources\"]"))
+}
+
+test_s23_rejects_npmrc if {
+	renovate := with_value(valid_config, "npmrc", "registry=https://registry.example.com")
+	denied_with(checked(renovate), changes_lookup("[\"npmrc\"]"))
+}
+
+test_s23_rejects_npmrc_merge if {
+	renovate := with_value(valid_config, "npmrcMerge", true)
+	denied_with(checked(renovate), changes_lookup("[\"npmrcMerge\"]"))
+}
+
+test_s23_rejects_registry_aliases if {
+	renovate := with_value(valid_config, "registryAliases", {"stable": "https://registry.example.com"})
+	denied_with(checked(renovate), changes_lookup("[\"registryAliases\"]"))
+}
+
+test_s23_rejects_host_rules if {
+	renovate := with_value(valid_config, "hostRules", [{"matchHost": "ghcr.io", "enabled": true}])
+	denied_with(checked(renovate), changes_lookup("[\"hostRules\"]"))
+}
+
+test_s23_rejects_extract_version if {
+	rule := {"matchPackageNames": ["postgres"], "extractVersion": "^nothing$"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"extractVersion\"]"))
+}
+
+test_s23_rejects_versioning if {
+	rule := {"matchPackageNames": ["postgres"], "versioning": "regex:^(?<major>\\d+)$"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"versioning\"]"))
+}
+
+test_s23_rejects_update_pinned_dependencies if {
+	renovate := with_value(valid_config, "updatePinnedDependencies", false)
+	denied_with(checked(renovate), changes_lookup("[\"updatePinnedDependencies\"]"))
+}
+
+test_s23_rejects_replacement_name if {
+	rule := {"matchPackageNames": ["postgres"], "replacementName": "example/postgres"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"replacementName\"]"))
+}
+
+test_s23_rejects_replacement_name_template if {
+	rule := {"matchPackageNames": ["postgres"], "replacementNameTemplate": "example/postgres"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"replacementNameTemplate\"]"))
+}
+
+test_s23_rejects_replacement_version if {
+	rule := {"matchPackageNames": ["postgres"], "replacementVersion": "1.0.0"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"replacementVersion\"]"))
+}
+
+test_s23_rejects_replacement_version_template if {
+	rule := {"matchPackageNames": ["postgres"], "replacementVersionTemplate": "1.0.0"}
+	denied_with(checked(config_with([rule])), changes_lookup("[\"packageRules\", 0, \"replacementVersionTemplate\"]"))
+}
+
+test_s23_rejects_constraints_filtering if {
+	renovate := with_value(valid_config, "constraintsFiltering", "strict")
+	denied_with(checked(renovate), changes_lookup("[\"constraintsFiltering\"]"))
+}
+
+# The Template keys of the tools manager are other keys than extractVersion
+# and versioning, and stay allowed.
+test_s23_accepts_the_template_keys_of_a_custom_manager if {
+	manager := {"customType": "regex", "extractVersionTemplate": "^v(?<version>.*)$", "versioningTemplate": "semver"}
+	accepted(checked(with_value(valid_config, "customManagers", [manager])))
+}
+
+# constraints names the tool versions that Renovate runs with, as in
+# configuration-options.md: "constraints": {"node": "^18.0.0"}. The names of
+# the tools there are not the legacy objects docker, node and the like.
+test_s23_accepts_the_constraints_of_the_tools if {
+	renovate := with_value(valid_config, "constraints", {"node": "^18.0.0", "docker": "^27.0.0"})
+	accepted(checked(renovate))
+}
+
+test_s23_accepts_the_constraints_versioning_of_the_tools if {
+	renovate := with_value(valid_config, "constraintsVersioning", {"node": "semver"})
+	accepted(checked(renovate))
+}
+
+test_s23_rejects_a_constraint_that_is_not_a_string if {
+	renovate := with_value(valid_config, "constraints", {"node": widened})
+	denied_with(checked(renovate), legacy_container("constraints\", \"node"))
+}
+
+test_s23_still_rejects_the_legacy_node_object_with_enabled if {
+	renovate := with_value(valid_config, "node", {"enabled": true})
+	denied_with(checked(renovate), legacy_container("node"))
+}
+
 # Messages.
 
 test_s23_names_the_delay_in_each_message if {

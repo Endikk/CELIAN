@@ -46,12 +46,19 @@ regex_object := {
 	],
 }
 
+# The manager of the _IMAGE variables, to the letter, as both renovate.json
+# files write it: the workflows of the project, and in CELIAN those of the
+# golden repo too.
+images_expression := `# renovate: datasource=(?<datasource>docker) depName=(?<depName>\S+)\s+[A-Z0-9_]+_IMAGE\s*:\s*\S+?:(?<currentValue>[^\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)`
+
 image_manager := {
 	"customType": "regex",
 	"description": "Container images in workflow env vars ending in _IMAGE",
 	"managerFilePatterns": ["/^\\.github/workflows/.+\\.ya?ml$/"],
-	"matchStrings": ["# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+[A-Z0-9_]+_IMAGE"],
+	"matchStrings": [images_expression],
 }
+
+celian_image_manager := with_value(image_manager, "managerFilePatterns", ["/^\\.github/workflows/.+\\.ya?ml$/", "/^golden/saas-b2b/\\.github/workflows/.+\\.ya?ml$/"])
 
 # The manager of tests/tools/install.sh, next to platform.yaml.
 golden_tools_manager := {
@@ -117,13 +124,13 @@ test_s23_accepts_the_rules_of_the_constitution_and_the_adrs if {
 
 test_s23_accepts_files_under_a_folder if {
 	accepted([
-		{"path": "golden/saas-b2b/renovate.json", "contents": config_for(valid_rules, [image_manager, celian_tools_manager])},
+		{"path": "golden/saas-b2b/renovate.json", "contents": config_for(valid_rules, [celian_image_manager, celian_tools_manager])},
 		{"path": "golden/saas-b2b/platform.yaml", "contents": valid_platform},
 	])
 }
 
 test_s23_accepts_the_layout_of_celian if {
-	accepted(in_celian(config_for(valid_rules, [image_manager, celian_tools_manager])))
+	accepted(in_celian(config_for(valid_rules, [celian_image_manager, celian_tools_manager])))
 }
 
 test_s23_accepts_a_description_on_each_entry if {
@@ -427,7 +434,7 @@ test_s23_accepts_the_layout_of_the_golden_repo_in_both_packages if {
 }
 
 test_s23_accepts_the_layout_of_celian_in_both_packages if {
-	files := in_celian(file_config([image_manager, celian_tools_manager]))
+	files := in_celian(file_config([celian_image_manager, celian_tools_manager]))
 	accepted(files)
 	count(renovate_delay.deny) == 0 with input as files
 }
@@ -484,6 +491,78 @@ test_s23_rejects_a_regex_object_that_is_not_an_object if {
 test_s23_accepts_a_regex_object_without_a_description if {
 	renovate := with_value(valid_config, "regex", without(regex_object, "description"))
 	accepted(checked(renovate, valid_platform))
+}
+
+# The custom managers. A template of an entry wins over what its expression
+# captures, and picks the datasource, the package and the registry, hence who
+# dates a release: customManagers holds the two known managers, to the letter
+# apart from the description, and nothing else.
+
+test_s23_rejects_one_more_custom_manager if {
+	extra := {
+		"customType": "regex",
+		"managerFilePatterns": ["/^Dockerfile$/"],
+		"matchStrings": ["FROM (?<depName>\\S+):(?<currentValue>\\S+)"],
+	}
+	renovate := config_for(valid_rules, [image_manager, extra, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[1] is not one of the two known managers")
+}
+
+test_s23_rejects_one_more_custom_manager_in_celian if {
+	extra := {"customType": "regex", "managerFilePatterns": ["/^Dockerfile$/"], "matchStrings": ["FROM (?<depName>\\S+)"]}
+	renovate := config_for(valid_rules, [celian_image_manager, celian_tools_manager, extra])
+	denied_with(in_celian(renovate), "customManagers[2] is not one of the two known managers")
+}
+
+test_s23_rejects_an_image_manager_with_a_datasource_template if {
+	manager := with_value(image_manager, "datasourceTemplate", "github-tags")
+	renovate := config_for(valid_rules, [manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_an_image_manager_with_a_registry_url_template if {
+	manager := with_value(image_manager, "registryUrlTemplate", "https://registry.example.com")
+	renovate := config_for(valid_rules, [manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_an_image_manager_with_another_expression if {
+	manager := with_value(image_manager, "matchStrings", ["(?<depName>\\S+)_IMAGE: (?<currentValue>\\S+)"])
+	renovate := config_for(valid_rules, [manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_an_image_manager_with_another_file_pattern if {
+	manager := with_value(image_manager, "managerFilePatterns", ["/.*/"])
+	renovate := config_for(valid_rules, [manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_the_image_manager_of_celian_in_the_golden_repo if {
+	renovate := config_for(valid_rules, [celian_image_manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_the_image_manager_of_the_golden_repo_in_celian if {
+	renovate := config_for(valid_rules, [image_manager, celian_tools_manager])
+	denied_with(in_celian(renovate), "customManagers[0] is not one of the two known managers")
+}
+
+test_s23_rejects_a_tools_manager_with_a_datasource_template if {
+	manager := with_value(golden_tools_manager, "datasourceTemplate", "github-tags")
+	renovate := config_for(valid_rules, [image_manager, manager])
+	denied_with(checked(renovate, valid_platform), "customManagers[1] is not one of the two known managers")
+}
+
+test_s23_names_the_two_known_managers_in_the_message if {
+	manager := with_value(image_manager, "datasourceTemplate", "github-tags")
+	renovate := config_for(valid_rules, [manager, golden_tools_manager])
+	denied_with(checked(renovate, valid_platform), "the _IMAGE variables of the workflows and tests/tools/install.sh")
+}
+
+test_s23_rejects_custom_managers_that_is_not_a_list if {
+	renovate := with_value(valid_config, "customManagers", image_manager)
+	denied_with(checked(renovate, valid_platform), "customManagers must be a list")
 }
 
 # Messages.
