@@ -28,56 +28,107 @@ standard := {"gateway.networking.k8s.io/bundle-version": "v1.7.0", "gateway.netw
 
 labels := {"helm.sh/chart": "gateway-helm-v1.10.0"}
 
-config(extra) := yaml.marshal(object.union({
+controller_ns := "envoy-gateway-system"
+
+app_ns := "saas-b2b"
+
+app_namespace_path := "k8s/base/namespace.yaml"
+
+# The kinds of the render that live in a namespace: the fixtures put them in
+# the namespace of the controller, as helm template -n does.
+namespaced_kinds := {"ConfigMap", "Deployment", "Job", "Role", "RoleBinding", "Secret", "Service", "ServiceAccount"}
+
+meta_in(ns, name) := {"name": name, "namespace": ns, "labels": labels}
+
+meta(kind, name) := meta_in(controller_ns, name) if {
+	kind in namespaced_kinds
+} else := {"name": name, "labels": labels}
+
+# The watch of the controller (ADR-005, complement of 2026-11-25).
+watch := {"type": "Namespaces", "namespaces": [controller_ns, app_ns]}
+
+config_object := {
 	"apiVersion": "gateway.envoyproxy.io/v1alpha1",
 	"kind": "EnvoyGateway",
 	"provider": {"type": "Kubernetes", "kubernetes": {
 		"rateLimitDeployment": {"container": {"image": "docker.io/envoyproxy/ratelimit:5ae0682e"}},
 		"shutdownManager": {"image": controller},
+		"watch": watch,
 	}},
-}, extra))
+}
+
+config(extra) := yaml.marshal(object.union(config_object, extra))
 
 configmap(text) := {
 	"apiVersion": "v1",
 	"kind": "ConfigMap",
-	"metadata": {"name": "envoy-gateway-config", "labels": labels},
+	"metadata": meta("ConfigMap", "envoy-gateway-config"),
 	"data": {"envoy-gateway.yaml": text},
 }
 
 deployment(image) := {
 	"apiVersion": "apps/v1",
 	"kind": "Deployment",
-	"metadata": {"name": "envoy-gateway", "labels": labels},
+	"metadata": meta("Deployment", "envoy-gateway"),
 	"spec": {"template": {"spec": {"containers": [{"name": "envoy-gateway", "image": image}]}}},
 }
 
 job(image) := {
 	"apiVersion": "batch/v1",
 	"kind": "Job",
-	"metadata": {"name": "eg-gateway-helm-certgen", "labels": labels},
+	"metadata": meta("Job", "eg-gateway-helm-certgen"),
 	"spec": {"template": {"spec": {"containers": [{"name": "envoy-gateway-certgen", "image": image}]}}},
 }
 
 # An object of the render of gateway-helm that the checks only name.
-stub(kind, name) := {"apiVersion": "v1", "kind": kind, "metadata": {"name": name, "labels": labels}}
+stub(kind, name) := {"apiVersion": "v1", "kind": kind, "metadata": meta(kind, name)}
 
 role(kind, name, verbs) := {
 	"apiVersion": "rbac.authorization.k8s.io/v1",
 	"kind": kind,
-	"metadata": {"name": name, "labels": labels},
+	"metadata": meta(kind, name),
 	"rules": [{"apiGroups": [""], "resources": ["configmaps"], "verbs": verbs}],
 }
 
 binding(kind, name, role_kind, role_name) := {
 	"apiVersion": "rbac.authorization.k8s.io/v1",
 	"kind": kind,
-	"metadata": {"name": name, "labels": labels},
+	"metadata": meta(kind, name),
 	"roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": role_kind, "name": role_name},
 	"subjects": [{"kind": "ServiceAccount", "name": "envoy-gateway", "namespace": "envoy-gateway-system"}],
 }
 
-# The 14 objects of the render besides the ConfigMap, the Deployment and the
-# Job; with those three, the 17 that S22 freezes.
+# The namespaced rights of the controller, which the watch puts in a Role of
+# each watched namespace (_rbac.tpl of the chart, eg.rbac.namespaced).
+namespaced_rules := [
+	{"apiGroups": [""], "resources": ["configmaps", "secrets", "services"], "verbs": ["get", "list", "watch"]},
+	{"apiGroups": [""], "resources": ["pods", "pods/binding"], "verbs": ["get", "list", "patch", "update", "watch"]},
+]
+
+role_in(ns, name, rules) := {
+	"apiVersion": "rbac.authorization.k8s.io/v1",
+	"kind": "Role",
+	"metadata": meta_in(ns, name),
+	"rules": rules,
+}
+
+binding_in(ns, name, role_name) := {
+	"apiVersion": "rbac.authorization.k8s.io/v1",
+	"kind": "RoleBinding",
+	"metadata": meta_in(ns, name),
+	"roleRef": {"apiGroup": "rbac.authorization.k8s.io", "kind": "Role", "name": role_name},
+	"subjects": [{"kind": "ServiceAccount", "name": "envoy-gateway", "namespace": "envoy-gateway-system"}],
+}
+
+cluster_role(name, rules) := {
+	"apiVersion": "rbac.authorization.k8s.io/v1",
+	"kind": "ClusterRole",
+	"metadata": meta("ClusterRole", name),
+	"rules": rules,
+}
+
+# The 14 objects of the render that step 7 froze, besides the ConfigMap, the
+# Deployment and the Job.
 other_objects := [
 	role("ClusterRole", "eg-gateway-helm-certgen:envoy-gateway-system", ["get", "update"]),
 	role("ClusterRole", "eg-gateway-helm-envoy-gateway-role", ["get", "list", "watch"]),
@@ -95,10 +146,25 @@ other_objects := [
 	stub("ServiceAccount", "envoy-gateway"),
 ]
 
+# The 4 objects that the watch adds: a Role and its RoleBinding in each
+# watched namespace.
+watch_objects := [
+	role_in(controller_ns, "eg-gateway-helm-envoy-gateway-role", namespaced_rules),
+	role_in(app_ns, "eg-gateway-helm-envoy-gateway-role", namespaced_rules),
+	binding_in(controller_ns, "eg-gateway-helm-envoy-gateway-rolebinding", "eg-gateway-helm-envoy-gateway-role"),
+	binding_in(app_ns, "eg-gateway-helm-envoy-gateway-rolebinding", "eg-gateway-helm-envoy-gateway-role"),
+]
+
 namespace(labels_of) := {
 	"apiVersion": "v1",
 	"kind": "Namespace",
 	"metadata": {"name": "envoy-gateway-system", "labels": labels_of},
+}
+
+app_namespace(name) := {
+	"apiVersion": "v1",
+	"kind": "Namespace",
+	"metadata": {"name": name, "labels": {"pod-security.kubernetes.io/enforce": "restricted"}},
 }
 
 base_files := [
@@ -110,9 +176,17 @@ base_files := [
 	{"path": helm_path, "contents": job(controller)},
 ]
 
+# Indexes: 0 to 5 base_files, 6 to 19 other_objects, 20 the namespace of the
+# controller, 21 to 24 watch_objects, 25 the namespace of the application.
 valid_files := array.concat(
-	array.concat(base_files, [{"path": helm_path, "contents": obj} | some obj in other_objects]),
-	[{"path": namespace_path, "contents": namespace({"pod-security.kubernetes.io/enforce": "restricted"})}],
+	array.concat(
+		array.concat(base_files, [{"path": helm_path, "contents": obj} | some obj in other_objects]),
+		[{"path": namespace_path, "contents": namespace({"pod-security.kubernetes.io/enforce": "restricted"})}],
+	),
+	array.concat(
+		[{"path": helm_path, "contents": obj} | some obj in watch_objects],
+		[{"path": app_namespace_path, "contents": app_namespace(app_ns)}],
+	),
 )
 
 accepted(files, refs_data) if {
@@ -230,10 +304,11 @@ test_s22_rejects_missing_references if {
 	denied_with(valid_files, {}, "the helm_chart reference of local/tasks/local.yml")
 }
 
-# The 17 objects of the render of gateway-helm are frozen by kind and name.
+# The 21 objects of the render of gateway-helm are frozen by kind, namespace
+# and name.
 test_s22_rejects_an_object_added_to_the_render if {
 	files := array.concat(valid_files, [{"path": helm_path, "contents": stub("Secret", "envoy-gateway-token")}])
-	denied_with(files, references, "Secret envoy-gateway-token")
+	denied_with(files, references, "Secret envoy-gateway-system/envoy-gateway-token")
 }
 
 test_s22_rejects_an_object_missing_from_the_render if {
@@ -243,7 +318,7 @@ test_s22_rejects_an_object_missing_from_the_render if {
 
 test_s22_rejects_an_object_renamed_in_the_render if {
 	files := replace(valid_files, 19, {"path": helm_path, "contents": stub("ServiceAccount", "envoy-gateway-admin")})
-	denied_with(files, references, "ServiceAccount envoy-gateway-admin")
+	denied_with(files, references, "ServiceAccount envoy-gateway-system/envoy-gateway-admin")
 }
 
 test_s22_rejects_a_service_in_the_render_of_another_kind if {
@@ -291,4 +366,73 @@ test_s22_rejects_a_privileged_namespace if {
 test_s22_accepts_the_baseline_namespace if {
 	files := replace(valid_files, 20, {"path": namespace_path, "contents": namespace({"pod-security.kubernetes.io/enforce": "baseline"})})
 	accepted(files, references)
+}
+
+# The watch of the controller: the namespaces of the project alone (ADR-005,
+# complement of 2026-11-25; tasks.md, gap 43).
+test_s22_rejects_a_configuration_without_watch if {
+	text := yaml.marshal(json.remove(config_object, ["provider/kubernetes/watch"]))
+	files := replace(valid_files, 3, {"path": helm_path, "contents": configmap(text)})
+	denied_with(files, references, "has no provider.kubernetes.watch")
+}
+
+test_s22_rejects_a_watch_by_namespace_selector if {
+	text := config({"provider": {"kubernetes": {"watch": {"type": "NamespaceSelector", "namespaceSelector": {"matchLabels": {"a": "b"}}}}}})
+	files := replace(valid_files, 3, {"path": helm_path, "contents": configmap(text)})
+	denied_with(files, references, "Namespaces expected")
+}
+
+test_s22_rejects_a_watch_of_another_namespace if {
+	text := config({"provider": {"kubernetes": {"watch": {"type": "Namespaces", "namespaces": [controller_ns, app_ns, "default"]}}}})
+	files := replace(valid_files, 3, {"path": helm_path, "contents": configmap(text)})
+	denied_with(files, references, "and no other")
+}
+
+test_s22_rejects_a_watch_without_the_application if {
+	text := config({"provider": {"kubernetes": {"watch": {"type": "Namespaces", "namespaces": [controller_ns]}}}})
+	files := replace(valid_files, 3, {"path": helm_path, "contents": configmap(text)})
+	denied_with(files, references, "and no other")
+}
+
+test_s22_rejects_a_watch_of_another_application_namespace if {
+	files := replace(valid_files, 25, {"path": app_namespace_path, "contents": app_namespace("shop")})
+	denied_with(files, references, "and no other")
+}
+
+test_s22_rejects_a_missing_application_namespace_file if {
+	files := array.slice(valid_files, 0, 25)
+	denied_with(files, references, "k8s/base/namespace")
+}
+
+test_s22_rejects_a_cluster_role_that_reads_secrets if {
+	rules := [{"apiGroups": [""], "resources": ["nodes", "secrets"], "verbs": ["get", "list", "watch"]}]
+	files := replace(valid_files, 7, {"path": helm_path, "contents": cluster_role("eg-gateway-helm-envoy-gateway-role", rules)})
+	denied_with(files, references, "on secrets across the cluster")
+}
+
+test_s22_rejects_a_cluster_role_that_patches_pods if {
+	rules := [{"apiGroups": [""], "resources": ["pods"], "verbs": ["patch", "update"]}]
+	files := replace(valid_files, 7, {"path": helm_path, "contents": cluster_role("eg-gateway-helm-envoy-gateway-role", rules)})
+	denied_with(files, references, "on pods across the cluster")
+}
+
+test_s22_rejects_a_cluster_role_on_every_resource if {
+	rules := [{"apiGroups": ["*"], "resources": ["*"], "verbs": ["get"]}]
+	files := replace(valid_files, 7, {"path": helm_path, "contents": cluster_role("eg-gateway-helm-envoy-gateway-role", rules)})
+	denied_with(files, references, "across the cluster")
+}
+
+test_s22_rejects_a_role_outside_the_project_namespaces if {
+	files := replace(valid_files, 22, {"path": helm_path, "contents": role_in("kube-system", "eg-gateway-helm-envoy-gateway-role", namespaced_rules)})
+	denied_with(files, references, "outside the namespaces of the project")
+}
+
+test_s22_rejects_a_role_moved_to_another_namespace if {
+	files := replace(valid_files, 24, {"path": helm_path, "contents": binding_in("default", "eg-gateway-helm-envoy-gateway-rolebinding", "eg-gateway-helm-envoy-gateway-role")})
+	denied_with(files, references, "lacks RoleBinding saas-b2b/eg-gateway-helm-envoy-gateway-rolebinding")
+}
+
+test_s22_rejects_a_render_without_the_watch_roles if {
+	files := array.concat(array.slice(valid_files, 0, 21), array.slice(valid_files, 25, 26))
+	denied_with(files, references, "lacks Role saas-b2b/eg-gateway-helm-envoy-gateway-role")
 }

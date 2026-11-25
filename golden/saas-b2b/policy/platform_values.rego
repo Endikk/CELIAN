@@ -5,8 +5,8 @@
 # Input: the files given to `conftest test --combine`, a list of objects with
 # a `path` and the parsed `contents` (research RS-18). Step 1 checks the shape
 # of platform.yaml; step 6 (T041) compares the node images of the kind
-# configuration with it; T065 and T105 add the Postgres image and the
-# OpenTofu layer.
+# configuration with it; T065 adds the Postgres image of local/data/, T105
+# the OpenTofu layer.
 #
 # OpenTofu layer (T105): its .tf files read the Kubernetes minor from
 # platform.yaml through a local. The Postgres major is a literal that equals
@@ -190,4 +190,50 @@ deny contains msg if {
 attribute_set(attribute) if {
 	some setting in layer_settings
 	setting.attribute == attribute
+}
+
+# The Postgres image of the local layer (T065): the major of its tag,
+# <major>.<minor>-trixie, is the postgres_major of platform.yaml (ADR-012,
+# condition 5). Renovate keeps it there (S23); a hand-made change shows here.
+postgres_files contains file if {
+	some file in input
+	regex.match(`(^|/)local/data/statefulset\.yaml$`, file.path)
+}
+
+postgres_images contains [file.path, image] if {
+	some file in postgres_files
+	walk(file.contents, [path, image])
+	count(path) > 0
+	path[count(path) - 1] == "image"
+	is_string(image)
+	regex.match(`(^|/)postgres:`, image)
+}
+
+# The major of a Postgres image reference: "18" for
+# docker.io/library/postgres:18.7-trixie@sha256:...
+postgres_image_major(image) := major if {
+	parts := regex.find_all_string_submatch_n(`(^|/)postgres:([0-9]+)\.[0-9]+[^@]*@sha256:[a-f0-9]{64}$`, image, 1)
+	count(parts) == 1
+	major := parts[0][2]
+}
+
+deny contains msg if {
+	some file in postgres_files
+	count({image | some [path, image] in postgres_images; path == file.path}) == 0
+	msg := sprintf("%s: %s names no Postgres image to compare with postgres_major", [label, file.path])
+}
+
+deny contains msg if {
+	some [path, image] in postgres_images
+	not postgres_image_major(image)
+	msg := sprintf("%s: the Postgres image %v of %s has no <major>.<minor> tag and digest to compare with postgres_major", [label, image, path])
+}
+
+deny contains msg if {
+	count(platform_postgres_majors) == 1
+	some major in platform_postgres_majors
+	some [path, image] in postgres_images
+	found := postgres_image_major(image)
+	found != major
+	msg := sprintf("%s: the Postgres image of %s runs the major %s, platform.yaml says postgres_major %s", [label, path, found, major])
 }
