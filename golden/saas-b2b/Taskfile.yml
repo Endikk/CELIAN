@@ -67,4 +67,3 @@ tasks:
     desc: Run the tests on kind of the current profile; the cluster is created, then deleted.
     cmds:
       - task: local:test-e2e
-
