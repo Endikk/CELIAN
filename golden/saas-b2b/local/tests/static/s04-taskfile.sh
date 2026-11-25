@@ -24,7 +24,7 @@ CDPATH='' cd -- "$root"
 . local/tests/static/lib/command-lines.sh
 
 # The commands that change the engine or a cluster, as written in the files.
-changing='(^|[^A-Za-z0-9_./-])(docker (container )?(run|create|rm|start|stop|kill|restart|rename|update|prune)|docker (volume|network) (create|rm|prune|connect|disconnect)|docker system prune|kind (create|delete) cluster)( |$)'
+changing='(^|[^A-Za-z0-9_./-])(docker (container )?(run|create|rm|start|stop|kill|restart|rename|update|prune)|docker (volume|network) (create|rm|prune|connect|disconnect)|docker system prune|kind (create|delete) clusters?)( |$)'
 
 # found_commands FILE: "<file>: <command>" for each changing command of FILE.
 found_commands() {

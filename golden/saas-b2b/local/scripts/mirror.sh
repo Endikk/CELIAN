@@ -2,8 +2,11 @@
 # The zot mirror of the local cluster (ADR-011; spec 001, plan, "Ce que fait
 # task up", point 3; contracts/task-cli.md).
 #
-# Usage: bash local/scripts/mirror.sh up IMAGE | down | report IMAGE | purge
-#   up      checks the configuration of the project, removes an old mirror
+# Usage: bash local/scripts/mirror.sh check IMAGE | up IMAGE | down | report IMAGE | purge
+#   check   the checks of up that need no cluster (image, configuration,
+#           container, volume): task up runs them before it creates the
+#           cluster, and creates nothing
+#   up      runs check and looks for the network kind, removes an old mirror
 #           container of the project, then starts the mirror on the network
 #           kind with no published port, the configuration read-only and the
 #           volume of the project, and waits until it runs
@@ -146,7 +149,12 @@ wait_ready() {
   fi
 }
 
-up() {
+# check IMAGE: everything that can be checked before the cluster exists, so that
+# task up refuses at once and not after 30 to 75 s of cluster creation
+# (contracts/task-cli.md, checks before creation): the image, the
+# configuration, the container and the volume of the mirror name. It creates
+# and removes nothing. The network kind is left to up: kind creates it.
+check() {
   local image="${1:-}" label owner
   if ! image_ok "$image"; then
     die "\"$image\" is not an image of $MIRROR_REPOSITORY by tag and digest: run the mirror through task up, which passes MIRROR_IMAGE of local/tasks/local.yml. Nothing was created."
@@ -154,16 +162,21 @@ up() {
   if [ ! -f "$CONFIG_FILE" ]; then
     die "$CONFIG_FILE is missing: the mirror never starts without the configuration of the project (ADR-011, condition 7). Restore it from the repository. Nothing was created."
   fi
-  if ! docker network inspect --format '{{.Name}}' "$KIND_NETWORK" >/dev/null 2>&1; then
-    die "the network $KIND_NETWORK does not exist: the cluster creates it, run task up. Nothing was created."
-  fi
   if owner="$(container_owner)" && ! is_ours "$owner"; then
     die "$(foreign_container "$owner") Nothing was created."
   fi
-  if label="$(volume_label)"; then
-    [ "$label" = "$MIRROR_ROLE" ] ||
-      die "a volume $MIRROR_VOLUME exists without the label $OWNER_LABEL_KEY=$MIRROR_ROLE: it is not the mirror volume of this project, and is left alone. Nothing was created."
-  else
+  if label="$(volume_label)" && [ "$label" != "$MIRROR_ROLE" ]; then
+    die "a volume $MIRROR_VOLUME exists without the label $OWNER_LABEL_KEY=$MIRROR_ROLE: it is not the mirror volume of this project, and is left alone. Nothing was created."
+  fi
+}
+
+up() {
+  local image="${1:-}"
+  check "$image"
+  if ! docker network inspect --format '{{.Name}}' "$KIND_NETWORK" >/dev/null 2>&1; then
+    die "the network $KIND_NETWORK does not exist: the cluster creates it, run task up. Nothing was created."
+  fi
+  if ! volume_label >/dev/null; then
     docker volume create --label "$OWNER_LABEL_KEY=$MIRROR_ROLE" "$MIRROR_VOLUME" >/dev/null
     printf 'Mirror: volume %s created.\n' "$MIRROR_VOLUME"
   fi
@@ -252,9 +265,13 @@ purge() {
 }
 
 case "${1:-}" in
+  check)
+    check "${2:-}"
+    printf 'Mirror: image, configuration, container and volume checked, nothing created.\n'
+    ;;
   up) up "${2:-}" ;;
   down) down ;;
   report) report "${2:-}" ;;
   purge) purge ;;
-  *) die "usage: bash local/scripts/mirror.sh up IMAGE | down | report IMAGE | purge" ;;
+  *) die "usage: bash local/scripts/mirror.sh check IMAGE | up IMAGE | down | report IMAGE | purge" ;;
 esac

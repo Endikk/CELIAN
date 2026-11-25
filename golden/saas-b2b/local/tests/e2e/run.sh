@@ -6,6 +6,10 @@
 # profile is refused until step 12 of spec 001, so the tests pass
 # PROFILE=lite (tasks.md, gap 14).
 #
+# It refuses to start when the cluster, the mirror container or the mirror
+# volume of the project already exist: it would remove what it did not create.
+# The CI runner is new and has none of them.
+#
 # The tests get a HOME of their own, so that the kubeconfig of the project
 # and the decoys of E24 never touch the user's ~/.kube. DOCKER_CONFIG keeps
 # the configuration directory of the docker CLI, and with it the current
@@ -18,6 +22,13 @@ set -uo pipefail
 
 here="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 root="$(CDPATH='' cd -- "$here/../../.." && pwd)"
+
+# Before anything else: no sandbox, no cleanup trap, no call that changes the
+# engine. The tests remove what they find under the names of the development
+# environment, so they never start over it (lib/guard.sh; P07).
+# shellcheck disable=SC1091 # lib/guard.sh is checked on its own
+. "$here/lib/guard.sh"
+e2e_guard || exit 1
 
 # The order matters: E24 starts the environment with a decoy kubeconfig set,
 # E08 ends with task down and task mirror:purge.

@@ -22,13 +22,17 @@ tasks:
   # up, or task up PROFILE=lite. Task does not export a command-line variable
   # to the commands, hence env; a PROFILE already in the environment wins
   # over it (research RS-08). The host ports join the call with step 7
-  # (T059). The platform and the application arrive with steps 7 to 9.
+  # (T059). The platform and the application arrive with steps 7 to 9. The
+  # checks of the mirror come before the cluster is created: a container or a
+  # volume that is not the project's stops task up at once; only the network
+  # kind, which kind creates, is checked after (mirror.sh up).
   up:
     silent: true
     env:
       PROFILE: '{{.PROFILE}}'
     cmds:
       - bash local/scripts/preflight.sh
+      - bash local/scripts/mirror.sh check '{{.MIRROR_IMAGE}}'
       - bash local/scripts/cluster.sh up
       - bash local/scripts/mirror.sh up '{{.MIRROR_IMAGE}}'
       - echo 'task up stops after the cluster and the mirror. The platform and the application arrive with steps 7 to 9 of spec 001.'

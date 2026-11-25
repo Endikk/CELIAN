@@ -8,7 +8,9 @@
 # above all (FR-019). The one exception is "kubectl version --client" of the
 # preflight checks, which reads no kubeconfig (research RS-08). A
 # port-forward listens on 127.0.0.1 only. The kind commands that write or
-# remove a kubeconfig entry name the same file and the cluster. Nothing sets
+# remove a kubeconfig entry name the same file and the cluster, plural form
+# included (kind delete clusters). No docker command carries a global option
+# (--context, -H, --host): it would aim the command at another engine. Nothing sets
 # KUBECONFIG. The two values come from local/scripts/lib/local-env.sh, which
 # keeps the kubeconfig outside the repository (research RS-21).
 #
@@ -51,7 +53,7 @@ check_file() {
         fi
         ;;
     esac
-    if [[ $text =~ ${command_start}kind\ (create\ cluster|delete\ cluster|export\ kubeconfig|get\ kubeconfig) ]]; then
+    if [[ $text =~ ${command_start}kind\ (create\ clusters?|delete\ clusters?|export\ kubeconfig|get\ kubeconfig) ]]; then
       case "$text" in
         *"$kubeconfig_flag"*) ;;
         *) printf '%s:%s: kind writes or removes a kubeconfig entry without %s: %s\n' "$file" "$number" "$kubeconfig_flag" "$text" ;;
@@ -60,6 +62,13 @@ check_file() {
         *"$name_flag"*) ;;
         *) printf '%s:%s: kind without %s: %s\n' "$file" "$number" "$name_flag" "$text" ;;
       esac
+    fi
+    # A global option of docker (--context, -c, --host, -H, --config, ...)
+    # aims the command at another engine than the one of the user's current
+    # context, which preflight.sh has checked. The tasks and the scripts
+    # write no option before the docker command.
+    if [[ $text =~ ${command_start}docker\ - ]]; then
+      printf '%s:%s: docker with a global option, which can aim it at another engine: %s\n' "$file" "$number" "$text"
     fi
     if [[ $text =~ (^|[^A-Za-z0-9_])KUBECONFIG= ]]; then
       printf '%s:%s: KUBECONFIG set; the tasks pass %s instead: %s\n' "$file" "$number" "$kubeconfig_flag" "$text"
