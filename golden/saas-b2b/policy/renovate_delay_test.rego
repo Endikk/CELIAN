@@ -306,6 +306,76 @@ test_s23_rejects_osv_alerts_turned_off if {
 	denied_with(checked(without(valid_config, "osvVulnerabilityAlerts")), "osvVulnerabilityAlerts must be true")
 }
 
+# Updates turned off. Renovate applies an entry to every package that its
+# criteria let through, whatever they are, and an entry without criteria to
+# all of them: enabled is written as true or not at all.
+
+test_s23_rejects_a_glob_entry_that_turns_every_update_off if {
+	rule := {"matchPackageNames": ["*"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_dep_name_entry_that_turns_updates_off if {
+	rule := {"matchDepNames": ["postgres"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_regex_entry_that_turns_off_a_registry_of_adr_016 if {
+	rule := {"matchPackageNames": ["/^ghcr\\.io//"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_regex_entry_that_turns_off_postgres if {
+	rule := {"matchPackageNames": ["/postgres/"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_negated_pattern_that_turns_updates_off if {
+	rule := {"matchPackageNames": ["!react"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_datasource_entry_that_turns_updates_off if {
+	rule := {"matchDatasources": ["docker"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_an_exact_name_entry_that_turns_updates_off if {
+	rule := {"matchPackageNames": ["kindest/node"], "enabled": false}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_updates_turned_off_for_an_update_type_inside_an_entry if {
+	rule := {"matchPackageNames": ["react"], "major": {"enabled": false}}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"major\", \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_a_manager_turned_off if {
+	renovate := with_value(valid_config, "dockerfile", {"enabled": false})
+	denied_with(checked(renovate), "[\"dockerfile\", \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_renovate_turned_off_at_the_top if {
+	denied_with(checked(with_value(valid_config, "enabled", false)), "[\"enabled\"] sets enabled to false")
+}
+
+# Renovate moves the entries of pathRules into packageRules
+# (lib/config/migrations/custom/path-rules-migration.ts, Renovate 44.247.1).
+test_s23_rejects_updates_turned_off_by_a_legacy_path_rule if {
+	renovate := with_value(valid_config, "pathRules", [{"paths": ["**"], "enabled": false}])
+	denied_with(checked(renovate), "[\"pathRules\", 0, \"enabled\"] sets enabled to false")
+}
+
+test_s23_rejects_enabled_written_as_a_string if {
+	rule := {"matchPackageNames": ["react"], "enabled": "no"}
+	denied_with(checked(config_with([rule])), "[\"packageRules\", 0, \"enabled\"] sets enabled to no")
+}
+
+# Both renovate.json files turn the pre-commit manager on.
+test_s23_accepts_a_manager_turned_on if {
+	accepted(checked(with_value(valid_config, "pre-commit", {"enabled": true})))
+}
+
 # Messages.
 
 test_s23_names_the_delay_in_each_message if {
