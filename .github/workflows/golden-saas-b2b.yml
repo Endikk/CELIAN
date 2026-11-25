@@ -72,7 +72,8 @@ jobs:
   # U01 and U02: unit tests of the API and of the front, each in its build
   # image (research RS-06). The runner's Docker builds the test stages of
   # src/Api/Dockerfile and src/front/Dockerfile; neither .NET SDK nor
-  # Node.js is installed. A required check, like static.
+  # Node.js is installed. U03: the decision of the image scan, on example
+  # reports. A required check, like static.
   unit:
     name: unit
     runs-on: ubuntu-latest
@@ -92,6 +93,44 @@ jobs:
 
       - name: Run the unit tests
         run: task test
+
+  # E27 on the pulled images of the lite profile, without a cluster (spec
+  # 001, T117): the node, the mirror, Envoy Gateway and its proxy, then each
+  # image that the next steps add to the inventory (S25). First with a
+  # database repository under .invalid, where the scan must fail and say so,
+  # then for real, with the database downloaded in this run and no cache
+  # (research RS-22). Trivy comes from tests/tools/install.sh, checked
+  # against its SHA-256, never from an action of Aqua Security (S26). The
+  # second PR of step 18 moves the scan into e2e-lite (T123). No path
+  # filter: a finding published after a merge fails the next PR (plan,
+  # "SBOM et scan des images"). Required check of the ruleset of main.
+  scan-images:
+    name: scan-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: golden/saas-b2b
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Trivy and conftest
+        run: |
+          bash tests/tools/install.sh "$RUNNER_TEMP/golden-tools"
+          echo "$RUNNER_TEMP/golden-tools" >> "$GITHUB_PATH"
+
+      # kubectl renders local/k8s/<profile> for the inventory once step 8
+      # writes it; its Kustomize reads no kubeconfig (research RS-24).
+      - name: Install kind and kubectl
+        working-directory: .
+        run: |
+          bash scripts/ci/install-kind-kubectl.sh "$RUNNER_TEMP/kind-tools"
+          echo "$RUNNER_TEMP/kind-tools" >> "$GITHUB_PATH"
+
+      - name: Scan the pulled images (E27)
+        run: bash tests/scan/e27-pulled-images.sh
 
   # X01: the golden repo as a project of its own, copied into a new Git
   # repository where its hooks, commitlint, actionlint and gitleaks run
