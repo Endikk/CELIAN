@@ -3,7 +3,9 @@
 # - every update waits 7 days (constitution, principle VI);
 # - a security fix does not wait (principle VI, constitution 1.2.0);
 # - an update from a registry that Renovate cannot date waits on the
-#   Dependency Dashboard until a person ticks it (ADR-016).
+#   Dependency Dashboard until a person ticks it (ADR-016);
+# - nothing turns updates off, security fixes included (principle VI,
+#   ADR-016).
 #
 # The rules that hold for any Renovate configuration of CELIAN live here,
 # apart from the rules that follow platform.yaml, in package renovate_rules.
@@ -210,6 +212,28 @@ deny contains msg if {
 	path[count(path) - 1] == "dependencyDashboardApproval"
 	not undated_rule_path(path, "dependencyDashboardApproval")
 	msg := sprintf("%s: %v sets dependencyDashboardApproval; only the entry of ADR-016 sets it", [label_undated, path])
+}
+
+# Updates turned off. Renovate applies a packageRules entry to every package
+# that its criteria let through, and an entry without criteria to all of them
+# (lib/util/package-rules/index.ts, lines 28 to 46, Renovate 44.247.1). A
+# criterion can be a glob read by minimatch, a regex, a negated pattern
+# (lib/util/string-match.ts, lines 11 to 57), matchDepNames or
+# matchDatasources: S23 cannot tell which updates such an entry turns off,
+# nor what a manager or the top turns off. A security fix does not bring the
+# update back: the entry that Renovate adds for an advisory forces the
+# settings of vulnerabilityAlerts, where enabled is not set
+# (lib/workers/repository/init/vulnerability.ts, lines 160 to 166;
+# lib/util/package-rules/index.ts, lines 79 to 103). So enabled is true
+# wherever it is written, legacy pathRules included, which Renovate moves
+# into packageRules (lib/config/migrations/custom/path-rules-migration.ts).
+deny contains msg if {
+	is_object(config)
+	walk(config, [path, value])
+	count(path) > 0
+	path[count(path) - 1] == "enabled"
+	value != true
+	msg := sprintf("%s: %v sets enabled to %v; enabled is written as true or not at all, because S23 cannot tell which updates, security fixes included, an entry, a manager or the top would turn off", [label_undated, path, value])
 }
 
 # Security exception: written out, so that a change of default upstream

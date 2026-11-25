@@ -8,6 +8,8 @@
 #   kind and its node image share one group (ADR-004, version rule, point 5);
 # - the charts and the controller image of Envoy Gateway share one group
 #   (ADR-005, updates, point 2);
+# - no other entry, manager or top setting decides the branch of an update,
+#   so that nothing splits those two pairs;
 # - Task and conftest, pinned in tests/tools/install.sh next to
 #   platform.yaml, keep their custom manager, and the regex managers see
 #   tests/, which config:recommended hides (research RS-17).
@@ -38,6 +40,8 @@ label_envoy := "S23 (FR-013; ADR-005, updates, point 2)"
 label_versions := "S23 (FR-013; ADR-004, version rule, point 5; ADR-012, condition 5)"
 
 label_tools := "S23 (FR-013; research RS-17)"
+
+label_pairs := "S23 (FR-013; ADR-004, version rule, point 5; ADR-005, updates, point 2)"
 
 # Names under which Renovate may report each image or release: with or
 # without the registry, as the file it reads writes them.
@@ -93,7 +97,8 @@ deny contains msg if {
 # Matching of package names. An entry of matchPackageNames catches a name
 # when it is that name (Renovate compares exact names without case), or a
 # regular expression between slashes that matches it (research RS-18).
-# Other globs and negated patterns catch nothing here.
+# Other globs and negated patterns catch nothing here: the entries that S23
+# relies on may not hold them (own_pattern).
 
 regex_body(pattern) := substring(pattern, 1, count(pattern) - 2) if {
 	startswith(pattern, "/")
@@ -143,24 +148,37 @@ guard_keys := {"description", "matchDatasources", "matchPackageNames", "allowedV
 
 group_keys := {"description", "matchDatasources", "matchPackageNames", "groupName"}
 
-# rule holds only keys of `allowed`, and a list of plain patterns in
-# matchPackageNames. A pattern that starts with ! excludes the names it
-# matches (lib/util/string-match.ts, lines 48 to 57), and catches() does not
-# read it.
-plain(rule, allowed) if {
+# A pattern that catches() reads in full: a regular expression between
+# slashes, or one of `names`. Renovate reads any other string as a glob,
+# through minimatch without case, or as an exclusion when it starts with !
+# (lib/util/string-match.ts, lines 11 to 27 and 48 to 57, Renovate 44.247.1);
+# it reads "/" and "//" as an empty regular expression, which catches every
+# name (lines 73 to 92).
+own_pattern(pattern, _) if {
+	is_string(pattern)
+	is_string(regex_body(pattern))
+}
+
+own_pattern(pattern, names) if {
+	is_string(pattern)
+	lower(pattern) in names
+}
+
+# rule holds only keys of `allowed`, and in matchPackageNames only patterns
+# that catches() reads in full.
+plain(rule, allowed, names) if {
 	is_object(rule)
 	every key, _ in rule {
 		key in allowed
 	}
 	is_array(rule.matchPackageNames)
 	every pattern in rule.matchPackageNames {
-		is_string(pattern)
-		not startswith(pattern, "!")
+		own_pattern(pattern, names)
 	}
 }
 
 guard_rule(rule, names, expected) if {
-	plain(rule, guard_keys)
+	plain(rule, guard_keys, names)
 	for_docker(rule)
 	every name in names {
 		catches(rule, name)
@@ -177,7 +195,7 @@ guard_entry(rule) if postgres_entry(rule)
 guard_entry(rule) if node_entry(rule)
 
 group_rule(rule, names) if {
-	plain(rule, group_keys)
+	plain(rule, group_keys, names)
 	grouped(rule)
 	every name in names {
 		catches(rule, name)
@@ -193,15 +211,96 @@ deny contains msg if {
 	is_object(rule)
 	"allowedVersions" in object.keys(rule)
 	not guard_entry(rule)
-	msg := sprintf("%s: packageRules[%v] sets allowedVersions; only the postgres and node entries set it, with no other key than %s, and no pattern that starts with !", [label_versions, i, concat(", ", guard_keys)])
+	msg := sprintf("%s: packageRules[%v] sets allowedVersions; only the postgres and node entries set it, with no other key than %s, and only regexes or their own names as patterns", [label_versions, i, concat(", ", guard_keys)])
 }
 
+# An entry that turns updates off is refused in package renovate_delay,
+# whatever it catches.
+
+# Keys that decide the branch of an update, hence its PR. Renovate puts the
+# updates of one branch name in one PR
+# (lib/workers/repository/updates/branchify.ts, lines 47 to 49), and builds
+# that name from these keys (lib/workers/repository/updates/branch-name.ts,
+# lines 59 to 159), groupSlug following the last groupName
+# (lib/util/package-rules/index.ts, lines 69 to 74). The last four are legacy
+# names that Renovate turns into one of them
+# (lib/config/migrations/migrations-service.ts, lines 103 to 105;
+# lib/config/migrations/custom/separate-major-release-migration.ts).
+branch_keys := {
+	"groupName",
+	"groupSlug",
+	"group",
+	"branchName",
+	"branchTopic",
+	"branchPrefix",
+	"additionalBranchPrefix",
+	"hashedBranchLength",
+	"branchNameStrict",
+	"separateMajorMinor",
+	"separateMultipleMajor",
+	"separateMultipleMinor",
+	"separateMinorPatch",
+	"managerBranchPrefix",
+	"multipleMajorPrs",
+	"separatePatchReleases",
+	"separateMajorReleases",
+}
+
+# A group of S23 keeps each pair whole: it catches all of a pair or none of
+# it, kind with no matchDatasources, Envoy Gateway as docker images.
+kind_whole(rule) if {
+	every name in kind_pair_names {
+		catches(rule, name)
+	}
+	not rule.matchDatasources
+}
+
+envoy_whole(rule) if {
+	every name in envoy_names {
+		catches(rule, name)
+	}
+	for_docker(rule)
+}
+
+splits(rule) if {
+	catches_any(rule, kind_pair_names)
+	not kind_whole(rule)
+}
+
+splits(rule) if {
+	catches_any(rule, envoy_names)
+	not envoy_whole(rule)
+}
+
+group_entry(rule) if {
+	group_rule(rule, kind_pair_names)
+	not splits(rule)
+}
+
+group_entry(rule) if {
+	group_rule(rule, envoy_names)
+	not splits(rule)
+}
+
+group_name_path(path) if {
+	count(path) == 3
+	path[0] == "packageRules"
+	path[2] == "groupName"
+	group_entry(rules[path[1]])
+}
+
+# Only the groupName of the two groups decides a branch. Any other entry can
+# catch part of a pair, through a glob, a regex, matchDepNames or a criterion
+# that catches() does not read; a manager or the top can name a branch after
+# each package, through a template. S23 refuses the key itself, wherever it is
+# written, legacy containers of packageRules included.
 deny contains msg if {
-	some i, rule in rules
-	is_object(rule)
-	rule.enabled == false
-	catches_any(rule, watched_names)
-	msg := sprintf("%s: packageRules[%v] turns off the updates of an image or release that S23 watches", [label, i])
+	is_object(config)
+	walk(config, [path, _])
+	count(path) > 0
+	path[count(path) - 1] in branch_keys
+	not group_name_path(path)
+	msg := sprintf("%s: %v sets a key that decides the branch, hence the PR, of an update; only the kind group and the Envoy group set one, groupName, and each catches all or none of both pairs, so that nothing splits kind from its node image or the charts of Envoy Gateway from its controller", [label_pairs, path])
 }
 
 # Postgres: no other major than the one of platform.yaml.
@@ -215,7 +314,7 @@ deny contains msg if {
 	is_object(config)
 	is_object(platform)
 	not postgres_rule_found
-	msg := sprintf("%s: no packageRules entry keeps the postgres image on allowedVersions %s, the postgres_major of platform.yaml, with matchPackageNames catching %s, no other key than %s, and no pattern that starts with !", [label_postgres, expected_postgres, concat(", ", postgres_names), concat(", ", guard_keys)])
+	msg := sprintf("%s: no packageRules entry keeps the postgres image on allowedVersions %s, the postgres_major of platform.yaml, with matchPackageNames catching %s, no other key than %s, and only regexes or these names as patterns", [label_postgres, expected_postgres, concat(", ", postgres_names), concat(", ", guard_keys)])
 }
 
 deny contains msg if {
@@ -239,7 +338,7 @@ deny contains msg if {
 	is_object(config)
 	is_object(platform)
 	not node_rule_found
-	msg := sprintf("%s: no packageRules entry keeps the kind node image on allowedVersions %s, the kubernetes_minor of platform.yaml, with matchPackageNames catching %s, no other key than %s, and no pattern that starts with !", [label_kind, expected_node, concat(", ", node_names), concat(", ", guard_keys)])
+	msg := sprintf("%s: no packageRules entry keeps the kind node image on allowedVersions %s, the kubernetes_minor of platform.yaml, with matchPackageNames catching %s, no other key than %s, and only regexes or these names as patterns", [label_kind, expected_node, concat(", ", node_names), concat(", ", guard_keys)])
 }
 
 deny contains msg if {
@@ -260,7 +359,7 @@ kind_group_found if {
 deny contains msg if {
 	is_object(config)
 	not kind_group_found
-	msg := sprintf("%s: no packageRules entry without matchDatasources puts %s in one groupName, with no other key than %s, and no pattern that starts with !, so that kind and its node image move in one PR", [label_kind, concat(", ", kind_pair_names), concat(", ", group_keys)])
+	msg := sprintf("%s: no packageRules entry without matchDatasources puts %s in one groupName, with no other key than %s, and only regexes or these names as patterns, so that kind and its node image move in one PR", [label_kind, concat(", ", kind_pair_names), concat(", ", group_keys)])
 }
 
 # Envoy Gateway: the charts and the controller image in one group.
@@ -274,7 +373,7 @@ envoy_group_found if {
 deny contains msg if {
 	is_object(config)
 	not envoy_group_found
-	msg := sprintf("%s: no packageRules entry puts the charts and the controller image of Envoy Gateway (%s) in one groupName, with no other key than %s, and no pattern that starts with !", [label_envoy, concat(", ", envoy_names), concat(", ", group_keys)])
+	msg := sprintf("%s: no packageRules entry puts the charts and the controller image of Envoy Gateway (%s) in one groupName, with no other key than %s, and only regexes or these names as patterns", [label_envoy, concat(", ", envoy_names), concat(", ", group_keys)])
 }
 
 # Task and conftest. tests/tools/install.sh pins their versions, each under

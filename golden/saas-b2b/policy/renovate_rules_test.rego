@@ -209,12 +209,6 @@ test_s23_rejects_a_later_rule_that_widens_postgres if {
 	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions /.*/ for the postgres image")
 }
 
-test_s23_rejects_a_rule_that_turns_off_postgres if {
-	rule := {"matchPackageNames": ["/postgres/"], "enabled": false}
-	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "packageRules[4] turns off the updates")
-}
-
 # kind and its node image.
 
 test_s23_rejects_another_kubernetes_minor if {
