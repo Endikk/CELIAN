@@ -4,15 +4,15 @@
 | --- | --- |
 | Identifiant | BENCH-014 |
 | Sujet | Moteur du cache du projet généré : image dans le cluster kind de la cible `local`, et variante de Memorystore sur `gcp` |
-| Statut | brouillon |
+| Statut | relu |
 | Ouvert le | 2026-11-21 |
 | Mis à jour le | 2026-11-25 |
 | Auteur | [BENCH] |
 | Relecteurs | [SECU] pour les licences et les CVE, [FINOPS] pour les coûts |
 | Périmètre | Projet généré sur PC (cluster kind, ADR-004) et projet généré sur GCP (Memorystore, ADR-008) |
 | Choix du PRD | Aucune ligne propre au cache. US-004 : le service de chaque brique vient du catalogue, par cible. Le brief (sections 5 et 6) prévoit Memorystore sur GCP et Valkey sur le PC |
-| ADR lié | À écrire par [ARCHI], après les relectures et l'arbitrage du DSI |
-| Verdict proposé | O1, Valkey 9.1.4 : 86/100, devant Redis 7.2.17 (72). Écart de 14 points ; l'empreinte, mesurée le 2026-11-25, ne départage pas (4/5 chacune) et ne pourrait pas l'inverser (section 7). En attente des relectures [SECU] et [FINOPS] |
+| ADR lié | ADR-015, à écrire par [ARCHI] d'après l'arbitrage du DSI du 2026-11-25 (section 7) |
+| Verdict proposé | O1, Valkey 9.1.4 : 86/100, devant Redis 7.2.17 (69). Écart de 17 points, après la correction de maturité de [SECU] ; l'empreinte, mesurée le 2026-11-25, ne départage pas (4/5 chacune) et ne pourrait pas l'inverser (section 7). Retenu par le DSI le 2026-11-25 ; dérogation datée à ENF-03 pour `valkey/valkey` ; relectures [SECU] et [FINOPS] en section 10 |
 
 ## 1. Contexte
 
@@ -93,7 +93,7 @@ candidat devient une option s'il remplit les cinq conditions suivantes.
 
 | Option | Image et condensat d'index | Registre | Plates-formes | Tenue par | Attestations et signature |
 | --- | --- | --- | --- | --- | --- |
-| O1. Valkey | `valkey/valkey:9.1.4-alpine@sha256:56729e68…b37893f0` | docker.io, aussi publiée sur ghcr.io et public.ecr.aws | Construites pour linux/amd64, linux/arm64, linux/arm/v7 et linux/ppc64le ; le tag liste amd64, arm64, arm v7 et ppc64le | La communauté Valkey, dépôt `valkey-io/valkey-container`. Hors du programme d'images officielles : `library/valkey` n'existe pas | Construction avec `provenance: false`, aucune étape de signature |
+| O1. Valkey | `valkey/valkey:9.1.4-alpine@sha256:56729e68…b37893f0` | docker.io, aussi publiée sur ghcr.io et public.ecr.aws | Construites pour linux/amd64, linux/arm64, linux/arm/v7 et linux/ppc64le ; le tag liste amd64, arm64, arm v7 et ppc64le | La communauté Valkey, dépôt `valkey-io/valkey-container`. Hors du programme d'images officielles : `library/valkey` n'existe pas | Construction avec `provenance: false`, aucune étape de signature. Le même condensat d'index est publié sur docker.io, ghcr.io et public.ecr.aws ; aucun manifeste d'attestation dans l'index, aucun tag `sha256-*`, API d'attestations de GitHub à 404 ; le SBOM SPDX embarqué dans l'image n'est pas signé (relecture [SECU], 2026-11-25) [S55], [S56], [S57] |
 | O2. Redis 7.2 | `redis:7.2.17-alpine@sha256:2f66de68…5aa1c335` | docker.io, programme d'images officielles (`library/redis`) | amd64, arm32v6, arm32v7, arm64v8, i386, ppc64le, riscv64, s390x | Huit mainteneurs, tous en `@redis.com` | Aucune signature vérifiable des images officielles depuis le retrait de Docker Content Trust (BENCH-011, S45 et S49) |
 
 [BENCH] Sources de ce tableau : [S7], [S8], [S14], [S16], [S38]. Le condensat
@@ -142,6 +142,12 @@ la même raison. Memorystore for Valkey propose un mode sans cluster
 
 [BENCH] Options éliminées : aucune parmi les deux étudiées. KeyDB, Dragonfly
 et Redict le sont avant l'étude (section 2).
+
+[BENCH] Délai de 7 jours du principe VI (correction demandée par [SECU],
+2026-11-25). Le tag `9.1.4-alpine` a été poussé le 2026-11-18 à 23:11:58 UTC
+(`tag_last_pushed` de Docker Hub) ; le délai s'achève le 2026-11-25 à 23:12
+UTC. La 9.1.4 corrige GHSA-3885-pq5f-788j : l'exception du principe VI la
+couvrait de toute façon [S59].
 
 [BENCH] Parité de version (ENF-02), lue le 2026-11-23. Aucune option n'est
 éliminée à ce titre.
@@ -280,7 +286,8 @@ mot de passe par la variable `REDISCLI_AUTH`, que `redis-cli` lit et que
 1. État de départ : aucun cluster `celian-bench-014`. Le script ne construit
    ni ne retire aucune image : chaque exécution crée un nœud kind neuf, qui
    tire l'image de l'option sur le réseau (R-25). L'image du nœud reste en
-   cache, partagée avec les autres benchmarks.
+   cache, partagée avec les autres benchmarks ; `kind create cluster` la tire
+   si elle manque au cache de l'hôte (précision de [SECU]).
 2. Commandes, identiques à chaque exécution : création du cluster, namespace,
    Secret, puis `kubectl apply` du cache et du client.
 3. Fin de M1 : le premier de trois `PING` authentifiés de suite qui reçoivent
@@ -339,8 +346,10 @@ de commit.
 
 [BENCH] Inventaire des commandes qui créent, modifient ou suppriment un
 conteneur ou un réseau, en tête du script pour la relecture [SECU] :
-`kind create cluster`, qui lance le nœud par `docker run --privileged` et crée
-le réseau `kind` s'il manque ; `kind delete cluster` ; `docker network rm
+`kind create cluster`, qui lance le nœud par `docker run --privileged`, avec
+aussi `seccomp=unconfined`, `apparmor=unconfined` et `--restart=on-failure:1`,
+et crée le réseau `kind` par `docker network create -d=bridge` s'il manque
+[S65] ; `kind delete cluster` ; `docker network rm
 kind`, seulement si le script a créé ce réseau et qu'il est vide. Aucun
 `docker run`, `start`, `stop`, `restart`, `exec`, `cp` ni `create` : le
 redémarrage du nœud de BENCH-011 n'existe pas ici. Les autres appels à Docker
@@ -351,6 +360,24 @@ contrôle d'alimentation ne fait que lire : `pmset -g ps`, `pmset -g log`,
 ni wget, ni python, ni node, ni perl : l'horloge vient de `gdate` s'il est
 installé, sinon de `date +%s`, à la seconde, et le choix est noté dans
 `versions.tsv`.
+
+[BENCH] Compléments de l'inventaire, demandés par [SECU] le 2026-11-25. Hors
+du dossier d'essai, le script n'écrit que le dossier du verrou, quand
+`BENCH_LOCK` est défini, et tient une assertion `caffeinate` libérée à sa
+sortie. Dans le cluster, il écrit par `kubectl apply`, `create`, `scale`,
+`delete pod` et `exec`, toujours vers `celian-bench-014`, par un `KUBECONFIG`
+du dossier d'essai. Il ne sort du poste que par `docker manifest inspect`,
+`docker buildx imagetools inspect` et les tirages du nœud, tous vers Docker
+Hub. `docker ps -q`, qui manquait dans BENCH-013, figure ici parmi les
+lectures. [SECU] confirme l'inventaire du script `16daad12…`, exact et complet
+pour ce qui crée, modifie ou supprime un conteneur ou un réseau.
+
+[BENCH] Correction non appliquée. [SECU] demande que l'en-tête du script, qui
+dit « no port is published to the host », devienne « no port is published
+outside the loopback », puisque kind publie l'API sur 127.0.0.1 (R-20). Le
+script du rapport a pour SHA-256 `16daad12…` et les relectures le citent : le
+modifier changerait ce condensat. La correction se fera à la prochaine
+modification du script, comme l'écrit [SECU].
 
 ### 4.4 Résultats
 
@@ -528,6 +555,18 @@ de la ligne 7.2 que Memorystore for Redis sert par défaut [S24].
    25,6 et 6,2 Mio pour O2. M2 de O2 tient dans le bruit du nœud de base,
    dont l'écart vaut 36,1 Mio. La plus haute valeur, 70,5 Mio, fait 13,8 %
    du seuil de 512 Mio.
+   Précisions de [FINOPS], 2026-11-25. Les 70,5 Mio sont l'écart d'une même
+   ronde ; le majorant de la règle de BENCH-013 (nœud d'option le plus haut
+   moins nœud de base le plus bas) vaut 70,6 Mio pour O1 (644,6 moins 574,0).
+   Les bornes se recouvrent : O1 entre 24,3 et 70,6 Mio, O2 entre moins 29,9
+   et 61,7 Mio. Le script écrit seulement la médiane des trois échantillons de
+   nœud de chaque exécution (`runs.tsv`), pas les échantillons : les médianes
+   d'exécution ne peuvent pas être refaites, contrairement aux pods
+   (`idle-pods.tsv`). Hypothèse de [FINOPS], non mesurée : le cache de pages
+   actif et la mémoire du noyau, comptés par `docker stats` au nœud et
+   absents des pods [S47] ; Valkey est le nœud le plus lourd des trois
+   rondes, une chance sur 27 si l'ordre était aléatoire, et le protocole a un
+   ordre fixe.
 2. M1 et sa résolution. Les six valeurs se rangent sur trois niveaux, 4,4,
    5,5 et 6,5 s, espacés d'environ une seconde, le pas de la sonde. Les deux
    options ont la même médiane, 5,5 s, et leur écart est sous la résolution
@@ -569,7 +608,9 @@ rapport à l'autre.
 
 [BENCH] Notes de lecture du 2026-11-23, sur 90, complétées le 2026-11-25 par
 l'empreinte mesurée (section 5.6). Chaque option est notée comme un couple,
-le moteur sur `local` et sa variante de Memorystore sur `gcp`.
+le moteur sur `local` et sa variante de Memorystore sur `gcp`. Une seule note
+a changé depuis la lecture : la maturité de Redis 7.2, de 5 à 4, sur la
+relecture de [SECU] (section 5.3, correction appliquée).
 
 ### 5.1 Licence et liberté d'usage, poids 15
 
@@ -590,7 +631,7 @@ le moteur sur `local` et sa variante de Memorystore sur `gcp`.
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
 | O1. Valkey | 4/5 | 12 | Code issu de Redis 7.2.4 ; première version GA, 7.2.5, le 2024-04-16. Google le sert en GA dans Memorystore depuis le 2025-04-02, et 9.1 y est la version par défaut. La page du projet liste 23 organisations participantes. Politique de support écrite : trois ans de maintenance par mineure, cinq ans de sécurité pour la dernière mineure de chaque majeure. Réserve : projet de deux ans et huit mois, liste de participants déclarative, aucun niveau de maturité de fondation | [S3], [S6], [S18], [S40] |
-| O2. Redis 7.2 | 5/5 | 15 | Dépôt créé en 2009 ; ligne 7.2 en « Extended », maintenue jusqu'au 2029-12-01, servie par défaut par Memorystore for Redis | [S9], [S12], [S24] |
+| O2. Redis 7.2 | 4/5 | 12 | Dépôt créé en 2009 ; ligne 7.2 en « Extended », maintenue jusqu'au 2029-12-01, servie par défaut par Memorystore for Redis. Réserve (correction de [SECU], 2026-11-25) : le 5 revient aux projets gradués à la CNCF qui tiennent une liste d'adoptants (Cilium, Argo CD, Flux) et à minikube ; un projet sans fondation, sans liste d'adoptants tenue par lui-même, a reçu 4 (k3d, Traefik, Config Sync, Mailpit). Redis 7.2 n'a pas de liste d'adoptants : l'âge du dépôt, la ligne Extended et Memorystore ne suffisent pas à la règle de BENCH-013 | [S9], [S12], [S24] |
 
 ### 5.4 Activité et maintenance, poids 10
 
@@ -603,8 +644,8 @@ le moteur sur `local` et sa variante de Memorystore sur `gcp`.
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| O1. Valkey | 3/5 | 6 | Neuf avis en 12 mois, huit élevés et un moyen, chacun corrigé par une release de chaque ligne maintenue ; quatre releases de sécurité pour la ligne 9.1. Signalement privé, divulgation coordonnée avec une liste d'éditeurs. La réserve demande une action : trois avis sur neuf n'ont pas de CVE, donc échappent aux scanners ; l'image n'a ni provenance ni signature, et la dérogation de l'ADR-012 ne la couvre pas, puisqu'elle sort du programme d'images officielles | [S2], [S5], [S7], [S38], [S42] |
-| O2. Redis 7.2 | 3/5 | 6 | Quatre releases de sécurité de la ligne 7.2 en 12 mois, dont trois CVE publiées par avis le 2026-05-05. Le 2026-10-26, Redis et Valkey corrigent le même jour une faille de même description, un dépassement de tampon sur un `PUBLISH` relayé par le bus du cluster. Signalement par un programme de divulgation ou par GitHub. La réserve demande une action : les correctifs de 7.2.15, 7.2.16 et 7.2.17 n'ont ni avis ni CVE, d'où une veille des notes de version ; l'image officielle n'a pas de signature vérifiable, couverte par la dérogation de l'ADR-012 | [S2], [S5], [S10], [S13], [S42] |
+| O1. Valkey | 3/5 | 6 | Neuf avis en 12 mois, huit élevés et un moyen, chacun corrigé par une release de chaque ligne maintenue ; quatre releases de sécurité pour la ligne 9.1. Signalement privé, divulgation coordonnée avec une liste d'éditeurs. La réserve demande une action : Trivy 0.76.2 ne voit pas le moteur, compilé depuis les sources hors de tout gestionnaire de paquets (23 paquets d'Alpine, aucun paquet `valkey`), et aucun des douze avis, neuf de Valkey et trois de Redis, n'est dans la base mondiale de GitHub, dont trois sans CVE (correction de [SECU], 2026-11-25) ; une seconde source par la CPE du SBOM embarqué (`cpe:2.3:a:lfprojects:valkey:9.1.4`) se heurte au retard de NVD, CVE-2026-63639 y étant « Awaiting Analysis » le 2026-11-25. Les six avis qui touchent la ligne 9.1 sont corrigés au plus tard par la 9.1.4 et demandent tous un client authentifié. L'image n'a ni provenance ni signature (index sans manifeste d'attestation, aucun tag `sha256-*`, API d'attestations à 404), et la dérogation de l'ADR-012 ne la couvre pas, puisqu'elle sort du programme d'images officielles | [S2], [S5], [S7], [S38], [S42], [S53], [S54], [S55], [S56], [S57], [S66] |
+| O2. Redis 7.2 | 3/5 | 6 | Quatre releases de sécurité de la ligne 7.2 en 12 mois, dont trois CVE publiées par avis le 2026-05-05. Le 2026-10-26, Redis et Valkey corrigent le même jour une faille de même description, un dépassement de tampon sur un `PUBLISH` relayé par le bus du cluster. Signalement par un programme de divulgation ou par GitHub. La réserve demande une action : les correctifs de 7.2.15, 7.2.16 et 7.2.17 n'ont ni avis ni CVE, d'où une veille des notes de version. Même angle mort que Valkey (correction de [SECU], 2026-11-25) : Trivy 0.76.2 ne voit pas le moteur dans l'image (20 paquets d'Alpine, aucun paquet `redis`), et aucun des trois avis n'est dans la base mondiale ; ils demandent un client authentifié. L'image officielle n'a pas de signature vérifiable, couverte par la dérogation de l'ADR-012 | [S2], [S5], [S10], [S13], [S42], [S53], [S54] |
 
 [BENCH] Le contrôle de M6 (mot de passe imposé, absent des lignes de
 commande) vaut pour les deux options, avec les mêmes manifests : il confirme
@@ -634,13 +675,18 @@ O1, à 16,7 % du seuil de volume. Le seuil 2 se lit par oui ou non.
 
 [BENCH] Sensibilité. La somme des pods à la place du nœud (6,4 et 5,8 Mio)
 ne franchit aucun seuil. M2 lu exécution par exécution non plus : au plus
-70,5 Mio pour O1, 13,8 % du seuil 4. L'écart de 50,4 Mio entre les nœuds des
+70,5 Mio pour O1 (écart d'une même ronde), 13,8 % du seuil 4 ; le majorant de
+la règle de BENCH-013, nœud d'option le plus haut moins nœud de base le plus
+bas, vaut 70,6 Mio pour O1 et 61,7 pour O2, soit 13,8 % et 12,1 %
+(correction de [FINOPS], 2026-11-25). L'écart de 50,4 Mio entre les nœuds des
 deux options, sans cause établie (section 4.4, point 1), reste sans effet sur
 la note. Avec le miroir zot de l'ADR-011, si le seuil 2 se lit comme un
 retéléchargement depuis Internet, les deux options regagnent un cran, 5/5 :
 le classement ne change pas (section 7). Cumul avec la plate-forme de base,
 en sensibilité (deuxième règle) : 524,6 Mo pour O1 et 521,8 Mo pour O2,
-au-dessus des 500 Mo tous les deux.
+au-dessus des 500 Mo tous les deux. Avec la base mesurée avec le miroir zot
+(583,5 Mo, BENCH-010) : 602,3 et 599,5 Mo, même effet (correction de
+[FINOPS], 2026-11-25).
 
 ### 5.7 Portabilité multi-cloud, poids 10
 
@@ -677,43 +723,48 @@ script [S36], [S37].
 
 | Option | Note | Points | Justification | Sources |
 | --- | --- | --- | --- | --- |
-| O1. Valkey | 4/5 | 4 | Aucune licence ni service payant sur le PC. Sur `gcp`, grilles de prix illisibles le 2026-11-23 ; seul fait lu, le plus petit nœud, `shared-core-nano`, réservé au développement, et `custom-pico` avec SLA. Réserve : prix à lire par [FINOPS] (R-05) | [S23], [S29] |
-| O2. Redis 7.2 | 4/5 | 4 | Aucune licence ni service payant sur le PC. Sur `gcp`, grille illisible, même réserve | [S29] |
+| O1. Valkey | 4/5 | 4 | Aucune licence ni service payant sur le PC. Sur `gcp`, grilles de prix illisibles le 2026-11-23 et le 2026-11-25. Mode de facturation lu (correction de [FINOPS], 2026-11-25) : par nœud et par heure, un réplica doublant la facture d'une instance à une partition ; engagements à 20 % (un an) et 40 % (trois ans), payés chaque heure et non annulables, hors stockage, sauvegardes, persistance et sortie de données. Plus petit nœud : `shared-core-nano`, réservé au développement, et `custom-pico` avec SLA. Postes non lus : point de terminaison Private Service Connect, trafic qui le traverse, stockage des sauvegardes. Réserve : prix à lire avec la région par Lucas (R-05) | [S23], [S29], [S48], [S49], [S50] |
+| O2. Redis 7.2 | 4/5 | 4 | Aucune licence ni service payant sur le PC. Sur `gcp`, grille illisible (404 le 2026-11-23), même réserve | [S29] |
 
 [BENCH] Le critère ne départage pas les options : aucune n'a de prix lu, et
-le coût de sortie de la ligne 7.2 est déjà compté en licence (5.1).
+le coût de sortie de la ligne 7.2 est déjà compté en licence (5.1). [FINOPS]
+confirme 4/5 pour les deux ; la réserve passe de « prix illisibles » à
+« prix à lire avec la région ».
 
 ## 6. Grille pondérée
 
-[BENCH] Grille du 2026-11-25, sur 100, avant les relectures. L'empreinte
+[BENCH] Grille du 2026-11-25, sur 100, après les relectures. L'empreinte
 vient de la série 2 (section 5.6) ; les autres notes sont celles du
 2026-11-23, et seules les justifications de 5.5 et de 5.8 reçoivent le
-résultat de la série, sans changement de note.
+résultat de la série, sans changement de note. Seule la maturité de Redis 7.2
+change, de 5 à 4, sur la relecture de [SECU] : 69 au lieu de 72.
 
 | Critère | Poids | O1. Valkey | O2. Redis 7.2 |
 | --- | --- | --- | --- |
 | Critères éliminatoires (section 3) | éliminatoire | passe | passe |
 | Licence et liberté d'usage | 15 | 5/5, 15 pts | 3/5, 9 pts |
 | Gouvernance (fondation, multi-vendeurs) | 15 | 5/5, 15 pts | 2/5, 6 pts |
-| Maturité et adoption | 15 | 4/5, 12 pts | 5/5, 15 pts |
+| Maturité et adoption | 15 | 4/5, 12 pts | 4/5, 12 pts |
 | Activité et maintenance | 10 | 5/5, 10 pts | 4/5, 8 pts |
 | Sécurité (CVE, réactivité) | 10 | 3/5, 6 pts | 3/5, 6 pts |
 | Empreinte sur PC (RAM, CPU, démarrage) | 10 | 4/5, 8 pts | 4/5, 8 pts |
 | Portabilité multi-cloud | 10 | 4/5, 8 pts | 4/5, 8 pts |
 | Expérience dev et documentation | 10 | 4/5, 8 pts | 4/5, 8 pts |
 | Coût (managé ou opérationnel) | 5 | 4/5, 4 pts | 4/5, 4 pts |
-| Total | 100 | 86 / 100 | 72 / 100 |
+| Total | 100 | 86 / 100 | 69 / 100 |
 
 ## 7. Verdict proposé
 
 [BENCH] Proposition : O1, Valkey 9.1.4, à 86 sur 100, devant Redis 7.2.17 à
-72. L'écart de 14 points vient tout entier des notes de lecture : l'empreinte,
+69. L'écart de 17 points vient tout entier des notes de lecture : l'empreinte,
 mesurée par la série 2, donne 4/5 aux deux options. Elle ne pourrait pas
-l'inverser : même à 0/5 pour O1 et 5/5 pour O2, il resterait 78 contre 74.
+l'inverser : même à 0/5 pour O1 et 5/5 pour O2, il resterait 78 contre 71.
+Avant la relecture de [SECU], la maturité de Redis valait 5 et le total 72,
+soit 14 points d'écart.
 
-[BENCH] Pourquoi. L'écart vient de la licence (6 points) et de la gouvernance
-(9 points), moins la maturité (3 points rendus à Redis), plus l'activité
-(2 points). Valkey est sous BSD-3-Clause, porté par LF Projects, avec un
+[BENCH] Pourquoi. L'écart vient de la licence (6 points), de la gouvernance
+(9 points) et de l'activité (2 points) ; la maturité, à 4/5 chacune, ne
+départage plus. Valkey est sous BSD-3-Clause, porté par LF Projects, avec un
 comité où aucune organisation ne dépasse un tiers [S4], [S6]. Redis 7.2
 garde la BSD-3-Clause, mais sur une ligne figée que l'éditeur a déjà quittée
 deux fois par un changement de licence [S9], [S11]. Le principe V tranche
@@ -723,24 +774,39 @@ dans le même sens que la grille.
 
 | Lecture | O1 | O2 | En tête | Règle |
 | --- | --- | --- | --- | --- |
-| Grille (section 6) | 86 | 72 | O1 | Sans objet |
-| Licence de O2 à 4 (la ligne 7.2 seule compte) | 86 | 75 | O1 | Aucune contredite : jugement sur la trajectoire |
-| Gouvernance de O2 à 3 (127 auteurs) | 86 | 75 | O1 | Aucune contredite : jugement |
-| Les deux à la fois, et maturité de O1 à 3 | 83 | 78 | O1 | Aucune contredite : trois jugements |
+| Grille (section 6) | 86 | 69 | O1 | Sans objet |
+| Licence de O2 à 4 (la ligne 7.2 seule compte) | 86 | 72 | O1 | Aucune contredite : jugement sur la trajectoire |
+| Gouvernance de O2 à 3 (127 auteurs) | 86 | 72 | O1 | Aucune contredite : jugement |
+| Les deux à la fois, et maturité de O1 à 3 | 83 | 75 | O1 | Aucune contredite : trois jugements |
 | O2 en Redis 8.12 sous AGPLv3 | 86 | parité perdue face à Memorystore (7.2) | O1 | Contredit la condition 3 de la section 2 et la décision du DSI sur la ligne locale |
-| Empreinte au pire pour O1 (0/5) et au mieux pour O2 (5/5) | 78 | 74 | O1 | Contredit les mesures de la série 2 ; borne de ce que le critère peut changer |
-| Somme des pods à la place du nœud (6,4 et 5,8 Mio), ou M2 exécution par exécution (au plus 70,5 Mio) | 86 | 72 | O1 | Contredit la troisième règle de la GATE 1 ; aucun seuil franchi, même effet |
-| Miroir zot de l'ADR-011 : seuil 2 lu comme un retéléchargement depuis Internet ; docker.io servi pour les deux | 88 | 74 | O1 | Contredit la lettre du seuil 2, mesuré sans miroir |
-| Volume cumulé avec la plate-forme de base (505,8 Mo, BENCH-011) contre 500 Mo : 524,6 et 521,8 Mo | 86 | 72 | O1 | Contredit la deuxième règle de la GATE 1 ; les deux sont au-dessus, même effet |
+| Empreinte au pire pour O1 (0/5) et au mieux pour O2 (5/5) | 78 | 71 | O1 | Contredit les mesures de la série 2 ; borne de ce que le critère peut changer |
+| Somme des pods à la place du nœud (6,4 et 5,8 Mio), ou M2 exécution par exécution (au plus 70,5 Mio) | 86 | 69 | O1 | Contredit la troisième règle de la GATE 1 ; aucun seuil franchi, même effet |
+| Miroir zot de l'ADR-011 : seuil 2 lu comme un retéléchargement depuis Internet ; docker.io servi pour les deux | 88 | 71 | O1 | Contredit la lettre du seuil 2, mesuré sans miroir |
+| Volume cumulé avec la plate-forme de base (505,8 Mo, BENCH-011) contre 500 Mo : 524,6 et 521,8 Mo | 86 | 69 | O1 | Contredit la deuxième règle de la GATE 1 ; les deux sont au-dessus, même effet |
 
 [BENCH] Aucune lecture n'inverse le classement. Pour que Redis 7.2 passe
-devant, il faudrait au moins cinq crans de note contre O1, tous sur des
-critères de poids 15 : l'écart vaut 14 points, et un cran en vaut au plus 3.
+devant, il faudrait au moins six crans de note contre O1, tous sur des
+critères de poids 15 : l'écart vaut 17 points, et un cran en vaut au plus 3
+(cinq crans pour un écart de 14, avant la correction de maturité).
 
 [BENCH] Cumul avec le premier `task up` (R-04), pour [FINOPS]. La stack de
 BENCH-005, comptée dans R-04, contient déjà `valkey/valkey:9.1.4-alpine`
 (18,8 Mo en amd64) : O1 ne change rien au volume du premier lancement, et O2
-le réduirait de 2,8 Mo (16,0 au lieu de 18,8).
+le réduirait de 2,8 Mo (16,0 au lieu de 18,8). Chiffres de [FINOPS], 2026-11-25
+(correction demandée) : le premier `task up` du profil standard reste à
+1 802,1 Mo avec O1 (160,2 % du budget de 900 s à 10 Mbit/s, 16,0 Mbit/s au
+minimum) et passe à 1 799,3 Mo avec O2 (159,9 %). Le profil lite, sans Flux
+(ADR-010), Keycloak ni Mailpit, vaut 1 263,8 Mo avec zot : 1 011,0 s à
+10 Mbit/s, 112,3 % du budget, 11,2 Mbit/s au minimum pour le seul
+téléchargement ; calcul de [FINOPS] sur des séries de jours différents, un
+ordre de grandeur. Le cache pèse 18,8 Mo là-dedans, 1,7 % du budget : même
+sans cache, le lite resterait à 110,7 %, et le choix du moteur ne peut ni
+faire tenir ni faire manquer le critère des 15 minutes. Plancher mémoire, par
+la méthode de BENCH-005 et le majorant : le lite reste à 2,0 Gio de VM et
+6,0 Gio de portable, avec 108 à 122 Mio avant le palier suivant ; le standard
+à 3,5 Gio de VM et 7,5 Gio de portable, avec 8 à 23 Mio avant le palier de
+4,0 Gio, qui tient encore sur 8 Gio. Le moteur ne décide aucun de ces
+paliers : Valkey est déjà dans les planchers de l'ADR-012 et de BENCH-013.
 
 [BENCH] Gouvernance : l'option proposée ne dépend pas d'un éditeur unique.
 Sur `gcp`, Memorystore reste un service de Google seul, comme toute cible
@@ -756,8 +822,10 @@ que Memorystore sert par défaut, 9.1 au 2026-11-23 [S18]. Prochaine
 vérification : à la sortie d'une ligne 9.2 dans Memorystore, ou au plus tard
 le 2027-05-23.
 
-[BENCH] Conditions proposées pour l'ADR, à confirmer après les relectures,
-chacune vérifiable par la matrice (principe I) :
+[BENCH] Conditions proposées pour l'ADR, avant les relectures et corrigées
+selon leurs demandes (conditions 2, 3 et 5). Les conditions complètes de
+[SECU] (1 à 8) et de [FINOPS] (1 à 7) figurent en section 10 ; l'ADR-015
+reprend celles-ci. Chacune est vérifiable par la matrice (principe I) :
 
 1. Ligne commune. La ligne de Valkey est celle que Memorystore sert par
    défaut, relevée à chaque release du blueprint et tenue en une seule valeur
@@ -767,19 +835,28 @@ chacune vérifiable par la matrice (principe I) :
    persistance, profil `restricted`, configuration écrite depuis le Secret par
    un conteneur d'initialisation, comme dans le script. Contrôle : la matrice
    rejoue M6, et échoue si un manifest porte le mot de passe dans `command`,
-   `args` ou `env` du serveur.
+   `args` ou `env` du serveur. Ajout demandé par [SECU] : une ACL sur le compte
+   `default` (`-@admin` et le refus des commandes que Memorystore bloque) à la
+   place de `requirepass`, le conteneur d'initialisation n'écrivant que
+   l'empreinte SHA-256 du mot de passe (condition 4 de [SECU], section 10).
 3. Secret `cache-auth`, type `Opaque`, clé `password`, sur les deux cibles. Sur
    `gcp`, `authorization_mode = "TOKEN_AUTH"` ; le producteur du Secret
    attend la ressource `google_memorystore_auth_token` dans une version
    publiée du provider, et le jeton tombe dans l'état chiffré (condition 2 de
    l'ADR-008). L'authentification IAM reste une évolution, avec son propre
-   ADR, puisqu'elle change le code client sur `gcp`.
+   ADR, puisqu'elle change le code client sur `gcp`. Ajouts demandés par
+   [SECU] : `transit_encryption_mode = "SERVER_AUTHENTICATION"` dès la
+   création, l'attribut étant immuable ; la rotation par les deux jetons de
+   chaque utilisateur ; et les contrôles conftest de la condition 7 de [SECU]
+   (autre mode d'autorisation, `TRANSIT_ENCRYPTION_DISABLED` et mot de passe en
+   clair dans une règle `acl_policy` refusés).
 4. Réseau `gcp` : une politique de connexion de service pour
    `gcp-memorystore`, et les ports de la section 3 ouverts au seul cluster
    GKE. [OPS] l'écrit, [SECU] relit.
-5. Mode sans cluster (`CLUSTER_DISABLED`) et type de nœud écrit, la politique
-   conftest de l'ADR-008 sur le tier s'étendant au type de nœud ; le choix
-   revient à [FINOPS].
+5. Mode sans cluster (`CLUSTER_DISABLED`), zéro réplica, un nœud de type
+   `shared-core-nano` en dev et pour la démo (`custom-pico` seulement avec un
+   besoin de SLA), la politique conftest de l'ADR-008 sur le tier s'étendant
+   au type de nœud et au nombre de réplicas (condition 5 de [FINOPS]).
 
 [BENCH] Suites. Les relectures [SECU] et [FINOPS], l'arbitrage du DSI, puis
 l'ADR de [ARCHI]. Une entrée `redis` au catalogue (ADR-009) : ligne `local`
@@ -790,7 +867,52 @@ sources [S1], [S3], [S6] ; ligne `gcp` en `managed`, Memorystore for Valkey
 
 ### Arbitrage du DSI
 
-<!-- À remplir par le DSI après les relectures [SECU] et [FINOPS]. -->
+[DSI] Arbitrage du 2026-11-25, après les relectures de [SECU] et de
+[FINOPS]. Valkey 9.1.4 est retenu comme moteur du cache, à 86 sur 100 contre
+69 pour Redis 7.2.17, dans la grille corrigée. La version locale suit la
+ligne que Memorystore sert par défaut, 9.1 : c'est la décision de la
+session 4, que le rapport applique. Sur `gcp`, la variante est Memorystore
+for Valkey.
+
+[DSI] Grille. Les deux relectures sont acceptées. Aucune note ne change, sauf
+la maturité de Redis 7.2, ramenée de 5 à 4 par [SECU] selon la règle de
+BENCH-013 : 72 devient 69, et l'écart passe de 14 à 17 points. Les
+corrections de [FINOPS] portent sur des chiffres et des phrases, pas sur des
+notes.
+
+[DSI] Une couche dans le bruit du nœud. Question ouverte depuis BENCH-013,
+tranchée : le majorant (nœud d'option le plus haut moins nœud de base le plus
+bas) compte pour la note ; la mémoire du pod compte pour le dimensionnement.
+La règle vaut pour les rapports à venir. Pas de deuxième palier de volume
+dans le gabarit, sur l'avis de [FINOPS] : les volumes de couche des quatre
+rapports ne présentent aucune coupure naturelle, et le budget par étape
+d'ENF-01 fait mieux le travail (R-04).
+
+[DSI] Écart de 50 Mio de M2. L'hypothèse de [FINOPS] est retenue : le cache du
+noyau, compté au nœud par `docker stats` et absent des pods. Elle n'a aucun
+effet sur la note, aucune valeur possible n'étant à moins de 10 % du seuil de
+512 Mio. Elle se mesure (`memory.stat` du nœud, témoins sans serveur, ordre
+permuté) si une couche future frôle un seuil ; pas avant.
+
+[DSI] Suites portées par l'ADR-015, que [ARCHI] écrit. Un : le jeton de
+Memorystore pour le MVP, l'authentification IAM en évolution avec son propre
+ADR. Deux : une dérogation datée à ENF-03 pour `docker.io/valkey/valkey`, sur
+le modèle de l'ADR-014, texte proposé par [SECU], avec le contrôle des trois
+registres à chaque condensat neuf. Trois : une ACL et une NetworkPolicy sur
+`local`, le compte `default` plus strict que sur Memorystore. Quatre :
+`VALKEY_EXTRA_FLAGS` refusé par le contrôle statique du rendu. Cinq : le
+dimensionnement de [FINOPS], sur `local` comme sur `gcp`. Six : `foobared` et
+`password123` ajoutés à la liste des valeurs connues de l'ADR-007 (R-20). Les
+conditions 1 à 8 de [SECU] et 1 à 7 de [FINOPS], en section 10, sont reprises
+telles quelles, sauf contre-ordre de [ARCHI] ou de Lucas.
+
+[DSI] Ticket amont. Le ticket que [SECU] propose chez `valkey-container`
+(demande de signature ou d'attestation de l'image) n'est pas ouvert : c'est
+une action publique, laissée à Lucas.
+
+[DSI] R-04. Selon le calcul de [FINOPS], le profil lite pèse environ 112 % du
+budget de 900 s à 10 Mbit/s. Le point est reporté à R-04. Il ne change rien
+au choix du moteur : sans cache, le lite resterait à environ 111 %.
 
 ## 8. Limites et biais
 
@@ -798,7 +920,7 @@ sources [S1], [S3], [S6] ; ligne `gcp` en `managed`, Memorystore for Valkey
 | --- | --- | --- |
 | Série 1 interrompue le 2026-11-24 par une veille capot fermé, sur batterie | Aucun : aucune de ses valeurs n'entre dans la note, sauf M4, identique à l'octet près dans la série 2 | Levée par la série 2 du 2026-11-25, au protocole |
 | Test de fumée à repos raccourci (30 s au lieu de 120) | Aucun : ses valeurs restent indicatives et n'entrent pas dans la note | Levée par la série 2, à 120 s |
-| Bruit du nœud plus grand que la couche (6 Mio par les pods) : M9 varie de 36,1 Mio, le nœud avec Redis de 55,5 Mio, et le nœud avec Valkey pèse 50,4 Mio de plus que celui avec Redis sans cause établie | M2 de O2 (5,9 Mio) tient dans le bruit, et celui de O1 (56,3 Mio) n'est pas expliqué par ses pods ; aucune incidence sur la note, au plus 13,8 % du seuil de 512 Mio | Relevé de la mémoire par processus du nœud (containerd, kubelet, serveur d'API), ou plus d'exécutions |
+| Bruit du nœud plus grand que la couche (6 Mio par les pods) : M9 varie de 36,1 Mio, le nœud avec Redis de 55,5 Mio, et le nœud avec Valkey pèse 50,4 Mio de plus que celui avec Redis sans cause établie | M2 de O2 (5,9 Mio) tient dans le bruit, et celui de O1 (56,3 Mio) n'est pas expliqué par ses pods ; aucune incidence sur la note, au plus 13,8 % du seuil de 512 Mio (bornes de [FINOPS] : O1 de 24,3 à 70,6 Mio, O2 de moins 29,9 à 61,7). Les trois échantillons du nœud de chaque exécution ne sont écrits dans aucun TSV, seule leur médiane l'est : les médianes d'exécution ne se refont pas. Le protocole a un ordre fixe (base, O1, O2), qui ne sépare pas l'effet de l'option de celui de son prédécesseur. Hypothèse retenue par le DSI, non mesurée : cache du noyau compté au nœud | `memory.stat` du nœud et RSS par processus à chaque échantillon, témoins sans serveur, ordre permuté, au moins cinq exécutions, échantillons du nœud écrits en TSV, si une couche future frôle un seuil |
 | M1 relevé par une sonde par seconde, par `kubectl exec` | Écart entre les options sous la résolution (valeurs sur 4,4, 5,5 et 6,5 s) ; sans effet, à 6,1 % du seuil de 90 s | Sonde plus fine, utile seulement près d'un seuil |
 | Charge de l'hôte plus haute aux exécutions 2 (6,01 à 11,13 sur une minute) | Les exécutions 2 donnent le M1 le plus long aux deux options, et le nœud le plus lourd au nœud de base et à Redis | Série sur un poste sans autre activité |
 | Création du cluster plus longue de 8 s aux exécutions 3 du nœud de base et de O1, cause non établie | Aucun : aucun seuil ne porte sur ce temps, et M1 commence après | Relever les redémarrages du plan de contrôle à chaque exécution |
@@ -810,12 +932,13 @@ sources [S1], [S3], [S6] ; ligne `gcp` en `managed`, Memorystore for Valkey
 | Employeurs déclarés sur les profils GitHub | Parts de AWS et de Redis approximatives ; quatre auteurs du top 10 de Redis sans employeur déclaré | Statistiques de la fondation, ou fichier de mainteneurs |
 | Correctif servi par Memorystore non publié pour Valkey, affiché à 7.2.0 pour Redis | Parité de correctif inconnue sur `gcp` | Lire `INFO server` sur une instance, au premier apply de la GATE 2 |
 | Grilles de prix de Memorystore illisibles le 2026-11-23 | Coût noté sans prix | Lecture par [FINOPS] ou par Lucas (R-05) |
-| M6 (c) lit les processus du conteneur du cache, pas ceux du nœud | Un argument vu par containerd échappe au contrôle | Le contrôle statique de la condition 2 sur les manifests |
+| M6 (c) lit `/proc/[0-9]*/cmdline` dans l'espace de noms de processus du conteneur du cache, au moment du contrôle (correction de [SECU], 2026-11-25) | Trois lieux lui échappent : le conteneur d'initialisation, déjà terminé ; les environnements des processus (`/proc/*/environ`) ; le nœud (kubelet, containerd, volumes en mémoire où la valeur est en clair par construction). Un argument se lit dans le manifest rendu, ce que couvre le contrôle statique. Aucune incidence sur la note : le contrôle vaut pour les deux options. Sur le PC, lire le nœud demande d'être root dans la machine virtuelle de Docker, et le mot de passe local est jetable (R-20) | Le contrôle statique du rendu (`env` et `envFrom` refusés sur le conteneur du cache, `VALKEY_EXTRA_FLAGS` compris ; aucune option de mot de passe dans `command` ou `args`), et M6 (c) étendu à `/proc/*/environ` (condition 5 de [SECU]) |
+| Trivy 0.76.2 ne voit le moteur dans aucune des deux images, compilé depuis les sources ; aucun des douze avis n'est dans la base mondiale de GitHub (R-36) | Le scan de FR-021 ne voit aucun avis du moteur, pour les deux options à égalité ; la note de sécurité ne départage pas | Lecture mensuelle des avis du dépôt par [SECU] ; seconde source par la CPE du SBOM embarqué, limitée par le retard de NVD et par les avis sans CVE |
 | Option pressentie par le brief : Valkey | Aucune note ne lui donne d'avantage | Sans objet |
 
 ## 9. Sources
 
-[BENCH] Lues le 2026-11-23, sauf mention. Les fichiers de dépôt GitHub ont été
+[BENCH] Lues le 2026-11-23, sauf mention, et S47 à S67 le 2026-11-25 (relectures de [FINOPS] et de [SECU]). Les fichiers de dépôt GitHub ont été
 lus par l'API de GitHub (`gh api`), au tag ou au commit indiqué. Les comptes de
 commits portent sur la branche par défaut, du 2025-11-23 au 2026-11-23, bots
 exclus.
@@ -868,13 +991,34 @@ exclus.
 | S44 | Branche `docs/plan-golden-repo`, commit `13be333d` : `specs/001-golden-repo-saas-b2b/research.md` (RS-10, RS-11), `contracts/secrets.md` | 2026-11-21 | Valkey en Deployment sans persistance, image de BENCH-005 ; `cache-auth`, `Opaque`, clé `password` ; producteur `gcp` en attente de ce benchmark | Oui, interne, non fusionné |
 | S45 | `specs/001-golden-repo-saas-b2b/spec.md` | 2026-11-21 | FR-001 et FR-009 : la base et le cache démarrent par une commande ; l'exemple lit et écrit dans le cache | Oui, interne |
 | S46 | `man caffeinate` et `pmset -g custom`, sur la machine de mesure | 2026-11-24 | `-i` empêche la veille sur inactivité, `-s` la veille du système sur secteur seulement, `-w` libère l'assertion à la fin du processus ; réglage `sleep` à 1 minute sur secteur | Oui, documentation du système |
+| S47 | <https://docs.docker.com/reference/cli/docker/container/stats/> | 2026-11-25 | Sur Linux, le CLI retranche le cache de l'usage total ; cache = `inactive_file` sur cgroup v2 ; l'API rend l'usage total et le cache (relevé de [FINOPS]) | Oui |
+| S48 | <https://docs.cloud.google.com/memorystore/docs/valkey/cuds> | 2026-11-25 | Facturation par nœud et par heure ; engagements à 20 % (un an) et 40 % (trois ans), payés chaque heure, non annulables ; stockage, sauvegardes, persistance et sortie de données exclus ; outil qui résume (relevé de [FINOPS]) | Oui |
+| S49 | <https://docs.cloud.google.com/memorystore/docs/valkey/instance-node-specification> | 2026-11-25 | Types de nœud, mémoire totale et clés inscriptibles par défaut, vCPU, SLA, mode ; 0 à 5 réplicas ; capacité minimale d'un nœud ; `shared-core-nano` limité à 1,12 Go ; outil qui résume (relevé de [FINOPS]) | Oui |
+| S50 | <https://cloud.google.com/memorystore/valkey/pricing> | 2026-11-25 | Le titre seulement : aucune grille, aucune unité, aucune région lisible ; l'adresse de `docs.cloud.google.com/memorystore/docs/valkey/pricing` y redirige (301) (relevé de [FINOPS]) | Oui |
+| S51 | <https://valkey.io/topics/lru-cache/> | 2026-11-25 | `maxmemory` : sans limite par défaut sur 64 bits ; `allkeys-lru` conseillé pour un cache quand on hésite ; tampons de réplication et de journal non comptés dans `maxmemory` ; outil qui résume (relevé de [FINOPS]) | Oui |
+| S52 | <https://kubernetes.io/docs/concepts/workloads/pods/pod-qos/> | 2026-11-25 | Guaranteed : demande égale à la limite, mémoire et CPU, pour chaque conteneur ; texte lu jusqu'au caractère 100 000 sur 106 127 (relevé de [FINOPS]) | Oui |
+| S53 | API de GitHub : `repos/valkey-io/valkey/security-advisories`, `repos/redis/redis/security-advisories`, `advisories/<GHSA>` et `advisories?cve_id=` | 2026-11-25 | Valkey : neuf avis du 2026-02-23 au 2026-11-19, versions touchées, vecteurs CVSS (`PR:L` pour les six avis de la ligne 9.1 ; `PR:N` pour GHSA-93p9 et GHSA-c677, jusqu'à 9.0.2) ; Redis : trois avis du 2026-05-05, authentifiés. Aucun des douze dans la base mondiale, ni par GHSA ni par CVE, revu ou non (relevé de [SECU]) | Oui |
+| S54 | Trivy 0.76.2, `trivy image --image-src remote --platform linux/amd64 --scanners vuln,license --list-all-pkgs`, sur les deux images figées par condensat | 2026-11-25 | Valkey : Alpine 3.24.4, 23 paquets, aucun paquet `valkey`, 16 constats (6 faibles, 10 moyens) sur OpenSSL 3.5.9-r0 et zlib 1.3.2-r1, corrigés dans Alpine ; Redis : Alpine 3.22.8, 20 paquets, aucun paquet `redis`, mêmes six CVE en 11 constats ; aucun `USER` dans les deux configurations ; licences des paquets (GPL-2.0, MPL-2.0, Apache-2.0, MIT), aucune AGPL (relevé de [SECU]) | Oui, outil |
+| S55 | `docker buildx imagetools inspect` sur `docker.io/valkey/valkey`, `ghcr.io/valkey-io/valkey` et `public.ecr.aws/valkey/valkey`, tag `9.1.4-alpine` | 2026-11-25 | Index OCI `sha256:56729e68…` identique sur les trois registres ; quatre manifestes de plate-forme, aucun manifeste d'attestation ; ni `sha256-56729e68….sig` ni `.att` sur docker.io, ni `.sig` ni tag de référents sur ghcr.io (relevé de [SECU]) | Oui, registres |
+| S56 | API de GitHub : `repos/valkey-io/valkey-container/attestations/<condensat>`, `orgs/valkey-io/attestations/<condensat>` | 2026-11-25 | 404 aux deux : aucune attestation GitHub pour le condensat figé (relevé de [SECU]) | Oui |
+| S57 | <https://github.com/valkey-io/valkey-container> : `.github/workflows/ci.yml` et `.github/actions/build-image/action.yml` au commit `5b08693a`, `9.1/alpine/Dockerfile` et `docker-entrypoint.sh` au commit `32d10db6` | 2026-11-25 | Tâche planifiée limitée à `unstable` ; publication des versions dont le dossier ou `versions.json` change, ou à la main ; trois identifiants (jeton Docker Hub, jeton GitHub, rôle AWS par OIDC) ; `id-token: write` ; `provenance: false`, aucune signature ; `FROM alpine:3.24` sans condensat ; archive vérifiée par SHA-256 ; `BUILD_TLS=yes`, sans RDMA ; aucun `USER`, `setpriv` depuis root ; SBOM `/usr/local/valkey.spdx.json` avec la CPE `cpe:2.3:a:lfprojects:valkey:9.1.4` ; `exec "$@" $VALKEY_EXTRA_FLAGS` | Oui |
+| S58 | <https://github.com/valkey-io/valkey/blob/9.1.4/valkey.conf>, `src/acl.c` au tag 9.1.4 | 2026-11-25 | `enable-protected-configs`, `enable-debug-command`, `enable-module-command` à `no` par défaut ; `rename-command` déconseillé au profit des ACL ; `requirepass` couche de compatibilité du compte `default` ; catégories `@admin`, `@dangerous`, `@scripting` ; un million d'essais de mot de passe par seconde ; empreinte `#` de 64 caractères hexadécimaux acceptée ; exemple `requirepass foobared` | Oui |
+| S59 | <https://hub.docker.com/v2/namespaces/valkey/repositories/valkey/tags/9.1.4-alpine>, idem `library/redis` tag `7.2.17-alpine` | 2026-11-25 | Valkey : condensat `sha256:56729e68…`, `tag_last_pushed` 2026-11-18T23:11:58Z ; Redis : `sha256:2f66de68…`, `tag_last_pushed` 2026-11-12T00:05:00Z ; outil qui résume (relevé de [SECU]) | Oui |
+| S60 | <https://docs.cloud.google.com/memorystore/docs/valkey/manage-basic-auth> | 2026-11-25 | Compte `default` créé par le service, `AUTH <jeton>` ou `AUTH <utilisateur> <jeton>` ; deux jetons au plus par utilisateur, rotation sans coupure ; jetons créés par le service ; TLS recommandé ; `default` garde ses droits ; outil qui résume (relevé de [SECU]) | Oui |
+| S61 | <https://docs.cloud.google.com/memorystore/docs/valkey/about-iam-auth> | 2026-11-25 | Jeton d'une heure, douze au plus ; permission `memorystore.instances.connect` ; jeton présenté à chaque nouvelle connexion, impossible à écrire en dur ; fournisseurs dynamiques de GLIDE et redis-py, rien sur .NET ; débit de connexions freiné ; TLS recommandé ; outil qui résume (relevé de [SECU]) | Oui |
+| S62 | <https://docs.cloud.google.com/memorystore/docs/valkey/supported-commands> | 2026-11-25 | Commandes bloquées (`NOPERM`) : `ACL`, `SAVE`, `BGSAVE`, `BGREWRITEAOF`, `CONFIG GET`, `SET`, `REWRITE`, `RESETSTAT`, `DEBUG`, `MODULE` sauf `HELP`, `SHUTDOWN`, `REPLICAOF`, `FAILOVER`, `MIGRATE`, `MOVE`, `SWAPDB`, `PSYNC`, `SYNC`, entre autres ; `EVAL`, `FUNCTION`, `KEYS`, `FLUSHALL`, `MONITOR` permis ; outil qui résume (relevé de [SECU]) | Oui |
+| S63 | <https://docs.cloud.google.com/memorystore/docs/valkey/about-in-transit-encryption> | 2026-11-25 | TLS 1.2 et plus ; CA par instance, partagée par région ou gérée par le client ; certificat du serveur renouvelé chaque semaine ; clients sans TLS bloqués ; perte de performance possible ; outil qui résume (relevé de [SECU]) | Oui |
+| S64 | <https://github.com/hashicorp/terraform-provider-google>, tag v8.12.0 : `memorystore_instance.html.markdown`, `memorystore_acl_policy.html.markdown` ; releases | 2026-11-25 | `transit_encryption_mode` immuable (`TRANSIT_ENCRYPTION_DISABLED`, `SERVER_AUTHENTICATION`) ; `acl_policy` ; ressource `google_memorystore_acl_policy`, règle en syntaxe Valkey, exemple `on >password123 ~* +@all` ; v8.12.0 du 2026-11-17, dernière release au 2026-11-25 | Oui |
+| S65 | <https://github.com/kubernetes-sigs/kind>, tag v0.33.0 : `pkg/cluster/internal/providers/docker/provision.go` et `network.go` ; notes de la release v0.24.0 | 2026-11-25 | Nœud lancé par `docker run` avec `--privileged`, `seccomp=unconfined`, `apparmor=unconfined`, `--restart=on-failure:1` ; réseau par `docker network create -d=bridge` ; NetworkPolicy prises en charge depuis v0.24.0 par kube-network-policies | Oui |
+| S66 | <https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=CVE-2026-63639>, idem `CVE-2025-67733` | 2026-11-25 | CVE-2026-63639 : « Awaiting Analysis », aucune configuration CPE ; CVE-2025-67733 : CPE `cpe:2.3:a:lfprojects:valkey`, plages de versions ; outil qui résume (relevé de [SECU]) | Oui |
+| S67 | <https://github.com/valkey-io/valkey> : `COPYING`, `deps/` au tag 9.1.4, `MAINTAINERS.md` ; `valkey-io/valkey-container` (licence) ; `redis/redis`, `COPYING` au tag 7.2.17 | 2026-11-25 | Deux textes BSD-3-Clause ; dépendances sous BSD, MIT, Boost, domaine public, Apache-2.0 ou MIT ; neuf mainteneurs, huit organisations ; `valkey-container` sous BSD-3-Clause ; Redis 7.2.17 sous BSD-3-Clause | Oui |
 
 ## 10. Relectures
 
 | Relecteur | Porte sur | Date | Avis |
 | --- | --- | --- | --- |
-| [SECU] | Licences, critères éliminatoires, sécurité, inventaire du script | à venir | à venir |
-| [FINOPS] | Coût, seuils d'empreinte | à venir | à venir |
+| [SECU] | Licences, critères éliminatoires, sécurité, inventaire du script | 2026-11-25 | Réservé, favorable à Valkey 9.1.4 sous conditions. Licences, gouvernance et critères éliminatoires sont confirmés sur les sources, sans AGPL dans aucune image. La maturité de Redis 7.2 passe à 4 par la règle de BENCH-013 : 86 contre 69. Trivy 0.76.2 ne voit le moteur dans aucune des deux images, compilé depuis les sources, et aucun des douze avis n'est dans la base mondiale : R-36 couvre tout le moteur, pas trois avis sur neuf. Tous les avis de la ligne 9.1 demandent un client authentifié. `valkey/valkey` n'a ni signature ni attestation : dérogation datée dans l'ADR-015, avec comparaison du condensat sur trois registres. M6 (c) tient pour ce qu'il vise ; un contrôle statique le complète, `VALKEY_EXTRA_FLAGS` compris. L'inventaire `16daad12…` est exact. Jeton plutôt qu'IAM sur `gcp`, TLS dès la création. Aucun secret dans les données ni dans les commits. Conditions 1 à 8. |
+| [FINOPS] | Coût, seuils d'empreinte | 2026-11-25 | Favorable, avec corrections. M2, la somme des pods, M3, M4 et M5 se retrouvent dans les données brutes de `series-2` ; les échantillons du nœud ne sont écrits dans aucun TSV. Seuils de 4.1 appliqués tels qu'écrits : 4/5 pour les deux, le coût à 4/5 pour les deux, le classement inchangé. Écart de 50,4 Mio entre les nœuds : hypothèse de cache de pages, non mesurée, sans effet sur la note (au plus 13,8 % du seuil). O1 n'ajoute rien au premier `task up` : 1 802,1 Mo pour le standard (160,2 % du budget de 900 s à 10 Mbit/s), 1 799,3 avec O2 ; le lite, environ 1 263,8 Mo, 112,3 %, sans que le moteur décide. Plancher mémoire : lite 2,0 Gio de VM, standard 3,5 Gio, à 8 à 23 Mio du palier de 4,0 Gio. Memorystore for Valkey se facture par nœud et par heure ; aucun prix lisible, région non choisie (R-05). Dimensionnement proposé : pod à 64 Mi demandés et 128 Mi en limite, `maxmemory 64mb` ; `gcp` en `CLUSTER_DISABLED`, zéro réplica, `shared-core-nano`. Pas de deuxième palier de volume. Conditions 1 à 7. (Ligne rédigée par [BENCH] d'après la relecture, qui n'en fournissait pas.) |
 
 [BENCH] Points à relire en priorité. Pour [SECU] : la dérogation à ENF-03 que
 demanderait `valkey/valkey`, sans signature ni provenance et hors du champ de
@@ -889,8 +1033,138 @@ de la section 4.1 repris de BENCH-011.
 
 ### Relecture [SECU]
 
-<!-- À remplir par [SECU] : avis, remarques et suite donnée. -->
+[SECU] Ce que j'ai relu, le 2026-11-25. Le rapport au commit `17469f0` de la branche `docs/bench-014-cache`, et le script. J'ai aussi relu la série 2 en entier : `auth.tsv`, `pod-restart.tsv`, `power.tsv`, `versions.tsv`, les journaux et les manifests rendus, avec `series-2.out`, `attempts.log` et les `render-*.yaml`. Le script du worktree a pour SHA-256 `16daad12…`, identique au fichier du commit `0b6c8ad` ; celui de `33cf0dd` donne `1426ddca…`, comme l'écrit la section 4.3. La section 4.1 extraite du rapport, celle de `section-4.1-2026-11-23.md` et celle du commit `6843021` donnent toutes trois `67a35b6b…96f6`. Les faits externes viennent de `gh api`, de `docker buildx imagetools inspect`, de Trivy 0.76.2 à distance et de WebFetch, tous lus le même jour (S53 à S67, en fin de relecture). Je n'ai lancé ni `docker run`, ni cluster, ni action cloud.
+
+[SECU] Licences (5.1). Je confirme 5 pour Valkey et 3 pour Redis 7.2. Le `COPYING` du tag 9.1.4 contient deux textes BSD-3-Clause, celui des contributeurs de Valkey et celui de Redis Ltd. pour 2006 à 2020. Les dépendances de `deps/` sont toutes sous licence permissive : jemalloc, libvalkey et linenoise sous BSD, Lua sous MIT, fpconv sous Boost, hdr_histogram dans le domaine public ou sous BSD, fast_float au choix sous Apache-2.0, MIT ou Boost [S67]. `valkey-container` est sous BSD-3-Clause, comme le `COPYING` de Redis au tag 7.2.17 [S67]. Dans les images, Trivy relève les licences des paquets d'Alpine : GPL-2.0 pour busybox, apk-tools et alpine-baselayout, MPL-2.0 pour les certificats, Apache-2.0 pour OpenSSL [S54]. Aucune AGPL dans l'une ou l'autre image. CELIAN ne redistribue aucune image, puisque le miroir zot n'en transmet de copie à personne (ADR-011, condition 9). La réserve sur Redis tient : `7` et `latest` désignent des lignes hors BSD [S14], et si Redis revenait, Renovate devrait plafonner son image sous 7.4.
+
+[SECU] Gouvernance (5.2). Je confirme 5 et 2. `MAINTAINERS.md` liste toujours neuf mainteneurs chez huit organisations, Amazon deux fois [S67]. L'image est construite et publiée par un workflow de `valkey-io/valkey-container`, dans l'organisation du projet [S57].
+
+[SECU] Maturité (5.3). Je ramène Redis 7.2 à 4, par la règle appliquée dans BENCH-013. La note 5 revient aux projets gradués à la CNCF qui tiennent une liste d'adoptants (Cilium, Argo CD, Flux) et à minikube. Un projet sans fondation a reçu 4 : k3d, Traefik, Config Sync, Mailpit. Le rapport justifie le 5 de Redis par l'âge du dépôt, la ligne Extended et Memorystore, sans liste d'adoptants tenue par le projet. Valkey reste à 4. Effet : Redis passe de 72 à 69, et l'écart de 14 à 17 points. Chaque ligne de sensibilité perd 3 points pour O2, aucune n'inverse le classement, et il faudrait désormais six crans de 3 points contre O1 au lieu de cinq.
+
+[SECU] Avis de sécurité sur 12 mois (5.5). Les comptes du rapport sont exacts. Valkey a publié neuf avis du 2026-02-23 au 2026-11-19, huit élevés et un moyen, dont trois sans CVE : GHSA-f4q9-j22m-xqq9, GHSA-jcj7-v34w-v9vv et GHSA-fq2f-crmw-q97r. Redis a publié trois avis le 2026-05-05 [S53]. Gravité réelle pour la 9.1.4 : six avis touchaient la ligne 9.1, tous corrigés au plus tard par la 9.1.4, et tous demandent un client authentifié (vecteur CVSS `PR:L`) [S53]. Deux ne s'appliquent pas à notre montage : GHSA-f4q9 ne vise que le mode cluster, GHSA-jcj7 que RDMA, que le Dockerfile ne compile pas [S57]. GHSA-53mc-f3m3-99vh ne vise qu'un serveur en TLS. GHSA-3885-pq5f-788j, corrigé par la 9.1.4, demande l'éviction des clients, inactive par défaut. GHSA-fq2f porte « Unauthenticated » dans son titre, mais son texte et son vecteur exigent de pouvoir lancer des scripts. Les deux seuls avis sans authentification de la période, GHSA-93p9-5vc7-8wgr et GHSA-c677-q3wr-gggq, s'arrêtent à 9.0.2. Les trois avis de Redis demandent eux aussi un client authentifié. Deux avis de Valkey et un de Redis passent par Lua : retirer `@scripting` réduit la surface (condition 4). Sur le PC, seuls l'application et `task up` tiennent le mot de passe, et la gravité réelle reste faible tant que les correctifs suivent.
+
+[SECU] R-36 : le scan ne voit pas le moteur, dans aucune des deux images. Le rapport écrit que « trois avis sur neuf n'ont pas de CVE, donc échappent aux scanners ». L'angle mort est plus large. Les deux images compilent le moteur depuis l'archive des sources, hors de tout gestionnaire de paquets [S57]. Trivy 0.76.2 n'y trouve que des paquets d'Alpine, 23 pour Valkey et 20 pour Redis, et aucun paquet `valkey` ni `redis` [S54]. Aucun des douze GHSA n'est dans la base mondiale de GitHub, ni par son identifiant, ni par sa CVE, en avis revu comme non revu [S53]. Le scan de FR-021 ne peut donc voir aucun des neuf avis de Valkey ni aucun des trois de Redis. Une seconde source fondée sur la CPE ne comblerait qu'une partie du trou. L'image de Valkey embarque un SBOM SPDX, `/usr/local/valkey.spdx.json`, qui porte la CPE `cpe:2.3:a:lfprojects:valkey:9.1.4` [S57], celle que NVD emploie pour CVE-2025-67733. Mais CVE-2026-63639, publiée par le projet le 2026-07-22, reste « Awaiting Analysis » chez NVD le 2026-11-25, sans configuration [S66], et les trois avis sans CVE n'y entreront jamais. Trivy ne remonte pas ce fichier comme un paquet [S54]. Les deux options sont aussi aveugles l'une que l'autre, donc la note ne départage pas.
+
+[SECU] Je maintiens 3/5 aux deux options. La justification change : le moteur est invisible au scan dans les deux images ; l'image de Valkey n'a ni signature ni attestation ; celle de Redis n'a pas de signature vérifiable, couverte par l'ADR-012.
+
+[SECU] Base de l'image et délai du principe VI. Dans l'image de Valkey, Trivy relève 16 constats, 6 faibles et 10 moyens, aucun élevé ni critique, sur OpenSSL 3.5.9-r0 et zlib 1.3.2-r1 ; Alpine les a tous corrigés (3.5.9-r1, 1.4-r0). Redis porte les mêmes six CVE, en 11 constats [S54]. D'après son workflow, `valkey-container` ne republie une version que si son dossier ou `versions.json` change, ou sur lancement manuel ; la tâche planifiée quotidienne ne construit que `unstable`, et `FROM alpine:3.24` n'a pas de condensat [S57]. Un correctif d'Alpine n'arrive donc dans `9.1.4-alpine` qu'avec une release de Valkey ou une reconstruction manuelle. Docker Hub date le tag, donc Renovate aussi (ADR-016) : `tag_last_pushed` vaut 2026-11-18T23:11:58Z, et le délai de 7 jours s'achève le 2026-11-25 à 23:12 UTC [S59]. La 9.1.4 corrige GHSA-3885 : l'exception du principe VI la couvrait de toute façon.
+
+[SECU] Point 1 de [BENCH] : signature et dérogation. J'ai vérifié le 2026-11-25 que l'index OCI `sha256:56729e68…` ne contient que ses quatre manifestes de plate-forme, sans manifeste d'attestation. Docker Hub ne porte ni tag `sha256-56729e68….sig` ni `.att`, ghcr.io ni `.sig` ni tag de référents `sha256-56729e68…`, et l'API d'attestations de GitHub répond 404 pour ce condensat, au dépôt comme à l'organisation [S55], [S56]. L'action de construction garde `provenance: false`, et aucune étape ne signe [S57]. Il faut donc une dérogation datée dans l'ADR-015. Celle de l'ADR-012 s'arrête à `docker.io/library/`, et celles des ADR-013 et ADR-014 nomment chacune une seule image. Je recommande le modèle de l'ADR-014 plutôt que les deux autres voies. Reconstruire et signer l'image dans la CI de CELIAN mettrait un registre et une chaîne de construction de CELIAN sous chaque projet généré, contre ENF-07, et ajouterait un registre à la liste de la condition 10 de l'ADR-011. Docker Hardened Images a été écartée par l'ADR-012 pour le compte Docker qu'elle exige. Je n'ai pas cherché d'autre image signée de Valkey.
+
+[SECU] Contrôle compensatoire, à ajouter à la tenue de la liste. Le même condensat d'index, `sha256:56729e68…`, est publié sur docker.io, ghcr.io et public.ecr.aws [S55]. Le workflow pousse avec trois identifiants distincts : un jeton Docker Hub gardé dans les secrets du dépôt, le jeton éphémère de GitHub et un rôle AWS obtenu par OIDC [S57]. À chaque condensat neuf, [SECU] vérifie que les trois registres donnent le même. Le contrôle ne prouve pas l'auteur, puisque le workflow est commun. Il détecte en revanche un condensat poussé sur Docker Hub seul, avec un jeton volé. Le nœud continue de tirer depuis docker.io, que Renovate sait dater ; les copies de ghcr.io et d'ECR, que Renovate ne date pas (ADR-016), ne servent qu'à la comparaison.
+
+[SECU] Texte proposé pour la section « Dérogations » de l'ADR-015 :
+
+| Principe | Écart | Justification | Durée | Condition de levée |
+| --- | --- | --- | --- | --- |
+| Aucun : exigence ENF-03 du PRD, « Kyverno refuse les images non signées » | L'image `docker.io/valkey/valkey` n'a aucune signature vérifiable. Kyverno l'admet par sa référence exacte, condensat compris, inscrite dans une liste fermée | FR-008 reste tenu : le condensat fige le contenu, que containerd vérifie. Le workflow de `valkey-container` construit avec `provenance: false` et ne signe pas ; l'index n'a aucun manifeste d'attestation, docker.io et ghcr.io n'ont aucun tag de signature, et l'API d'attestations de GitHub répond 404 (BENCH-014, S55 à S57). Le même condensat est publié sur trois registres par trois identifiants distincts, ce qui permet un contrôle croisé. Une image reconstruite et signée par CELIAN placerait CELIAN dans la chaîne de chaque projet généré (ENF-07). [SECU] recommande cette voie | Depuis la décision de Lucas, jusqu'à sa levée. Relecture au plus tard le 2027-05-23, date de la prochaine vérification de BENCH-014, et par [SECU] à chaque condensat neuf | Valkey publie pour cette image une signature, ou une attestation signée, que Kyverno sait vérifier : la politique la vérifie alors, et la liste fermée disparaît pour cette image |
+
+[SECU] Portée proposée : la seule image `docker.io/valkey/valkey`, en variante Alpine. Les copies de ghcr.io et de public.ecr.aws n'entrent pas, ni `valkey/valkey-bundle`, ni un autre dépôt de docker.io hors de `library/`. Tenue de la liste : elle naît avec le premier profil qui embarque Kyverno, et change dans la même PR que le manifest, PR de Renovate comprise. [SECU] relit chaque condensat neuf, avec la comparaison des trois registres.
+
+[SECU] Point 2 de [BENCH] : portée de M6 (c). Le contrôle fait ce qu'il annonce, et rien de plus. Il lit `/proc/[0-9]*/cmdline` dans l'espace de noms de processus du conteneur `cache`, au moment du contrôle : `tini`, le serveur, et le shell du `kubectl exec` lui-même. Trois lieux lui échappent. Le conteneur d'initialisation, déjà terminé. Les environnements des processus (`/proc/*/environ`). Le nœud enfin : kubelet, containerd, et les volumes en mémoire où la valeur est en clair par construction, le Secret monté et `cache.conf`. Sur le PC, lire le nœud demande d'être root dans la machine virtuelle de Docker, ce qui donne déjà tout le cluster, et le mot de passe local est jetable (R-20). Le résultat tient pour ce qu'il vise : 0 ligne sur six exécutions, jamais `err` (`auth.tsv`). Deux contrôles le complètent (condition 5) : un contrôle statique du rendu, et la lecture d'`environ` à côté de `cmdline`. La ligne de la section 8, « Un argument vu par containerd échappe au contrôle », est à corriger. Un argument se lit dans le manifest rendu, et c'est le rôle du contrôle statique ; ce qui échappe à M6 (c), ce sont les trois lieux ci-dessus. Le vrai piège vient de l'image : son entrypoint finit par `exec "$@" $VALKEY_EXTRA_FLAGS` [S57], si bien qu'une variable posée sur le conteneur devient un argument du serveur. Le contrôle statique doit la refuser.
+
+[SECU] Point 3 de [BENCH] : inventaire du script `16daad12…`. Il est exact et complet pour ce qui crée, modifie ou supprime un conteneur ou un réseau. `kind create cluster` lance bien le nœud par `docker run --privileged`, avec aussi `seccomp=unconfined`, `apparmor=unconfined` et `--restart=on-failure:1`, et crée le réseau par `docker network create -d=bridge` s'il manque [S65]. Les autres appels à Docker ne font que lire, `docker ps -q` compris, qui manquait dans BENCH-013 et figure ici. Trois précisions à ajouter. `kind create cluster` tire `kindest/node` s'il manque au cache de l'hôte : la phrase « le script ne construit ni ne retire aucune image » reste vraie, mais il faut ajouter ce tirage possible. Hors du dossier d'essai, le script n'écrit que le dossier du verrou, quand `BENCH_LOCK` est défini, et tient une assertion `caffeinate` libérée à sa sortie. L'en-tête dit « no port is published to the host », alors que kind publie l'API sur 127.0.0.1 (R-20) : il faut écrire « aucun port hors de la boucle locale ». Le script ne sort du poste que par `docker manifest inspect`, `docker buildx imagetools inspect` et les tirages du nœud, tous vers Docker Hub. Dans le cluster, il écrit par `kubectl apply`, `create`, `scale`, `delete pod` et `exec`, toujours vers `celian-bench-014`, par un `KUBECONFIG` du dossier d'essai.
+
+[SECU] Secrets (R-20, ADR-007). Le Secret `cache-auth` sort de `/dev/urandom` par `tr` et `head`, puis passe par un tube à `kubectl create -f -`. Pas de `kubectl apply`, donc pas d'annotation `last-applied-configuration` (ADR-007, condition 1). La valeur fait 40 caractères alphanumériques, environ 238 bits. Valkey ne limite pas les essais d'`AUTH` et écrit qu'un attaquant peut tenter un million de mots de passe par seconde [S58] : c'est l'entropie qui tient lieu de limitation, et elle suffit. Le serveur lit le mot de passe dans un fichier, le client dans `REDISCLI_AUTH` par `secretKeyRef`. Dans `series-2`, `series-2.out`, `attempts.log` et les `render-*.yaml`, je ne trouve aucune chaîne de 40 caractères alphanumériques hors des condensats, ni `requirepass`, ni `stringData`. Les journaux ne gardent que « secret/cache-auth created », et le `kubeconfig` fait 28 octets. Les journaux de kind gardent le chemin absolu du dossier de travail, nom du compte compris : ils restent hors du dépôt. Les lignes ajoutées par la branche ne contiennent ni `/Users/`, ni `/private/tmp`, ni nom de compte, ni tiret cadratin, et les cinq commits portent l'adresse noreply. Je n'ai pas lancé gitleaks, comme demandé.
+
+[SECU] Valeurs connues à ajouter à la condition 1 de l'ADR-007 : `foobared`, l'exemple de `requirepass` dans `valkey.conf` [S58], et `password123`, l'exemple de règle de `google_memorystore_acl_policy` [S64]. Les deux tombent déjà sous la règle des 32 caractères.
+
+[SECU] Durcissement sur `local`, ce que la série prouve. Le namespace porte `pod-security.kubernetes.io/enforce: restricted`, et les pods du cache et du client y ont été admis dans les six exécutions. Ils tournent sous l'UID 999 et le GID 1000, sans élévation, capacités retirées, `seccompProfile: RuntimeDefault`, racine en lecture seule, sans jeton de compte de service. L'UID explicite est indispensable : aucune des deux images ne déclare de `USER` [S54], et l'entrypoint de Valkey ne descend à l'utilisateur `valkey` par `setpriv` que s'il démarre en root [S57]. La persistance est coupée (`save ""`, `appendonly no`), et la clé perdue 6 fois sur 6 le confirme. TLS : je ne le demande pas sur `local`. Le trafic reste dans un nœud kind sur le poste, et le mot de passe est local et jetable ; l'écart avec `gcp` va au README (ENF-02).
+
+[SECU] Trois points restent ouverts dans les manifests de l'essai, sans effet sur la mesure. Le volume `/data` est un `emptyDir` sans `sizeLimit`, où un client authentifié peut encore écrire un instantané par `SAVE`. Le compte `default` a tous les droits, et `requirepass` écrit le mot de passe en clair dans `cache.conf`. Aucune NetworkPolicy ne protège le port : tout pod du cluster joint 6379.
+
+[SECU] Commandes dangereuses, ACL ou mot de passe. Pas de `rename-command` : `valkey.conf` le déconseille et renvoie aux ACL [S58]. Les défauts de la 9.1.4 bloquent déjà `DEBUG`, `MODULE` et la modification par `CONFIG SET` des réglages qui désignent des fichiers, comme `dir` et `dbfilename` : `enable-protected-configs`, `enable-debug-command` et `enable-module-command` valent `no` [S58]. Le reste passe par une ACL sur le compte `default`, plutôt que par `requirepass`, qui n'en est qu'une couche de compatibilité [S58]. Valkey accepte le mot de passe sous la forme de son empreinte SHA-256, `#` suivi de 64 caractères hexadécimaux [S58]. Le conteneur d'initialisation calcule donc l'empreinte depuis le fichier du Secret, par l'entrée standard, puis écrit une ligne `user default on #… ~* &* +@all -@admin …`. Le mot de passe en clair ne figure plus dans `cache.conf`, et le serveur n'a plus besoin de monter le Secret. Le client garde `AUTH <mot de passe>`, la forme du compte `default`, celle de Memorystore [S60].
+
+[SECU] Parité avec Memorystore for Valkey. Memorystore authentifie le compte `default` par `AUTH <jeton>`. Le jeton est créé par le service, et chaque utilisateur peut en avoir deux, pour une rotation sans coupure [S60]. Le compte `default` garde tous ses droits, hors d'une liste de commandes bloquées : `ACL`, `SAVE`, `BGSAVE`, `CONFIG GET` et `SET`, `DEBUG`, `MODULE LOAD`, `SHUTDOWN`, `REPLICAOF`, `MIGRATE`, `SWAPDB`, entre autres. `EVAL`, `FUNCTION`, `KEYS`, `FLUSHALL` et `MONITOR` restent permis [S62]. Refuser sur `local` au moins cette liste fait échouer l'application sur le PC comme elle échouerait sur GCP. `-@admin` va plus loin, puisqu'il refuse aussi `MONITOR`, et c'est acceptable : le PC peut être plus strict, jamais moins. Une ressource `google_memorystore_acl_policy` existe dans le provider 8.12.0, avec la syntaxe d'ACL de Valkey ; sa page parle d'utilisateurs IAM et de comptes de service, et je n'ai pas vérifié qu'elle s'applique en mode `TOKEN_AUTH` [S64]. TLS : `transit_encryption_mode` est immuable [S64], donc le choix se fait à la création de l'instance. Memorystore accepte TLS 1.2 et plus, renouvelle chaque semaine le certificat du serveur, et propose une CA par instance, une CA partagée par région, ou une CA gérée par le client ; il bloque les clients sans TLS, et prévient d'une perte de performance [S63]. Le correctif servi n'est pas publié [S18] : `INFO server` le lira à la GATE 2.
+
+[SECU] Jeton ou IAM, mon avis pour l'ADR-015 : le jeton pour le MVP, et l'IAM en évolution, comme le propose [BENCH]. La force de l'IAM : aucun secret statique, donc rien dans l'état, rien dans Secret Manager, aucune rotation. Ses coûts : le jeton d'accès vit une heure par défaut, ne peut pas être écrit en dur, et doit être présenté à chaque nouvelle connexion. Google renvoie aux fournisseurs d'identifiants dynamiques de Valkey GLIDE et de redis-py, sans rien dire de .NET, et l'IAM freine l'ouverture des connexions [S61]. L'API aurait sur `gcp` un chemin d'authentification à elle, donc du code hors de la couche de cible (ENF-02). Le jeton garde le même client et le même contrat `cache-auth` sur les deux cibles. Son prix : une valeur statique qui passe par l'état OpenTofu, chiffré par la condition 2 de l'ADR-008, puis par Secret Manager. La condition 7 le borne. La ressource qui lit le jeton n'est toujours pas publiée : 8.12.0 reste la dernière version du provider le 2026-11-25 [S64]. Le producteur de `cache-auth` sur `gcp` reste bloqué jusqu'à sa publication, plus les 7 jours du principe VI.
+
+#### Corrections demandées au rapport par [SECU]
+
+1. Section 5.3 : Redis 7.2 à 4/5, 12 points, avec la règle de BENCH-013 en justification. Section 6 : total de O2 à 69. Section 7 : écart de 17 points, sensibilité recalculée pour O2 (moins 3 sur chaque ligne), « six crans » au lieu de « cinq ». En-tête et verdict proposé : 86 contre 69.
+2. Section 5.5, les deux options : remplacer « trois avis sur neuf n'ont pas de CVE, donc échappent aux scanners » par le fait mesuré. Trivy 0.76.2 ne voit pas le moteur, compilé depuis les sources, dans aucune des deux images ; aucun des douze GHSA n'est dans la base mondiale de GitHub [S53], [S54]. Ajouter la CPE du SBOM embarqué et le retard de NVD comme limite d'une seconde source [S57], [S66].
+3. Section 2, colonne « Attestations et signature » de O1 : même condensat sur trois registres, aucun tag `sha256-*`, API d'attestations à 404, SBOM SPDX embarqué non signé [S55] à [S57].
+4. Section 8, ligne M6 (c) : écrire ce que le contrôle couvre (lignes de commande des processus du conteneur du cache, au moment du contrôle), ce qui lui échappe (conteneur d'initialisation, environnements, nœud), et ce qui le lève (condition 5 ci-dessous). Retirer « Un argument vu par containerd ».
+5. Section 4.3, inventaire : ajouter le tirage possible de `kindest/node` par kind, les options `seccomp=unconfined`, `apparmor=unconfined` et `--restart=on-failure:1` du nœud [S65], et le dossier du verrou comme seule écriture hors du dossier d'essai. En-tête du script, à sa prochaine modification : « no port is published outside the loopback ».
+6. Section 3 ou 5.5 : le tag `9.1.4-alpine` poussé le 2026-11-18 à 23:11:58 UTC, délai de 7 jours échu le 2026-11-25 à 23:12 UTC, exception du principe VI applicable [S59].
+7. Section 7, conditions proposées : la condition 3 gagne TLS à la création, la rotation et les contrôles conftest de la condition 7 ci-dessous. La condition 2 gagne l'ACL de la condition 4 ci-dessous.
+8. Section 9 : ajouter S53 à S67. Section 10 : la ligne [SECU] ci-dessous.
+
+#### Conditions de [SECU] pour l'ADR-015
+
+1. Image et dérogation à ENF-03. `docker.io/valkey/valkey`, variante Alpine, est désignée par tag et condensat, tirée depuis docker.io par zot. docker.io figure déjà dans la liste de la condition 10 de l'ADR-011, et Renovate le date (ADR-016). La dérogation datée ci-dessus admet l'image par sa référence exacte, condensat compris, dans une liste fermée. À chaque condensat neuf, [SECU] vérifie que docker.io, ghcr.io et public.ecr.aws donnent le même condensat d'index. Contrôles : S01 ; E11 ; dès qu'un profil embarque Kyverno, le contrôle de la condition 7 de l'ADR-012 étendu à `docker.io/valkey/valkey`.
+2. Suivi des failles (R-36) et version. R-36 s'étend à tout le moteur, pour Valkey comme pour toute image qui compile son moteur depuis les sources : le scan de FR-021 ne couvre que les paquets d'Alpine. [SECU] lit chaque mois les avis de `valkey-io/valkey` et les notes des releases marquées « SECURITY ». Renovate suit les versions correctives de `9.1.x-alpine` ; une version qui corrige un avis passe par l'exception du principe VI, matrice comprise. La 9.1.4 se fige après le 2026-11-25 à 23:12 UTC. Une seconde source par la CPE du SBOM embarqué s'étudie à l'étape 18 du plan, avec sa limite écrite (NVD en retard, trois avis sans CVE).
+3. Durcissement du pod sur `local`, repris de l'essai. Le namespace applique le profil `restricted` ; le pod a `runAsNonRoot`, l'UID 999 et le GID 1000 explicites, `allowPrivilegeEscalation: false`, les capacités `ALL` retirées, `seccompProfile: RuntimeDefault`, `readOnlyRootFilesystem: true` et `automountServiceAccountToken: false`. Pas de persistance (`save ""`, `appendonly no`). `/data` est un `emptyDir` borné par `sizeLimit`. Demandes, limites et `maxmemory` selon la condition 2 de [FINOPS]. Contrôle : la matrice échoue sur un pod refusé par le profil.
+4. ACL à la place de `requirepass`. Le conteneur d'initialisation écrit `user default on #<empreinte SHA-256> ~* &* +@all -@admin`, suivi du refus explicite de chaque commande que Memorystore bloque et que `@admin` ne couvre pas, d'après la page relue et datée [S62]. L'empreinte se calcule depuis le fichier du Secret par l'entrée standard. Le serveur ne monte pas le Secret. Ni `rename-command`, ni `requirepass` ; `enable-protected-configs`, `enable-debug-command` et `enable-module-command` restent à `no`. `@scripting` est retiré si le client .NET fonctionne sans, ce que [DEV] vérifie sur le golden repo ; sinon l'ADR écrit pourquoi. Contrôles : `PING` sans mot de passe reçoit `NOAUTH` ; `CONFIG GET`, `DEBUG`, `SAVE`, `ACL LIST` et `MODULE LIST` reçoivent un refus ; `cache.conf` ne contient pas la valeur du Secret.
+5. Mot de passe hors des arguments et de l'environnement du serveur. Un contrôle statique du rendu refuse sur le conteneur du cache tout `env` et `envFrom`, dont `VALKEY_EXTRA_FLAGS`, et dans `command` ou `args` de tout conteneur toute option de mot de passe (`requirepass`, `-a`, `--pass`, `--user`). M6 entre dans la matrice, sa partie (c) étendue à `/proc/*/environ`. Le client lit le mot de passe par `secretKeyRef` ou par fichier, jamais en argument.
+6. Réseau sur `local`. Service `ClusterIP` seulement, sans `NodePort`, `LoadBalancer` ni route TCP. Une NetworkPolicy n'admet sur 6379 que les pods de l'API, et refuse toute sortie au pod du cache. kind applique les NetworkPolicy depuis sa v0.24.0 [S65] ; [OPS] vérifie qu'elles s'appliquent sous kind 0.33.0, comme pour la condition 4 de l'ADR-014. Contrôle : un pod non admis n'atteint pas 6379, l'API l'atteint.
+7. `gcp` : jeton, TLS, état. `authorization_mode = "TOKEN_AUTH"` et `transit_encryption_mode = "SERVER_AUTHENTICATION"` dès la création, puisque ce second attribut est immuable [S64]. La CA arrive au pod par la couche de cible, sous la forme d'un ConfigMap, puisqu'elle n'a rien de secret ; [OPS] choisit entre CA par instance et CA régionale. Le jeton vient de `google_memorystore_auth_token`, dans une version publiée du provider depuis 7 jours, dont [SECU] relit la page. Il part vers Secret Manager par `secret_data_wo`, puis vers `cache-auth`, clé `password`, par la synchronisation de GKE (ADR-007). Aucun `output` ne le porte, et l'état comme le plan sont chiffrés (ADR-008, condition 2). La rotation suit les deux jetons par utilisateur et s'écrit au README [S60]. Une politique conftest refuse un autre mode d'autorisation, `TRANSIT_ENCRYPTION_DISABLED`, et toute règle d'`acl_policy` contenant `>`, soit un mot de passe en clair dans le HCL. La politique de connexion de service n'admet que le sous-réseau de GKE, sur les seuls ports du mode sans cluster, que [OPS] lit. L'IAM passe par son propre ADR.
+8. Écarts et catalogue. Le README liste TLS sur `gcp` seulement, et l'ACL de `local` plus stricte que Memorystore (ENF-02). L'entrée `redis` du catalogue porte BSD-3-Clause, gouvernance `foundation` (LF Projects), statut actif, date et sources. Toute autre image ou tout module, `valkey-bundle` compris, passe par une relecture [SECU] avant d'entrer.
+
+[SECU] D'accord, avec réserves : Valkey 9.1.4 reste devant, 86 contre 69 après la correction de maturité. Le choix tient sur la licence et la gouvernance, que mes lectures confirment. La sécurité ne départage pas. Aucune des deux images ne laisse voir son moteur au scan, aucune n'a de signature vérifiable, et chaque avis de la ligne 9.1 demande un client authentifié. Ce qui distingue Valkey ici : il faut une dérogation de plus, et le compte `default` doit être restreint sur le PC pour se comporter comme Memorystore. Les conditions 1, 2 et 4 couvrent ces deux points.
+
+[SECU] Non vérifié : que le client .NET fonctionne sous `-@admin`, sans `@scripting`, puis avec TLS et la CA sur `gcp` ; que `google_memorystore_acl_policy` s'applique à une instance en `TOKEN_AUTH` ; les ports utiles à Private Service Connect en mode sans cluster ; que les NetworkPolicy s'appliquent sous kind 0.33.0 ; qu'un commit qui ne touche que `versions.json` republie toutes les versions, que je lis dans le workflow sans l'avoir observé ; ce que containerd garde sur disque de l'environnement d'un conteneur ; que Syft ou Dependency-Track lisent `/usr/local/valkey.spdx.json`. Les faits de S59 à S63 viennent d'un outil qui résume les pages. La page TLS de Memorystore écrit que TLS est requis pour ne pas exposer les jetons, tandis que la page IAM le dit seulement recommandé : la condition 7 l'impose de toute façon.
+
+[SECU] Question pour Lucas, facultative. Le workflow de `valkey-container` a déjà `id-token: write` pour AWS [S57], donc une signature sans clé ou une attestation de provenance lui coûterait peu. Un ticket amont accélérerait la levée de la dérogation. Je n'en ai ouvert aucun : c'est une action publique, qui revient à Lucas.
+
+[BENCH] Suite donnée aux corrections demandées par [SECU] (2026-11-25), sans réécrire la relecture ci-dessus. Appliquées : 1 (maturité de Redis 7.2 à 4/5, grille à 86 contre 69, écart de 17 points, six crans, sensibilité recalculée, en-tête et section 7), 2 (sections 5.5 et 8, R-36), 3 (section 2), 4 (section 8, ligne M6 (c)), 5 (section 4.3, sauf l'en-tête du script), 6 (section 3), 7 (conditions 2 et 3 de la section 7), 8 (sources S53 à S67 en section 9, ligne de ce tableau). Non appliquée : l'en-tête du script (« no port is published outside the loopback »), parce que le script du rapport a pour SHA-256 `16daad12…` et que les relectures le citent ; elle attend la prochaine modification du script. Les sections « Ligne du tableau de la section 10 » et « Sources de [SECU] à ajouter à la section 9 » de la relecture ont été déplacées dans le tableau de cette section et dans la section 9, au mot près. Le total de 86 contre 69 est celui de la grille corrigée.
 
 ### Relecture [FINOPS]
 
-<!-- À remplir par [FINOPS] : avis, remarques et suite donnée. -->
+[FINOPS] Recalcul depuis la série 2 du 2026-11-25. J'ai relu `runs.tsv`, `summary.tsv`, `idle-pods.tsv`, `images.tsv`, `node-images.tsv` et `load.tsv` de `series-2`. Je n'ai pas relu `auth.tsv`, `pod-restart.tsv` ni `power.tsv`. Les médianes des nœuds, par exécution : Valkey 634,4, 644,6 et 644,5 Mio, soit 644,5 ; Redis 594,1, 635,7 et 580,2, soit 594,1 ; nœud de base 588,2, 610,1 et 574,0, soit 588,2. M2 vaut donc 56,3 Mio pour O1 et 5,9 pour O2, comme dans le rapport, avec les mêmes écarts (10,2, 55,5 et 36,1 Mio). La somme des pods se retrouve échantillon par échantillon dans `idle-pods.tsv` : médianes d'exécution de 6,4, 6,5 et 6,2 Mio pour Valkey, de 4,3, 5,8 et 5,8 pour Redis, d'où 6,4 et 5,8. M3 se retrouve aussi (0,2 et 0,1 % d'un cœur). M4 se retrouve aux octets : 18 830 089 et 16 024 750 en amd64, soit 15,1 et 12,8 s à 10 Mbit/s. M5 : chaque exécution porte deux événements `Pulled` de l'image de l'option, 2,3 à 2,6 s puis 574 à 622 ms, donc oui trois fois sur trois. Un seul écart de méthode : les trois échantillons de nœud de chaque exécution ne sont écrits dans aucun TSV, seule leur médiane l'est (`runs.tsv`). Je ne peux donc pas refaire ces médianes d'exécution, seulement celles de la série. Pour la couche on a les pods échantillon par échantillon, pour le nœud non.
+
+[FINOPS] Écart de 50,4 Mio entre les nœuds. Ce que les données montrent. Le nœud de Redis suit celui de base ronde par ronde, à plus 5,9, 25,6 et 6,2 Mio. Celui de Valkey ne le suit pas : 634,4, 644,6 et 644,5 Mio pour une base qui varie de 36,1, d'où des écarts de 46,2, 34,5 et 70,5 Mio. Valkey est le nœud le plus lourd de chacune des trois rondes. Si l'ordre était aléatoire, cela arriverait une fois sur 27, soit 3,7 % (mon calcul) : faible, mais trois tirages n'établissent pas un effet. L'écart ne vient pas du pod, qui pèse 6,4 Mio : 49,9 Mio sont hors pod. Enfin les bornes se recouvrent. Si l'on prend le nœud d'option le plus haut moins le nœud de base le plus bas, Valkey tient entre 24,3 Mio (634,4 moins 610,1) et 70,6 (644,6 moins 574,0), Redis entre moins 29,9 et 61,7. Médiane des écarts de chaque ronde au lieu d'écart des médianes : 46,2 pour Valkey, 6,2 pour Redis, soit 40,0 d'écart entre les options au lieu de 50,4.
+
+[FINOPS] Explication la plus probable, et elle reste une hypothèse. La mémoire que lit `docker stats` est celle de tout le conteneur du nœud, et le CLI n'en retranche que le cache inactif (`inactive_file` sur cgroup v2) [S47]. Le cache de pages actif et la mémoire du noyau restent comptés : blobs de l'image tirée, couche dépaquetée, binaire exécuté, objets du système de fichiers. Aucun de ces postes n'est un processus du pod, donc la somme des pods ne les voit pas, et leur part dépend de l'image et de l'état du nœud à l'instant du relevé. Les 2,8 Mo de volume compressé de plus pour Valkey n'expliquent que quelques Mio, pas 50. Le reste se partage entre une vraie contribution de l'image de Valkey, que seule une mesure séparera, et la chance, vu les 3,7 % ci-dessus et un nœud de base qui varie déjà de 36,1 Mio. Je classe la chance et un cache de pages variable devant une cause propre au serveur : le pod, qui contient son propre cache de pages dans son working set, ne pèse que 6,4 Mio. Rien de ce qui précède n'a été mesuré. Le protocole a aussi un ordre fixe (base, Valkey, Redis, à chaque ronde), qui interdit de séparer l'effet de l'option de l'effet de son prédécesseur.
+
+[FINOPS] Ce qu'il faudrait mesurer pour trancher, sans toucher à la note. Un, au moment de chaque échantillon, le `memory.stat` du cgroup du nœud (`anon`, `file`, `active_file`, `inactive_file`, `slab`, `kernel_stack`, `pagetables`) et le RSS par processus (containerd, kubelet, kube-apiserver, etcd, les shims). Si l'écart est dans `file` ou `slab`, c'est du cache : le noyau le rend sous pression, et il ne compte pas dans un plancher. S'il est dans `anon`, il faut trouver le processus. Deux, des témoins : le nœud avec l'image de Valkey lancée en `sleep` (sans serveur), le même pour Redis, pour séparer l'image du serveur. Trois, l'ordre permuté (base, Redis, Valkey, puis aléatoire) et au moins cinq exécutions par option. Quatre, écrire les échantillons du nœud dans un TSV (`idle-node.tsv`), comme le fait déjà `idle-pods.tsv` pour les pods. Cela se prête à une série courte, sans action payante.
+
+[FINOPS] Effet sur une note : aucun. Seuil 4 : 56,3 Mio font 11,0 % de 512, 70,6 en font 13,8 % ; Redis, 5,9 et 61,7 Mio, 1,2 et 12,1 %. Aucune des valeurs possibles n'est à moins de 10 % du seuil, donc aucune seconde note à écrire. Pour franchir 512 Mio il faudrait un écart sept fois plus grand que le pire cas mesuré. Cela change en revanche le dimensionnement, voir plus bas : la plus grande des deux valeurs, couche au nœud ou pod, est celle qu'on compte (règle que j'ai proposée dans la relecture de BENCH-013, toujours à confirmer par Lucas). Pour O1 c'est 56,3 Mio, majorant 70,6. Pour O2, 5,9, majorant 61,7.
+
+[FINOPS] Seuils de 4.1. Le rapport indique que la section n'a pas bougé depuis son relevé du 2026-11-23, avant toute lecture web ; je n'ai pas le condensat de référence sous les yeux, je me fie à la déclaration de [BENCH], comme pour BENCH-012 et BENCH-013. Seuil 1 : non franchi (18,8 et 16,0 Mo pour 112,5 : 16,7 % et 14,2 %). Seuil 2 : franchi par les deux, un `Pulled` à chaque exécution. Seuil 3 : non franchi (5,5 s pour 90 : 6,1 %). Seuil 4 : non franchi, ni à la valeur de la règle, ni au majorant. Chaque option perd donc un cran et finit à 4/5, comme dans le rapport. Je confirme la note d'empreinte. Le critère ne départage pas, et je n'ai rien à lui reprocher : les 2,8 Mo d'écart de volume font 2,2 s à 10 Mbit/s, soit 0,2 % du budget de 900 s.
+
+[FINOPS] Lecture du seuil 2. D'accord avec la lecture à la lettre, comme dans BENCH-013 : la série a tourné sans miroir. Avec le miroir de l'ADR-011, les deux options regagnent un cran, 88 et 74 ; le classement ne bouge pas. L'image vient de docker.io pour les deux, donc aucun amont de plus pour zot. Le nœud émet deux `Pulled` par création pour la même image, sans que le fichier dise pourquoi (le second, en moins d'une seconde, ressemble à une nouvelle résolution au registre, ce que je ne peux pas confirmer). Il vaut la peine de le relever pour R-25, parce que chaque résolution sans miroir sort vers Docker Hub, pour les deux options à égalité.
+
+[FINOPS] Cumul avec le premier `task up` (R-04). O1 n'ajoute rien : la stack de BENCH-005, déjà comptée, contient `valkey/valkey:9.1.4-alpine` à 18,8 Mo, et le rapport l'écrit juste. Le premier `task up` du profil standard reste à 1 802,1 Mo avec O1 (160,2 % du budget de 900 s à 10 Mbit/s, 16,0 Mbit/s au minimum), et passe à 1 799,3 Mo avec O2 (159,9 %). Pour le profil lite, qui n'a ni Flux (ADR-010, GATE 1), ni Keycloak, ni Mailpit, je retire 258,1 Mo de Flux aux 1 521,9 Mo de BENCH-011 : 1 263,8 Mo avec zot, 1 011,0 s à 10 Mbit/s, 112,3 % du budget, 11,2 Mbit/s au minimum pour le seul téléchargement. Sans zot, 1 186,1 Mo : 948,9 s, 105,4 %. C'est un calcul de [FINOPS] qui additionne des séries de plusieurs jours, un ordre de grandeur. Le cache pèse 18,8 Mo là-dedans, 15,1 s à 10 Mbit/s, 1,7 % du budget : même sans cache le lite resterait à 110,7 %. Le choix du moteur ne peut donc pas faire tenir le critère des 15 minutes, et ne peut pas non plus le faire manquer. Côté temps de démarrage, M1 vaut 5,5 s, image tirée comprise, soit 0,6 % du budget même si la couche passait en série avec les autres. Le cumul de la sensibilité du rapport se retrouve : 505,8 plus 18,8 font 524,6, et plus 16,0 font 521,8. Avec zot, la base vaut 583,5 Mo (BENCH-010) : 602,3 et 599,5, même effet.
+
+[FINOPS] Mémoire. J'applique la méthode de BENCH-005, reprise de BENCH-010 à BENCH-013 : plancher multiplié par 1,5, arrondi au demi-gibioctet supérieur, plus 4 Gio pour le portable. Les planchers de l'ADR-012 et de BENCH-013 contiennent déjà le Valkey de BENCH-005, sans que sa part y soit isolée. Je compte donc par majorant, qui ajoute la couche sans rien retirer, comme dans BENCH-011. Profil lite : 1 186,6 Mio (ADR-012) plus 56,3 font 1 242,9, soit 1,8 Gio de plancher agrandi, donc 2,0 Gio de VM et 6,0 de portable, sans changer de palier. Il reste 122,4 Mio avant le palier de 2,5 Gio (108,1 avec le majorant de 70,6). Avec O2, plus 5,9, il en reste 172,8 (117,0 avec 61,7). Sur un portable de 8 Gio, la VM peut monter à 4,0 Gio, et le lite y garde 1 487,8 Mio de plancher. Profil standard : 2 310,3 Mio (BENCH-013, Mailpit au pod) plus 56,3 font 2 366,6, soit 3,5 Gio de VM et 7,5 de portable. Il ne reste que 22,7 Mio avant le palier de 4,0 Gio (8,4 avec le majorant), et ce palier tient encore sur 8 Gio, avec 364,1 Mio de plancher de reste (349,8 au majorant). Avec la somme des pods seule, 6,4 Mio, la marge est de 72,6. Le standard est donc sur 8 Gio dans tous les cas, mais à la limite d'un palier de VM, sans que le choix du moteur le décide, puisque Valkey est déjà dans ces planchers. Même réserve que dans BENCH-013 : ces chiffres mêlent des séries de jours différents.
+
+[FINOPS] Côté GCP, je n'ai lancé aucune action cloud, et aucun budget n'est validable : la région n'est pas choisie et la grille de prix reste illisible (R-05). Le 2026-11-25, l'outil lit la page `https://cloud.google.com/memorystore/valkey/pricing` mais n'y trouve que son titre : ni grille, ni unité, ni région. Un extrait de moteur de recherche annonce un prix à l'heure pour une région américaine ; je ne l'écris pas, parce que je ne l'ai pas lu sur la page. Lucas lit la grille de Memorystore for Valkey avec le sélecteur de région, comme pour les autres services (R-05).
+
+[FINOPS] Ce que je peux dire sans prix, pour Memorystore for Valkey, d'après les pages de Google lues le 2026-11-25 par un outil qui résume. Facturation par nœud et par heure : la page des engagements compte des nœuds facturables, un primaire et ses réplicas par partition [S48]. Le nombre de nœuds facturables est donc le nombre de partitions plus le nombre de réplicas, et un réplica double la facture d'une instance à une partition. Les engagements, à 20 % pour un an et 40 % pour trois ans, se paient chaque heure qu'on les utilise ou non, ne s'annulent pas, et ne couvrent ni le stockage, ni les sauvegardes, ni la persistance, ni la sortie de données [S48]. Pour une démo démontable (R-05, R-15) je n'en prends aucun. Tailles, d'après la page des nœuds [S49] : `shared-core-nano`, 1,4 Go au total dont 1,12 de clés inscriptibles, 0,5 vCPU, sans SLA, limite dure de 1,12 Go non modifiable, réservé au développement et aux essais, avec ou sans mode cluster ; `custom-pico`, 1,25 Go dont 1,08 inscriptibles, 2 vCPU, avec SLA, sans cluster seulement ; `custom-micro`, 2,5 Go dont 2 ; `custom-mini`, 3,75 Go dont 3 ; `standard-small`, 6,5 Go dont 5,2, avec ou sans cluster. La capacité minimale est celle d'un nœud, et une instance peut n'avoir aucun réplica (0 à 5 d'après la page). Memorystore met de côté une part de chaque nœud contre les dépassements de mémoire, et la page déconseille de dépasser la valeur par défaut de `maxmemory`. L'unité de « Go » n'est pas dite (Go ou Gio, 2 % d'écart, déjà soulevé dans BENCH-013). La formule du coût mensuel, sans chiffre : nœuds facturables, fois heures allumées (730 pour un mois plein), fois le prix horaire du type de nœud dans la région. Elle ne dépend d'aucun autre paramètre pour la partie nœuds.
+
+[FINOPS] Trois postes de coût de Memorystore restent non lus : le point de terminaison Private Service Connect que la couche `gcp` ajoute au socle de l'ADR-008 (BENCH-014, section 5.7), le trafic qui le traverse, et le stockage des sauvegardes si elles sont actives. Je n'ai lu aucune fonction d'arrêt d'une instance, ni de franchise gratuite : une instance facture dès sa création, au prix de son type de nœud, même vide. Le plus petit nœud avec SLA (`custom-pico`) a un keyspace par défaut de 1,08 Go, soit environ huit fois la limite de 128 Mi que je propose pour le pod local : aucune taille de Memorystore ne colle au besoin de l'exemple (FR-009), qui tient en quelques dizaines de Mio, donc on prend le plus petit et on ne cherche pas à ajuster.
+
+[FINOPS] Dimensionnement local, proposé pour l'ADR-015. Le pod au repos pèse 6,4 Mio et 0,2 % d'un cœur (soit environ 2 millicœurs), clés vides : aucune mesure sous charge n'existe. Je propose, comme valeurs de départ à vérifier sur le golden repo : demande mémoire de 64 Mi, limite de 128 Mi ; demande de CPU de 25m, sans limite de CPU (le cache n'a aucune raison d'être bridé sur un portable). Les 64 Mi font dix fois le repos, les 128 Mi vingt fois. Le pod est ainsi en classe Burstable, sous sa demande tant qu'il reste petit, donc peu exposé à l'éviction. En classe Guaranteed, le pod devrait avoir demande égale à la limite sur la mémoire et le CPU de chaque conteneur [S52], ce qui ne se justifie pas ici. Le moteur reçoit `maxmemory 64mb` (la moitié de la limite, pour les tampons de sortie des clients et la fragmentation) et `maxmemory-policy allkeys-lru`, que la doc de Valkey présente comme un bon choix quand on hésite, pour un cache sans persistance [S51]. Sans `maxmemory`, la doc dit que la limite par défaut sur 64 bits est l'absence de limite : le pod grossit jusqu'à sa limite de conteneur. Le contrôle est une écriture au-delà de `maxmemory` dans la matrice : zéro redémarrage (colonne `restarts` du script), working set sous la limite. Au pire, le cache plein coûterait 128 Mio, 121,6 de plus qu'au repos, soit 1,5 % d'un portable de 8 Gio.
+
+[FINOPS] Dimensionnement sur `gcp`, pour l'ADR-015. Mode `CLUSTER_DISABLED`, zéro réplica, un seul nœud, de type `shared-core-nano` en dev et pour la démo. `custom-pico` seulement si un environnement demande un SLA. Tout autre type de nœud, tout réplica et tout mode cluster passent par un budget revalidé (principe X). La politique conftest de l'ADR-008 sur le tier s'étend au type de nœud et au nombre de réplicas : elle refuse un plan hors de ces valeurs, sans que l'ajout d'un nœud ne passe par un simple changement de variable. Le budget se calcule avec la formule ci-dessus, une fois la grille lue pour la région choisie, avant la GATE 2. Une alerte budget ne plafonne rien (R-05) : le seul garde-fou réel est le démontage et le `ttl` en étiquette. L'instance est étiquetée `owner`, `env` et `ttl`.
+
+[FINOPS] Note de coût. Je confirme 4/5 pour les deux options, comme dans BENCH-012 et BENCH-013. Sur le PC, ni licence ni service payant. Sur `gcp`, les deux variantes de Memorystore se facturent par nœud et par heure, et je n'ai lu le prix d'aucune : la page de Redis donnait une 404 le 2026-11-23 (S29), celle de Valkey n'a pas de grille lisible. Le coût ne départage pas, les totaux restent 86 et 72. La réserve du critère passe de « prix illisibles » à « prix à lire avec la région » : aucune action de l'équipe n'y change rien.
+
+[FINOPS] Le deuxième palier de volume. Mon avis est non, et je retire la proposition que je faisais dans BENCH-011. Les quatre rapports donnent des volumes de couche de 15,1 Mo (Mailpit), 18,8 Mo (Valkey), 127,0 (CloudNativePG), 176,9 (smtp4dev), 265,1 (Keycloak), 463,8 (Zitadel) et 679,5 (Zalando). Il n'y a pas de coupure naturelle dans cette suite. Un palier à 225 Mo, par exemple, enlèverait un cran à Keycloak, retenu, et à Zitadel, au même titre, sans les séparer ; il faudrait un troisième palier vers 450 Mo pour isoler Zitadel. Aucun verdict de BENCH-011 à BENCH-014 n'en dépend : Zalando finit dernier avec ou sans, et la différence de volume entre Keycloak et Zitadel (198,7 Mo, 159 s à 10 Mbit/s) se lit déjà dans la ligne de budget que chaque relecture écrit. BENCH-014 montre le même défaut vu de l'autre côté : les deux options sont sous le seuil et la règle ne les distingue pas, alors que ce qui compte pour R-04 est le cumul. Le vrai outil est le budget par étape d'ENF-01, déjà dans la mitigation de R-04 et pas encore fixé. Règle si Lucas répond oui malgré tout : un seul cran de plus, à 225 Mo (180 s à 10 Mbit/s, 20 % du budget de 900 s), écrit dans le gabarit par Lucas, haché en 4.1, valable pour les couches à venir seulement. Sans rétroaction sur les notes existantes. Et seulement s'il remplace le budget par couche de R-04, pas en plus.
+
+[FINOPS] D'accord. Le coût ne départage pas, l'empreinte non plus, et le verdict tient sur la licence et la gouvernance, avec 14 points d'écart. Sur le PC, O1 ne coûte rien au premier `task up`, et O2 économiserait 2,8 Mo. Les conditions ci-dessous sont à reprendre dans l'ADR-015.
+
+[FINOPS] Questions ouvertes. L'origine des 50,4 Mio (hypothèse de cache de pages à confirmer par `memory.stat` et par un témoin, non bloquante pour l'ADR). La politique d'éviction par défaut de Memorystore for Valkey, non lue : celle du pod local doit lui être égale pour la parité de comportement. Les prix de Memorystore pour la région choisie, et le coût du point de terminaison Private Service Connect, du trafic et des sauvegardes. L'unité des « Go » des pages de Google. Le lite, composé sans Flux : ma lecture de l'ADR-010, à confirmer par [ARCHI]. La lecture d'une couche dans le bruit (majorant pour la note, pod pour le dimensionnement), toujours en attente de Lucas depuis BENCH-013.
+
+#### Corrections demandées au rapport par [FINOPS]
+
+1. Section 4.4, point 1, et section 8 : ajouter que les échantillons du nœud ne sont pas écrits en TSV, et les bornes (Valkey 24,3 à 70,6 Mio, Redis moins 29,9 à 61,7).
+2. Section 4.4, point 1, et 5.6 : « au plus 70,5 Mio » vaut pour l'écart d'une même ronde ; le majorant de la règle de BENCH-013 vaut 70,6 (644,6 moins 574,0). Écrire les deux.
+3. Section 5.6, sensibilité : ajouter le cumul avec la base mesurée avec zot (583,5 Mo, BENCH-010), soit 602,3 et 599,5 Mo, même effet.
+4. Section 7, paragraphe R-04 : ajouter le chiffre du profil lite (1 263,8 Mo, 112,3 %, 11,2 Mbit/s), le standard (1 802,1 Mo avec O1, 1 799,3 avec O2), et le plancher mémoire (section Mémoire de cette relecture).
+5. Section 5.9 : remplacer « grilles illisibles » par le mode de facturation lu (nœud et heure, engagements) et la liste des postes non lus (point de terminaison, trafic, sauvegardes).
+6. Section 7, condition 5 : ajouter le nombre de réplicas à la politique conftest, et fixer le type de nœud et le mode ci-dessous.
+7. Section 9 : ajouter S47 à S52 ci-dessous. Section 10 : mettre à jour la ligne [FINOPS].
+
+#### Conditions de [FINOPS] pour l'ADR-015
+
+1. Volume. L'image reste la variante Alpine de `valkey/valkey` figée par condensat : le cache ajoute 0 Mo net au premier `task up` (R-04 : 1 802,1 Mo pour le standard, 160,2 % du budget à 10 Mbit/s ; lite environ 1 263,8 Mo, 112,3 %). Passer à la variante trixie ajoute 26,0 Mo (44,8 contre 18,8) et rouvre R-04 avec un nouveau chiffre.
+2. Demandes et limites du pod sur `local`, explicites dans le manifest : mémoire 64 Mi demandés et 128 Mi en limite, CPU 25m demandés et pas de limite de CPU ; `maxmemory 64mb` et `maxmemory-policy allkeys-lru` écrits dans la configuration du conteneur d'initialisation. Valeurs de départ à confirmer sur le golden repo. Contrôle de la matrice : écriture au-delà de `maxmemory`, zéro redémarrage, working set sous la limite.
+3. Plancher mémoire. La couche entre dans les planchers pour la plus grande de ses deux valeurs, 56,3 Mio (majorant 70,6). Le lite reste à 2,0 Gio de VM et 6,0 Gio de portable, avec 108 à 122 Mio avant le palier suivant. Le standard reste à 3,5 Gio de VM et 7,5 Gio de portable, avec 8 à 23 Mio avant le palier de 4,0 Gio, qui tient encore sur 8 Gio. Le golden repo mesure le nœud avec toute la stack et remplace ces ordres de grandeur.
+4. Cause des 50,4 Mio. Une série courte de [BENCH], avant d'écrire le plancher dans le PRD : `memory.stat` du nœud et RSS par processus à chaque échantillon, témoins sans serveur pour les deux images, ordre permuté, cinq exécutions au moins par option, échantillons du nœud écrits en TSV. Si l'écart est dans le cache de pages, le plancher peut redescendre vers la valeur du pod.
+5. Taille de l'instance sur `gcp`. Mode `CLUSTER_DISABLED`, zéro réplica, un nœud, `shared-core-nano` en dev et pour la démo ; `custom-pico` seulement avec un besoin de SLA ; tout autre type, tout réplica et tout mode cluster exigent un budget revalidé. La politique conftest de l'ADR-008 refuse un plan hors de ces valeurs. Aucun engagement d'utilisation.
+6. Budget avant la GATE 2 (principe X, R-05). Lucas lit la grille de Memorystore for Valkey pour la région choisie. [FINOPS] calcule alors : nœuds facturables, fois heures allumées, fois prix horaire du type de nœud, plus les trois postes non lus (point de terminaison Private Service Connect, trafic, sauvegardes). Aucun `tofu apply` avant l'accord de Lucas sur ce montant. Ressources étiquetées `owner`, `env`, `ttl`.
+7. Parité d'éviction. La politique d'éviction par défaut de Memorystore for Valkey est lue et datée avant l'ADR ; celle de `local` lui est égale, ou l'écart est écrit dans l'ADR.
+
+[BENCH] Suite donnée aux corrections demandées par [FINOPS] (2026-11-25), sans réécrire la relecture ci-dessus. Appliquées : 1 (section 4.4 point 1 et section 8 : échantillons du nœud non écrits, bornes), 2 (4.4 et 5.6 : 70,5 d'une même ronde, majorant 70,6), 3 (5.6 : cumul avec la base mesurée avec zot), 4 (section 7 : profils lite et standard, plancher mémoire), 5 (5.9 : facturation lue, postes non lus), 6 (condition 5 de la section 7), 7 (sources S47 à S52 en section 9, ligne de ce tableau). Les sections « Corrections demandées » et « Sources de [FINOPS] » sont conservées ou déplacées au mot près ; la ligne du tableau de cette section est rédigée par [BENCH], la relecture n'en fournissant pas. Les totaux cités dans la relecture (86 et 72, 88 et 74, 14 points) précèdent la correction de maturité de [SECU] : ils valent 86 et 69, 88 et 71, 17 points. Les 7 conditions de [FINOPS] et les 8 de [SECU] vont à l'ADR-015.
