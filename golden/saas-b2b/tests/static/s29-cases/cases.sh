@@ -88,7 +88,7 @@ expect_fail npm-scoped-registry "$d" "@acme:registry"
 d="$(new_case npm-scoped-registry-in-subfolder)"
 mkdir -p "$d/src/front"
 printf '# comment\n@acme:registry=https://npm.example.test/\n' > "$d/src/front/.npmrc"
-expect_fail npm-scoped-registry-in-subfolder "$d" "src/front/.npmrc: @acme:registry"
+expect_fail npm-scoped-registry-in-subfolder "$d" "src/front/.npmrc: registry key @acme:registry"
 
 for key in '_auth' '_authToken' '_password' 'username' 'email' \
   '//registry.npmjs.org/:_authToken' '//npm.example.test/:_auth' \
