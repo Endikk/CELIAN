@@ -47,6 +47,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-37 | Parcours de connexion différent entre le PC et GCP | Moyenne | Moyen | DEV, QA | Ouvert |
 | R-38 | Mise à jour des images sans date suspendue à une personne | Moyenne | Moyen, fort pour l'image d'exécution de l'API | SECU, DSI | Ouvert |
 | R-40 | Scanner de secrets du projet généré en maintenance | Forte | Moyen | SECU, DSI | Ouvert |
+| R-41 | Jeton de Memorystore sans ressource publiée dans le provider | Moyenne | Moyen | OPS, SECU | Ouvert |
 
 ## Détail
 
@@ -1082,3 +1083,18 @@ pas ; un benchmark des scanners de secrets (gitleaks, Betterleaks,
 TruffleHog, Kingfisher au moins), ouvert après le golden repo et avant la
 mise en template de la phase 3 (décision de Lucas du 25/11/2026), et au plus
 tard avant le 21/03/2027.
+
+### R-41. Jeton de Memorystore sans ressource publiée dans le provider
+
+Ouvert le 25/11/2026 avec l'ADR-015. Sur `gcp`, le cache est Memorystore for
+Valkey, authentifié par jeton pour le MVP. Le Secret `cache-auth` doit porter ce
+jeton, mais la ressource du provider `google` qui le lit n'est publiée dans
+aucune version au 25/11/2026 (8.12.0 est la dernière). Sans elle, le producteur
+`gcp` de `cache-auth` manque au premier apply, et l'API ne joint pas le cache.
+
+Probabilité moyenne : la date de publication est inconnue. Impact moyen : le
+cache sur GCP reste inutilisable, sans fuite ; le reste de la cible tient.
+
+Mitigation : condition 18 de l'ADR-015 ; question 2 de l'ADR-015 reposée à
+l'ouverture de la GATE 2 (déployer sans la partie cache, ou ouvrir plus tôt
+l'ADR de l'IAM) ; [OPS] relit les notes de version du provider à chaque montée.
