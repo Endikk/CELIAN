@@ -133,7 +133,7 @@ refused index-protocol-relative-script index.html "$nos" '<!doctype html>
 <body><div id="root"></div><script src="//cdn.example.test/x.js"></script></body></html>'
 
 # 4. fetch, or another channel, through an alias.
-alias_text="fetch outside src/api.ts"
+alias_text="fetch outside the client of the contract"
 refused_added alias-const-outside-client extra.ts "$alias_text" 'const f = fetch;'
 refused_added alias-globalthis-outside-client extra.ts "$alias_text" 'export const g = globalThis.fetch;'
 refused_added alias-window-outside-client extra.ts "$alias_text" 'export const g = window.fetch.bind(window);'
