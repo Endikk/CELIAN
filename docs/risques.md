@@ -1070,5 +1070,6 @@ seront plus détectés, et le principe IX repose sur ce scanner.
 
 Mitigation : gitleaks garde son rôle tant qu'un benchmark n'a pas tranché ;
 tiré de Docker Hub, il reçoit ses correctifs par Renovate avec le délai de
-7 jours ; un benchmark des scanners de secrets, à ouvrir sur décision de
-Lucas, avant la mise en template de la phase 3.
+7 jours ; un benchmark des scanners de secrets (gitleaks, Betterleaks,
+TruffleHog au moins), ouvert après le golden repo et avant la mise en
+template de la phase 3 (décision de Lucas du 25/11/2026).
