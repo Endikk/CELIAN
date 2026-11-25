@@ -36,8 +36,75 @@ variable "state_encryption_key" {
 }
 
 variable "database_tier" {
-  description = "Machine tier of the Cloud SQL instance, chosen with [FINOPS] (R-05). The ENTERPRISE edition of database.tf accepts shared-core and custom tiers."
+  description = "Machine tier of the Cloud SQL instance, chosen with [FINOPS] (R-05): db-f1-micro, db-g1-small or db-custom-<vcpu>-<memory in MB> with 1 or 2 vCPU. A larger tier goes through a reviewed PR."
   type        = string
+
+  # Demo profile (R-05, R-17): 2 vCPU at most, in the ENTERPRISE edition of
+  # database.tf, which accepts shared-core and custom tiers. No backslash in
+  # the pattern: S15 reads it and tries tiers against it.
+  validation {
+    condition     = can(regex("^(db-f1-micro|db-g1-small|db-custom-[12]-[0-9]+)$", var.database_tier))
+    error_message = "database_tier: db-f1-micro, db-g1-small or db-custom-<vcpu>-<memory in MB> with 1 or 2 vCPU (demo profile, R-17)."
+  }
+}
+
+variable "database_disk_autoresize_limit_gb" {
+  description = "Upper limit, in GB, of the automatic growth of the Cloud SQL disk (R-17). Without a limit the disk grows, and bills, with no bound."
+  type        = number
+
+  # Provider: 0 means no limit, which R-17 refuses. Cloud SQL: at least 10 GB
+  # (docs.cloud.google.com/sql/docs/postgres/instance-settings, read on 2026-11-25).
+  validation {
+    condition     = var.database_disk_autoresize_limit_gb == floor(var.database_disk_autoresize_limit_gb) && var.database_disk_autoresize_limit_gb >= 10
+    error_message = "database_disk_autoresize_limit_gb: a whole number of GB, 10 at least. 0 would mean no limit."
+  }
+}
+
+variable "database_retained_backups" {
+  description = "Number of automated Cloud SQL backups kept, oldest deleted first. Each one is billed as storage (R-05)."
+  type        = number
+
+  # Cloud SQL: "any value in the range of 1 to 365" (same page, read on 2026-11-25).
+  validation {
+    condition     = var.database_retained_backups == floor(var.database_retained_backups) && var.database_retained_backups >= 1 && var.database_retained_backups <= 365
+    error_message = "database_retained_backups: a whole number from 1 to 365."
+  }
+}
+
+# Labels of R-05: they tell whose a resource is, which environment it serves
+# and when it may be removed, so that a forgotten demo shows up in the bill.
+# GCP label values: lower-case letters, digits, hyphens and underscores, 63
+# characters at most. A date such as 2026-12-31 fits. No backslash in the
+# patterns: S15 reads them and tries values against them.
+
+variable "owner" {
+  description = "Who owns the resources, as a label value (R-05)."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9_-]{1,63}$", var.owner))
+    error_message = "owner: 1 to 63 characters, lower-case letters, digits, hyphens and underscores."
+  }
+}
+
+variable "env" {
+  description = "Environment that the stack serves, as a label value, for example demo (R-05)."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9_-]{1,63}$", var.env))
+    error_message = "env: 1 to 63 characters, lower-case letters, digits, hyphens and underscores."
+  }
+}
+
+variable "ttl" {
+  description = "Date after which the stack should be torn down, as a label value such as 2026-12-31 (R-05)."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[a-z0-9_-]{1,63}$", var.ttl))
+    error_message = "ttl: 1 to 63 characters, lower-case letters, digits, hyphens and underscores, for example 2026-12-31."
+  }
 }
 
 # ADR-008, condition 1: the CI is identified by the numeric ids that GitHub

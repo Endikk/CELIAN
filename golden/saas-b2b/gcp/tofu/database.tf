@@ -20,6 +20,11 @@ resource "google_sql_database_instance" "main" {
     deletion_protection_enabled = true
     user_labels                 = local.labels
 
+    # The disk grows by itself, up to a limit (R-17): the provider's default,
+    # 0, means no limit.
+    disk_autoresize       = true
+    disk_autoresize_limit = var.database_disk_autoresize_limit_gb
+
     ip_configuration {
       ipv4_enabled    = false
       private_network = google_compute_network.main.id
@@ -28,6 +33,15 @@ resource "google_sql_database_instance" "main" {
 
     backup_configuration {
       enabled = true
+      # Demo profile, decided by the DSI: daily backups only, no point-in-time
+      # recovery, so no transaction logs kept. Turning it on restarts the
+      # instance (Cloud SQL, instance-settings page, read on 2026-11-25).
+      point_in_time_recovery_enabled = false
+
+      backup_retention_settings {
+        retained_backups = var.database_retained_backups
+        retention_unit   = "COUNT"
+      }
     }
   }
 

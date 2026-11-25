@@ -6,10 +6,17 @@
 locals {
   platform = yamldecode(file("${path.module}/../../platform.yaml"))
 
-  # Labels of the resources that take them. The labels of R-05 (owner, env,
-  # ttl) come with the budget, after [FINOPS].
-  labels = {
-    app        = var.name
-    managed-by = "opentofu"
-  }
+  # Labels of the resources that take them, with the three of R-05 (owner,
+  # env, ttl). S15 refuses a root where one is missing.
+  labels = merge(
+    {
+      app        = var.name
+      managed-by = "opentofu"
+    },
+    {
+      owner = var.owner
+      env   = var.env
+      ttl   = var.ttl
+    },
+  )
 }

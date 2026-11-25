@@ -30,13 +30,14 @@ resource "google_compute_subnetwork" "main" {
     ip_cidr_range = "10.20.0.0/20"
   }
 
-  # VPC flow logs (Trivy AVD-GCP-0029 and AVD-GCP-0076), at the default values
-  # of the provider written out. They go to Cloud Logging, whose price was not
-  # read: [FINOPS] sets the sampling with the budget (R-05).
+  # VPC flow logs stay on (Trivy AVD-GCP-0029 and AVD-GCP-0076), at the lowest
+  # volume of the demo profile (R-05, R-18): the longest interval the provider
+  # offers, one record in ten, no metadata fields. They go to Cloud Logging,
+  # whose price was not read.
   log_config {
-    aggregation_interval = "INTERVAL_5_SEC"
-    flow_sampling        = 0.5
-    metadata             = "INCLUDE_ALL_METADATA"
+    aggregation_interval = "INTERVAL_15_MIN"
+    flow_sampling        = 0.1
+    metadata             = "EXCLUDE_ALL_METADATA"
   }
 }
 
