@@ -82,13 +82,18 @@ die() {
 
 diagnostics() {
   [ "$cluster_created" -eq 1 ] || return 0
-  echo "--- RootSync status ---" >&2
-  k -n config-management-system get rootsync root-sync -o jsonpath='{.status}' 2>&1 | head -c 6000 >&2
+  echo "--- RootSync: errors of the source, the rendering and the sync ---" >&2
+  k -n config-management-system get rootsync root-sync -o json 2>&1 |
+    jq '{source: .status.source.errors, rendering: .status.rendering.errors, sync: .status.sync.errors, conditions: [.status.conditions[]? | {type, status, message, errorSummary}]}' 2>&1 | head -c 6000 >&2
   echo >&2
+  echo "--- the objects of the ResourceGroup that are not Current ---" >&2
+  k -n config-management-system get resourcegroups root-sync -o json 2>&1 |
+    jq -c '.status.resourceStatuses[]? | select(.status != "Current") | {kind, name, namespace, status, actuation, reconcile}' 2>&1 | head -20 >&2
   echo "--- pods of config-management-system ---" >&2
   k -n config-management-system get pods 2>&1 | head -20 >&2
   echo "--- reconciler log ---" >&2
-  k -n config-management-system logs deployment/root-reconciler --all-containers --tail=40 2>&1 | head -80 >&2
+  k -n config-management-system logs deployment/root-reconciler -c reconciler --tail=400 2>&1 |
+    grep -i -E 'error|fail|forbidden|denied|unable' | tail -30 | cut -c1-400 >&2
 }
 
 # Waits up to $1 seconds for the command that follows to succeed.
