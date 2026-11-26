@@ -1,6 +1,9 @@
 # APIs of the services that this root creates, enabled on an existing project
 # (ADR-008, scope). Kept at destroy: other resources of the project may use
-# them. Service names: research RS-16.
+# them. Service names: research RS-16. Memorystore (step 20): the three APIs
+# that the create-instances page of Memorystore for Valkey asks to enable,
+# memorystore, networkconnectivity and serviceconsumermanagement; the names are
+# those of the links of that page, read on 2026-11-26 (research RS-11).
 
 locals {
   services = [
@@ -12,7 +15,10 @@ locals {
     "gkehub.googleapis.com",
     "iam.googleapis.com",
     "iamcredentials.googleapis.com",
+    "memorystore.googleapis.com",
+    "networkconnectivity.googleapis.com",
     "secretmanager.googleapis.com",
+    "serviceconsumermanagement.googleapis.com",
     "servicenetworking.googleapis.com",
     "sqladmin.googleapis.com",
     "sts.googleapis.com",
