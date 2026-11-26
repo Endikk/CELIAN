@@ -208,7 +208,7 @@ create_tls() {
            /^-----BEGIN CERTIFICATE-----$/ { print "  tls.crt: |" }
            { print "    " $0 }'
   } | kube create -f - >/dev/null ||
-    die "the Secret $TLS_SECRET was not created: kubectl or openssl failed, and the messages of openssl are cut; those of kubectl are above."
+    die "the Secret $TLS_SECRET was not created: kubectl, or the command that makes the key, failed; the messages of the second are cut, those of kubectl are above."
 }
 
 # verify_tls: both keys of the new gateway-tls are filled; otherwise the

@@ -142,31 +142,51 @@ secret_findings() {
 
 # The commands of openssl that make or convert a key or a certificate (x509
 # and ca too, for -signkey and -out), and, among them, those that handle the
-# private key itself.
-openssl_call='(^|[^A-Za-z0-9_./-])openssl (req|genpkey|genrsa|gendsa|dsaparam|ecparam|pkcs12|pkey|rsa|ec|x509|ca)( |$)'
-openssl_key='(^|[^A-Za-z0-9_./-])openssl (req|genpkey|genrsa|gendsa|dsaparam|ecparam|pkcs12|pkey|rsa|ec)( |$)'
-openssl_req='(^|[^A-Za-z0-9_./-])openssl req( |$)'
+# private key itself. The word openssl may follow any path, so "/" is not
+# excluded before it (/opt/homebrew/bin/openssl), and a variable that holds
+# the command ("$OPENSSL") is read as the word itself (see openssl_normalized).
+openssl_call='(^|[^A-Za-z0-9_.-])openssl (req|genpkey|genrsa|gendsa|dsaparam|ecparam|pkcs12|pkcs8|pkey|rsa|ec|enc|cms|x509|ca)( |$)'
+openssl_key='(^|[^A-Za-z0-9_.-])openssl (req|genpkey|genrsa|gendsa|dsaparam|ecparam|pkcs12|pkcs8|pkey|rsa|ec|enc|cms)( |$)'
+openssl_req='(^|[^A-Za-z0-9_.-])openssl req( |$)'
+openssl_word='(^|[^A-Za-z0-9_.-])openssl([^A-Za-z0-9_]|$)'
+openssl_variable='"?\$\{?[A-Za-z0-9_]*[Oo][Pp][Ee][Nn][Ss][Ss][Ll][A-Za-z0-9_]*\}?"?'
 openssl_out='-(key)?out +([^ ]+)'
 req_keyout='-keyout /dev/stdout( |$)'
 to_null='>/dev/null'
-# What would keep a PEM in a variable or an argument, and a command that
-# writes a copy of its input.
+# What would keep a PEM in a variable or an argument, and the commands that
+# write a copy of their input to a file.
 pem_capture='\$\(|`|(^|[ ;|])(read|mapfile|readarray|export|env|base64)( |$)'
 read_capture='\$\(|`|(^|[ ;|])read '
-tee_or_temp='(^|[^A-Za-z0-9_-])(te[e]|mktem[p])( |$)'
+copy_writer='(^|[ ;|&(])(tee|mktemp|dd|cp|mv|install|sponge)( |$)'
 base64_word='(^|[^A-Za-z0-9_])base64( |$)'
 tls_key_field='tls\\?\.key'
 wc_length='wc -c'
+# What secrets.sh may run of openssl, and nothing else: openssl req (with
+# -keyout /dev/stdout, checked on its own) and openssl x509 -noout -checkend.
+allowed_req='openssl req '
+allowed_checkend='openssl x509 -noout -checkend '
+
+# openssl_normalized TEXT: TEXT with each variable that names openssl
+# ("$OPENSSL", ${OPENSSL_BIN}) written as the word openssl, so that the rules
+# below see the command whatever way it is spelled. Prints it.
+openssl_normalized() {
+  local text="$1"
+  while [[ $text =~ $openssl_variable ]]; do
+    text="${text/"${BASH_REMATCH[0]}"/openssl}"
+  done
+  printf '%s' "$text"
+}
 
 # tls_findings FILE: one line per rule that a command of FILE breaks, in the
 # key part of S04 (research RS-10).
 tls_findings() {
-  local file="$1" number text rest stripped path
+  local file="$1" number text norm rest stripped path
   local in_secrets=no
   [ "${file##*/}" = "${secrets_script##*/}" ] && in_secrets=yes
   while IFS=$'\t' read -r number text; do
-    if [[ $text =~ $openssl_call ]]; then
-      rest="$text"
+    norm="$(openssl_normalized "$text")"
+    if [[ $norm =~ $openssl_call ]]; then
+      rest="$norm"
       while [[ $rest =~ $openssl_out ]]; do
         path="${BASH_REMATCH[2]%%[)\";|&]*}"
         if [ "$path" != /dev/stdout ]; then
@@ -175,18 +195,18 @@ tls_findings() {
         fi
         rest="${rest#*"${BASH_REMATCH[0]}"}"
       done
-      if [[ $text =~ $openssl_req ]] && ! [[ $text =~ $req_keyout ]]; then
+      if [[ $norm =~ $openssl_req ]] && ! [[ $norm =~ $req_keyout ]]; then
         printf '%s:%s: openssl req without -keyout /dev/stdout writes the key to the file of its configuration: %s\n' "$file" "$number" "$text"
       fi
-      stripped="${text//$to_null/}"
+      stripped="${norm//$to_null/}"
       case "$stripped" in
         *'>'*) printf '%s:%s: a redirection on the output of openssl: %s\n' "$file" "$number" "$text" ;;
       esac
-      if [[ $text =~ $tee_or_temp ]]; then
-        printf '%s:%s: tee or mktemp on the output of openssl: %s\n' "$file" "$number" "$text"
+      if [[ $norm =~ $copy_writer ]]; then
+        printf '%s:%s: a command that copies the output of openssl to a file (tee, mktemp, dd, cp, mv, install, sponge): %s\n' "$file" "$number" "$text"
       fi
     fi
-    if [[ $text =~ $openssl_key ]] && [[ $text =~ $pem_capture ]]; then
+    if [[ $norm =~ $openssl_key ]] && [[ $norm =~ $pem_capture ]]; then
       printf '%s:%s: the PEM of openssl in a variable or an argument: %s\n' "$file" "$number" "$text"
     fi
     if [[ $text =~ $tls_key_field ]] && [[ $text =~ $read_capture ]] && ! [[ $text =~ $wc_length ]]; then
@@ -196,14 +216,21 @@ tls_findings() {
       if [[ $text =~ $base64_word ]]; then
         printf '%s:%s: base64 in %s, which writes the PEM as it is in stringData: %s\n' "$file" "$number" "$secrets_script" "$text"
       fi
-      if [[ $text =~ $tee_or_temp ]] && ! [[ $text =~ $openssl_call ]]; then
-        printf '%s:%s: tee or mktemp in %s: %s\n' "$file" "$number" "$secrets_script" "$text"
+      if [[ $norm =~ $copy_writer ]] && ! [[ $norm =~ $openssl_call ]]; then
+        printf '%s:%s: tee, mktemp, dd, cp, mv, install or sponge in %s: %s\n' "$file" "$number" "$secrets_script" "$text"
       fi
       stripped="${text//$to_null/}"
       stripped="${stripped//>&[0-9]/}"
       case "$stripped" in
         *'>'*) printf '%s:%s: a redirection to a file in %s: %s\n' "$file" "$number" "$secrets_script" "$text" ;;
       esac
+      # The white list: with openssl req and openssl x509 -noout -checkend
+      # taken out, no word openssl is left.
+      rest="${norm//$allowed_req/}"
+      rest="${rest//$allowed_checkend/}"
+      if [[ $rest =~ $openssl_word ]]; then
+        printf '%s:%s: %s runs only openssl req and openssl x509 -noout -checkend, nothing else of openssl: %s\n' "$file" "$number" "$secrets_script" "$text"
+      fi
     fi
   done < <(logical_lines "$file")
 }
@@ -344,12 +371,27 @@ printf '%s\n' \
   'kubectl create secret generic gateway-tls --from-file=tls.key=key.pem' \
   'kube create configmap pem --from-file=a=b' \
   'crt="$(kube get secret gateway-tls --output jsonpath={.data.tls\.key})"' \
-  'openssl req -x509 -nodes -keyout /dev/stdout -out /dev/stdout | base64' >"$samples/bad-tls.sh"
+  'openssl req -x509 -nodes -keyout /dev/stdout -out /dev/stdout | base64' \
+  '/opt/homebrew/bin/openssl req -x509 -newkey ec -nodes -keyout key.pem -out cert.pem' \
+  'openssl pkcs8 -topk8 -nocrypt -out key.pem' \
+  '"$OPENSSL" req -x509 -nodes -keyout k.pem -out c.pem' \
+  'openssl req -x509 -nodes -keyout /dev/stdout -out /dev/stdout | dd of=k.pem' \
+  'openssl req -x509 -nodes -keyout /dev/stdout -out /dev/stdout | cp /dev/stdin k.pem' \
+  'openssl enc -aes-256-cbc -in a -out k.enc' \
+  'openssl cms -sign -in a -out k.cms' >"$samples/bad-tls.sh"
 mkdir "$samples/bad-tls"
 printf '%s\n' \
   'base64 -d' \
   'cat | tee out.pem' \
-  'head -c 8 /dev/urandom > seed' >"$samples/bad-tls/secrets.sh"
+  'head -c 8 /dev/urandom > seed' \
+  'dd of=k.pem' \
+  'cat | cp /dev/stdin k.pem' \
+  'mv a k.pem' \
+  'install -m 600 a k.pem' \
+  'sponge k.pem' \
+  'openssl pkcs8 -topk8 -nocrypt -out key.pem' \
+  'openssl s_client -connect 127.0.0.1:18443' \
+  '"$OPENSSL" x509 -in a -noout -text' >"$samples/bad-tls/secrets.sh"
 printf '%s\n' \
   '# openssl req -keyout key.pem in a comment' \
   '{' \
@@ -362,12 +404,11 @@ printf '%s\n' \
   '  die "the Secret was not created."' \
   'length="$(kube get secret gateway-tls --output '"'"'jsonpath={.data.tls\.key}'"'"' | wc -c | tr -d '"'"' '"'"')"' \
   'kube get secret gateway-tls --output '"'"'jsonpath={.data.tls\.crt}'"'"' | openssl x509 -noout -checkend 2592000 >/dev/null' \
-  'command -v openssl >/dev/null 2>&1 || die "openssl is missing"' \
   'printf '"'"'secrets: %s\n'"'"' "$1" >&2' >>"$samples/good/secrets.sh"
 tls_bad_other="$({ tls_findings "$samples/bad-tls.sh"; secret_findings "$samples/bad-tls.sh"; } | wc -l | tr -d ' ')"
 tls_bad_secrets="$({ tls_findings "$samples/bad-tls/secrets.sh"; secret_findings "$samples/bad-tls/secrets.sh"; } | wc -l | tr -d ' ')"
-if [ "$tls_bad_other" != 15 ] || [ "$tls_bad_secrets" != 3 ]; then
-  echo "the key part caught $tls_bad_other of the 15 findings of its bad samples, and $tls_bad_secrets of the 3 of its bad secrets.sh:" >&2
+if [ "$tls_bad_other" != 24 ] || [ "$tls_bad_secrets" != 12 ]; then
+  echo "the key part caught $tls_bad_other of the 24 findings of its bad samples, and $tls_bad_secrets of the 12 of its bad secrets.sh:" >&2
   { tls_findings "$samples/bad-tls.sh"; secret_findings "$samples/bad-tls.sh"; tls_findings "$samples/bad-tls/secrets.sh"; secret_findings "$samples/bad-tls/secrets.sh"; } >&2
   exit 1
 fi
