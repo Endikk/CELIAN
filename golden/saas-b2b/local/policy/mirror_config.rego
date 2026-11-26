@@ -2,7 +2,9 @@
 # node (spec 001, plan, matrix S13; ADR-011, conditions 1, 5, 7, 10 and 13).
 # - each hosts.toml gives the mirror the capability pull, and nothing else;
 # - the zot configuration holds the extension sync and nothing else, with no
-#   credential anywhere;
+#   credential anywhere, and the anonymous policy that grants read on every
+#   repository and nothing else, so that no pod writes to the mirror
+#   (ADR-011, complement of 2026-11-26);
 # - the hosts.toml files and the sync entries both derive from the one list
 #   of registries, local/mirror/registries;
 # - the kind configuration points containerd at the versioned hosts.toml,
@@ -159,15 +161,35 @@ deny contains msg if {
 
 deny contains msg if {
 	some key, _ in object.get(zot, "http", {})
-	not key in {"address", "port", "compat"}
-	msg := sprintf("%s: http holds %s; the mirror has no authentication, TLS or access control to configure (ADR-011, condition 13)", [label, key])
+	not key in {"address", "port", "compat", "accessControl"}
+	msg := sprintf("%s: http holds %s; the mirror has no authentication or TLS to configure, and accessControl alone, for the anonymous policy (ADR-011, condition 13)", [label, key])
+}
+
+# zot 2.1.23 reads accessControl under http (pkg/api/config/config.go,
+# HTTPConfig, field accessControl). Without authentication, its presence
+# alone turns on the "anonymous policy only" access control (pkg/api/routes.go,
+# lines 127 to 144): an anonymous client gets the actions of
+# anonymousPolicy on the repositories that match, and nothing else. The
+# pattern ** matches every repository, and read is the one action the node
+# needs. create, update and delete stay out, as does any other key: a
+# defaultPolicy, an adminPolicy or a second pattern would be a right to write
+# that the mirror has no one to check (R-34).
+read_only_access := {"repositories": {"**": {"anonymousPolicy": ["read"]}}}
+
+deny contains msg if {
+	is_object(zot)
+	object.get(object.get(zot, "http", {}), "accessControl", null) != read_only_access
+	msg := sprintf("%s: http.accessControl must be %v, the anonymous policy that grants read on every repository and nothing else, so that no pod of the cluster writes to the mirror (ADR-011, complement of 2026-11-26; tasks.md, gaps 29 and 98)", [label, read_only_access])
 }
 
 credential_keys := {"credentialsfile", "password", "username", "htpasswd", "token", "secret", "auth", "accesscontrol", "bearer", "ldap", "openid"}
 
+# The key http.accessControl is the policy above, which no credential fits;
+# every key under it, and every other key of the file, is read as before.
 deny contains msg if {
 	walk(zot, [path, _])
 	count(path) > 0
+	path != ["http", "accessControl"]
 	key := path[count(path) - 1]
 	is_string(key)
 	lower(key) in credential_keys

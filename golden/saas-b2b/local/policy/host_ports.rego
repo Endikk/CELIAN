@@ -7,7 +7,10 @@
 #   Service of the proxy is the containerPort of an extraPortMappings;
 # - the EnvoyProxy keeps to what ADR-005 writes: envoyService.type NodePort,
 #   a StrategicMerge patch reduced to spec.ports[] with port and nodePort,
-#   and no other key under spec, provider.kubernetes or envoyService.
+#   and no other key under spec, provider.kubernetes or envoyService;
+# - the EnvoyProxy pins the proxy image by digest under
+#   docker.io/envoyproxy/envoy, in envoyDeployment.container.image, and sets
+#   nothing else of the Deployment (ADR-005, complement of 2026-11-26).
 #
 # Input: local/kind/cluster.yaml and local/platform/envoy-proxy.yaml, given
 # to `conftest test --combine` (research RS-18). Data: task_host_ports, the
@@ -118,9 +121,59 @@ deny contains msg if {
 
 deny contains msg if {
 	some proxy in proxies
-	extra := keys_beyond(kubernetes_of(proxy), {"envoyService"})
+	extra := keys_beyond(kubernetes_of(proxy), {"envoyService", "envoyDeployment"})
 	count(extra) > 0
-	msg := sprintf("%s: provider.kubernetes holds envoyService only, found also %v", [label, sort([k | some k in extra])])
+	msg := sprintf("%s: provider.kubernetes holds envoyService and envoyDeployment only, found also %v", [label, sort([k | some k in extra])])
+}
+
+# The image of the proxy (ADR-005, complement of 2026-11-26). The controller
+# compiles a default image into its binary (DefaultEnvoyProxyImage, by tag and
+# digest in v1.10.0); the EnvoyProxy writes it down, so that the repository
+# names the image that runs, the inventory of the scan reads it (S25) and
+# Renovate follows it. The field is
+# provider.kubernetes.envoyDeployment.container.image (api/v1alpha1 of
+# Envoy Gateway v1.10.0, shared_types.go, KubernetesDeploymentSpec.Container
+# and KubernetesContainerSpec.Image), and nothing else of the Deployment is
+# set: no patch, no replicas, no securityContext, no imageRepository.
+envoy_deployment_of(proxy) := object.get(kubernetes_of(proxy), "envoyDeployment", {})
+
+container_of(proxy) := object.get(envoy_deployment_of(proxy), "container", {})
+
+proxy_image_of(proxy) := object.get(container_of(proxy), "image", null)
+
+proxy_image_pattern := `^docker\.io/envoyproxy/envoy:[A-Za-z0-9._-]+@sha256:[a-f0-9]{64}$`
+
+deny contains msg if {
+	some proxy in proxies
+	extra := keys_beyond(envoy_deployment_of(proxy), {"container"})
+	count(extra) > 0
+	msg := sprintf("%s: provider.kubernetes.envoyDeployment holds container only, found also %v", [label, sort([k | some k in extra])])
+}
+
+deny contains msg if {
+	some proxy in proxies
+	extra := keys_beyond(container_of(proxy), {"image"})
+	count(extra) > 0
+	msg := sprintf("%s: provider.kubernetes.envoyDeployment.container holds image only, found also %v", [label, sort([k | some k in extra])])
+}
+
+deny contains msg if {
+	some proxy in proxies
+	proxy_image_of(proxy) == null
+	msg := sprintf("%s: the EnvoyProxy fixes no image: provider.kubernetes.envoyDeployment.container.image pins the proxy by digest (ADR-005, complement of 2026-11-26)", [label])
+}
+
+proxy_image_valid(proxy) if {
+	image := proxy_image_of(proxy)
+	is_string(image)
+	regex.match(proxy_image_pattern, image)
+}
+
+deny contains msg if {
+	some proxy in proxies
+	proxy_image_of(proxy) != null
+	not proxy_image_valid(proxy)
+	msg := sprintf("%s: the proxy image %v must be written by digest under docker.io/envoyproxy/envoy, docker.io/envoyproxy/envoy:<tag>@sha256:<64 hex digits>", [label, proxy_image_of(proxy)])
 }
 
 deny contains msg if {

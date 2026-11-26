@@ -155,6 +155,27 @@ Ce qui reste. Dans `saas-b2b`, le contrôleur lit les Secrets, `db-auth` et `db-
 | <https://helm.sh/docs/intro/using_helm/> | 2026-11-25 | Listes de `--set` |
 | Essai sur kind du 2026-11-25 | 2026-11-25 | Classe acceptée, Gateway programmée, droits relus par `kubectl auth can-i` |
 
+### Relevé du 2026-11-26 : image du proxy dans l'EnvoyProxy (PR #77, écarts 110 et 111)
+
+Fait par [OPS]. Lectures du 2026-11-26, au tag v1.10.0 d'Envoy Gateway :
+
+- `api/v1alpha1/envoyproxy_types.go`, ligne 663 : `EnvoyProxyKubernetesProvider.EnvoyDeployment *KubernetesDeploymentSpec` (clé `envoyDeployment`).
+- `api/v1alpha1/shared_types.go`, ligne 126 : `KubernetesDeploymentSpec.Container *KubernetesContainerSpec` (clé `container`) ; ligne 270 : `KubernetesContainerSpec.Image *string` (clé `image`), « the EnvoyProxy container image to be used including a tag, instead of the default image », mutuellement exclusif avec `imageRepository`. La règle de validation accepte un condensat (`(@sha256:[a-z0-9]+)?`). Le champ est `spec.provider.kubernetes.envoyDeployment.container.image`, comme prévu.
+- Même fichier, ligne 30 : `DefaultEnvoyProxyImage = "docker.io/envoyproxy/envoy:distroless-v1.40.2@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded"`, avec le commentaire « pin to sha256 to avoid issues with image tags being mutable and changing over time ». Le défaut compilé porte déjà le condensat de l'index que l'étape 7 a relevé : la référence écrite dans l'`EnvoyProxy` est la même, à l'octet près (écart 110).
+
+Renovate 44.247.1. `lib/modules/versioning/docker/index.ts` : `versionPattern` exige un préfixe numérique, `distroless-v1.40.2` n'est pas une version pour lui. `lib/workers/repository/process/lookup/index.ts`, lignes 554 à 566 : une valeur non versionnée avec `currentDigest` n'est pas ignorée, et les lignes 592 à 601 ajoutent la mise à jour du condensat. Le gestionnaire de la couche `local` lit `local/platform/` en plus ; le commentaire `# renovate: datasource=docker depName=docker.io/envoyproxy/envoy` précède la ligne `image:` de l'`EnvoyProxy`. Aucun Renovate n'a tourné sur cette ligne.
+
+Essai sur kind, même suite : l'`EnvoyProxy` du cluster porte `envoyDeployment.container.image` égal au fichier, et le conteneur `envoy` du pod du proxy, trouvé par l'étiquette `gateway.envoyproxy.io/owning-gateway-name=saas-b2b`, tourne avec cette référence (E03).
+
+Garde de la relecture [SECU] (C1). Le champ `image` de l'`EnvoyProxy` prime sur le défaut compilé : un contrôleur monté seul laisserait l'ancien Envoy, et E03, qui compare le pod au fichier, passerait. Lecture du 2026-11-26 par `gh api`, au tag v1.10.0 : le fichier est `api/v1alpha1/shared_types.go`, la constante `DefaultEnvoyProxyImage` (ligne 30), seule ligne du fichier à porter ce nom suivi d'un `=` ; le commentaire qui la précède n'en porte pas. `scripts/ci/check-envoy-gateway-render.sh` (job `envoy-render`) lit ce fichier à l'adresse `https://raw.githubusercontent.com/envoyproxy/gateway/<tag>/api/v1alpha1/shared_types.go`, le tag étant celui de `ENVOY_GATEWAY_IMAGE` de `local/tasks/local.yml`, et échoue en nommant les deux valeurs si la référence de `envoy-proxy.yaml` diffère. Essai avec le fichier lu par `gh api` au tag v1.10.0 : les deux valeurs sont identiques. Son test (`tests/ci/check-envoy-gateway-render-test.sh`) lit un `shared_types.go` simulé : référence plus ancienne, même tag et autre condensat, fichier absent, fichier sans image, source sans constante, chacun refusé ; vu échouer avant la correction (7 cas).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/envoyproxy/gateway/blob/v1.10.0/api/v1alpha1/envoyproxy_types.go> | 2026-11-26 | Ligne 663 : `envoyDeployment` |
+| <https://github.com/envoyproxy/gateway/blob/v1.10.0/api/v1alpha1/shared_types.go> | 2026-11-26 | Lignes 30, 126 et 270 : image par défaut par condensat, `container`, `image` |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/modules/versioning/docker/index.ts> | 2026-11-26 | `versionPattern` : un tag préfixé n'est pas ordonné |
+| <https://github.com/renovatebot/renovate/blob/44.247.1/lib/workers/repository/process/lookup/index.ts> | 2026-11-26 | Lignes 554 à 566 et 592 à 601 : mise à jour du condensat d'un tag non versionné |
+
 ## RS-03. Exemple applicatif
 
 Décision : une ressource « note » (identifiant, texte de 1 à 500 caractères, date de création). Écriture en base, lecture par identifiant en lecture paresseuse par le cache, liste des plus récentes depuis la base, provenance de la lecture dans la réponse. Deux routes de santé : vivant et prêt. Accès à la base par Npgsql, requêtes paramétrées, sans ORM ; accès au cache derrière une interface, dont le client concret suit l'ADR-015 (RS-11).
@@ -756,6 +777,28 @@ Essai sur le poste (OrbStack, docker 29.8.2), le 2026-11-25 : le conteneur garde
 ### Relevé du 2026-11-25 : ce qu'un pod joint du miroir (étape 8)
 
 Fait par [OPS], sur kind (OrbStack, Docker 29.8.2, kind 0.33.0, nœud v1.36.4), depuis un pod d'un namespace à part, au profil `restricted`, sur l'image de Postgres de l'étape 8, qui porte bash (écarts 21 et 34). Le nom du conteneur du miroir, `saas-b2b-mirror`, se résout depuis le pod (adresse IPv6 du réseau `kind`) ; `GET /v2/_catalog` répond `HTTP/1.0 200 OK`, et le début d'un envoi, `POST /v2/e2e/probe/blobs/uploads/`, répond `HTTP/1.0 202 Accepted` : le journal de zot le montre, avec l'adresse du nœud pour client. Tout pod du cluster lit donc le miroir et peut y commencer un envoi, sans authentification (R-34). La capacité `pull` seule du nœud et les références par condensat empêchent qu'une image envoyée remplace une image de la stack, mais rien n'empêche un pod de remplir le volume du miroir, ni de déposer une image sous un tag. La politique anonyme en lecture seule de l'écart 29 fermerait l'envoi ; elle est prévue à l'étape 10. E03 relève désormais ces trois réponses à chaque exécution, sans les juger (écart 98).
+
+### Relevé du 2026-11-26 : miroir en lecture seule (PR #77, écarts 29, 98, 106, 109 et 113)
+
+Fait par [OPS]. Lectures du 2026-11-26 :
+
+- `pkg/api/routes.go` au tag v2.1.23, lignes 127 à 144 : `accessControlConfig := rh.c.Config.CopyAccessControlConfig()` ; quand il existe, sans authentification (`IsBasicAuthnEnabled` faux), zot journalise « anonymous policy only access control is being enabled » et monte `BaseAuthzHandler` et `DistSpecAuthzHandler` sur les routes.
+- `pkg/api/config/config.go` au même tag : `AccessControl *AccessControlConfig` est un champ de `HTTPConfig` (tag `accessControl`). La clé se range donc sous `http`, non à la racine (écart 109).
+- `pkg/api/authz.go` : pour un client sans nom d'utilisateur, seule la liste `anonymousPolicy` du motif qui correspond compte (lignes 116 et 117, et 664 et 665) ; le motif `**` correspond à tout dépôt.
+- Documentation de zot v2.1.23, page « authn-authz » : `anonymousPolicy` dit ce qu'un client non authentifié peut faire ; `**` est la politique par défaut, le motif le plus long l'emportant ; les actions sont read, create, update et delete, et create, update et delete ne s'emploient pas sans read.
+
+Essai sur kind (OrbStack, Docker 29.8.2, kind 0.33.0, nœud v1.36.4), depuis un pod d'un namespace à part, au profil `restricted`. Ancienne configuration, volume du miroir neuf : un pod envoie un blob (`POST` 202 puis `PUT` 201), un manifeste d'image (`PUT` 201), le relit (`GET` 200), puis pousse un index dans `envoyproxy/envoy` (`PUT` 201, relu par son condensat) ; le catalogue liste alors `poison/test`. zot accepte donc l'écriture d'un manifeste : ce point, non vérifié à l'écart 98, l'est. Un `GET` du tag `distroless-v1.40.2` rend encore le condensat d'origine après l'index poussé dessus, sans qu'on sache si zot tient le tag ou le resynchronise (écart 113).
+
+Nouvelle configuration, volume neuf : `GET /v2/_catalog` répond 200, `POST /v2/<nom>/blobs/uploads/`, `PUT` et `DELETE` d'un manifeste répondent 401. La synchronisation à la demande remplit le cache : sur le volume neuf du premier `task up` de la suite (E24), le nœud tire le proxy et Postgres, et le catalogue lu par E03 liste `envoyproxy/envoy` et `library/postgres`. `PROFILE=lite task test:e2e` passe en entier, dix tests, 281 s.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/project-zot/zot/blob/v2.1.23/pkg/api/routes.go> | 2026-11-26 | Lignes 127 à 144 : accès « anonymous policy only » dès que `accessControl` existe |
+| <https://github.com/project-zot/zot/blob/v2.1.23/pkg/api/config/config.go> | 2026-11-26 | `HTTPConfig.AccessControl` : la clé est sous `http` |
+| <https://github.com/project-zot/zot/blob/v2.1.23/pkg/api/authz.go> | 2026-11-26 | Lignes 116 et 117, 664 et 665 : `anonymousPolicy` pour un client sans nom |
+| <https://github.com/project-zot/zot/blob/v2.1.23/examples/config-anonymous-authz.json> | 2026-11-26 | `accessControl` sous `http`, motif `**` avec `anonymousPolicy` |
+| <https://zotregistry.dev/v2.1.23/articles/authn-authz/> | 2026-11-26 | Actions, motif `**`, `anonymousPolicy` |
+| Essai sur kind du 2026-11-26 | 2026-11-26 | Écriture acceptée avant, refusée avec 401 après ; cache rempli |
 
 ## RS-14. Flux dans le profil standard
 

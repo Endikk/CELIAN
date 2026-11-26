@@ -93,7 +93,7 @@ Toutes les images qu'un profil livré fait tourner (FR-021). Calculé à chaque 
 | Construites par `task up` | `saas-b2b.invalid/api`, `saas-b2b.invalid/front` | tâche de construction ; SBOM exigé (FR-020) |
 | Tirées par le cluster, nommées par le projet | Postgres, cache, contrôleur d'Envoy Gateway, contrôleurs de Flux en standard | rendus du profil et fichiers vendorés |
 | Lancées sur le moteur | image du nœud kind, zot | configuration kind, tâche du miroir |
-| Nommées par aucun fichier | images préchargées par l'image du nœud, proxy d'Envoy Gateway | `local/security/unlisted-images`, versionné, par condensat |
+| Nommées par aucun fichier | images préchargées par l'image du nœud | `local/security/unlisted-images`, versionné, par condensat ; le proxy d'Envoy Gateway n'y figure plus, `local/platform/envoy-proxy.yaml` le fixe par condensat |
 
 Règle : toute image en marche après `task up`, dans le cluster ou sur le moteur, figure dans l'inventaire, et tout l'inventaire est scanné (E25, E27). Les images de construction (SDK .NET, Node.js) n'en font pas partie.
 

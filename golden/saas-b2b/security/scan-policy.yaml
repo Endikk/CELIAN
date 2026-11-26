@@ -36,7 +36,7 @@ scan_policy:
       - docker.io/kindest/node
       # The mirror of registries (MIRROR_IMAGE of local/tasks/local.yml).
       - ghcr.io/project-zot/zot
-      # Envoy Gateway: the controller, and its proxy (local/security/unlisted-images).
+      # Envoy Gateway: the controller, and its proxy (local/platform/envoy-proxy.yaml).
       - docker.io/envoyproxy/gateway
       - docker.io/envoyproxy/envoy
       # Postgres of the local layer (local/data/): a third-party image, on the

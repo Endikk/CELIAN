@@ -126,4 +126,52 @@ for file in gateway-crds-helm.yaml gateway-helm.yaml; do
   fi
 done
 
+# The image of the proxy (ADR-005, complement of 2026-11-26). The field
+# envoyDeployment.container.image of local/platform/envoy-proxy.yaml takes
+# precedence over the default that the controller compiles
+# (DefaultEnvoyProxyImage). A release of Envoy Gateway changes that default;
+# a controller moved without the proxy would keep the old Envoy, and the
+# pod would still equal the file. So the reference of the file must be the
+# DefaultEnvoyProxyImage of api/v1alpha1/shared_types.go at the tag of the
+# controller that local.yml names (the tag is read there, not copied).
+# ENVOY_SHARED_TYPES_FILE, when set, replaces the download: the tests use it.
+proxy_file="$golden/local/platform/envoy-proxy.yaml"
+controller_tag="${controller_ref#*:}"
+controller_tag="${controller_tag%%@*}"
+shared_types_url="https://raw.githubusercontent.com/envoyproxy/gateway/$controller_tag/api/v1alpha1/shared_types.go"
+
+# shared_types_source: the text of shared_types.go at the controller tag.
+shared_types_source() {
+  if [ -n "${ENVOY_SHARED_TYPES_FILE:-}" ]; then
+    cat -- "$ENVOY_SHARED_TYPES_FILE"
+  else
+    curl --fail --silent --show-error --location --max-time 60 "$shared_types_url"
+  fi
+}
+
+if [ ! -f "$proxy_file" ]; then
+  echo "FAIL $proxy_file is missing: it pins the proxy image, which must be the DefaultEnvoyProxyImage of the controller $controller_tag." >&2
+  failures=$((failures + 1))
+else
+  pinned_proxy="$(LC_ALL=C awk '$1 == "image:" && $2 ~ /\/envoyproxy\/envoy:/ { print $2; exit }' "$proxy_file")"
+  if ! types_text="$(shared_types_source)"; then
+    echo "FAIL shared_types.go of Envoy Gateway $controller_tag could not be read from $shared_types_url." >&2
+    failures=$((failures + 1))
+  else
+    default_proxy="$(LC_ALL=C awk -F'"' '$0 ~ /^[ \t]*DefaultEnvoyProxyImage[ \t]*=/ { print $2; exit }' <<<"$types_text")"
+    if [ -z "$default_proxy" ]; then
+      echo "FAIL shared_types.go of Envoy Gateway $controller_tag holds no DefaultEnvoyProxyImage constant: the check must be updated for this release." >&2
+      failures=$((failures + 1))
+    elif [ -z "$pinned_proxy" ]; then
+      echo "FAIL $proxy_file pins no proxy image (envoyDeployment.container.image); DefaultEnvoyProxyImage of $controller_tag is $default_proxy." >&2
+      failures=$((failures + 1))
+    elif [ "$pinned_proxy" != "$default_proxy" ]; then
+      echo "FAIL the proxy image of $proxy_file, $pinned_proxy, differs from DefaultEnvoyProxyImage of Envoy Gateway $controller_tag, $default_proxy: move the tag and the digest by hand, in the same PR as the controller and the charts." >&2
+      failures=$((failures + 1))
+    else
+      echo "ok   the proxy image of envoy-proxy.yaml is DefaultEnvoyProxyImage of Envoy Gateway $controller_tag."
+    fi
+  fi
+fi
+
 [ "$failures" -eq 0 ]

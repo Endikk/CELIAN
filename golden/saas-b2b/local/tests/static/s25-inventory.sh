@@ -50,15 +50,23 @@ entries() {
 }
 
 # 1. Each entry of the unlisted images carries a digest.
-listed=0
 while IFS= read -r ref; do
-  listed=$((listed + 1))
   if ! printf '%s\n' "$ref" | grep -q -E "$digest"; then
     report "$unlisted: $ref has no digest (@sha256:<64 hex digits>)."
   fi
 done < <(entries "$unlisted")
-if [ "$listed" -eq 0 ]; then
-  report "$unlisted lists no image; the proxy of Envoy Gateway, which no file names, belongs there (research RS-24)."
+
+# 1b. The proxy of Envoy Gateway is named by the EnvoyProxy of
+# local/platform/ (ADR-005, complement of 2026-11-26): the inventory reads it
+# there and Renovate follows it there. The list of unlisted images does not
+# repeat it: a second copy would outlive the first at the next update, and
+# the scan would take the old image for a live one.
+proxy_pin='^[[:space:]]*image:[[:space:]]*docker\.io/envoyproxy/envoy:[A-Za-z0-9._-]+@sha256:[0-9a-f]{64}$'
+if ! grep -q -E "$proxy_pin" local/platform/envoy-proxy.yaml; then
+  report "local/platform/envoy-proxy.yaml pins no proxy image, docker.io/envoyproxy/envoy by tag and digest (ADR-005, complement of 2026-11-26)."
+fi
+if entries "$unlisted" | grep -q 'envoyproxy/envoy'; then
+  report "$unlisted names the proxy of Envoy Gateway, which local/platform/envoy-proxy.yaml names: remove the line."
 fi
 
 # 2. The inventory of the repository.

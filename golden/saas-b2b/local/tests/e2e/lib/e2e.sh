@@ -135,6 +135,12 @@ mirror_image() {
   awk '$1 == "MIRROR_IMAGE:" { print $2; exit }' "$E2E_ROOT/local/tasks/local.yml"
 }
 
+# The image of the proxy that local/platform/envoy-proxy.yaml pins, by tag and
+# digest (ADR-005, complement of 2026-11-26); empty when the file pins none.
+proxy_image() {
+  awk '$1 == "image:" && $2 ~ /\/envoyproxy\/envoy:/ { print $2; exit }' "$E2E_ROOT/local/platform/envoy-proxy.yaml"
+}
+
 # The Postgres image of local/data/statefulset.yaml, by tag and digest: the
 # client pods of E03 and E12 run it, since the node already holds it and it
 # carries bash and psql.
