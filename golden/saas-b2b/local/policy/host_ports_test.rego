@@ -8,13 +8,20 @@ cluster(mappings) := {"path": "local/kind/cluster.yaml", "contents": {
 	"nodes": [{"role": "control-plane", "extraPortMappings": mappings}],
 }}
 
+proxy_image := "docker.io/envoyproxy/envoy:distroless-v1.40.2@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded"
+
+deployment_of(image) := {"container": {"image": image}}
+
 proxy(ports) := {"path": "local/platform/envoy-proxy.yaml", "contents": {
 	"apiVersion": "gateway.envoyproxy.io/v1alpha1",
 	"kind": "EnvoyProxy",
-	"spec": {"provider": {"type": "Kubernetes", "kubernetes": {"envoyService": {
-		"type": "NodePort",
-		"patch": {"type": "StrategicMerge", "value": {"spec": {"ports": ports}}},
-	}}}},
+	"spec": {"provider": {"type": "Kubernetes", "kubernetes": {
+		"envoyService": {
+			"type": "NodePort",
+			"patch": {"type": "StrategicMerge", "value": {"spec": {"ports": ports}}},
+		},
+		"envoyDeployment": deployment_of(proxy_image),
+	}}},
 }}
 
 both := [mapping(30080, 18080), mapping(30443, 18443)]
@@ -84,7 +91,9 @@ proxy_of(spec) := {"path": "local/platform/envoy-proxy.yaml", "contents": {
 	"spec": spec,
 }}
 
-with_service(service) := proxy_of({"provider": {"type": "Kubernetes", "kubernetes": {"envoyService": service}}})
+with_service(service) := proxy_of({"provider": {"type": "Kubernetes", "kubernetes": {"envoyService": service, "envoyDeployment": deployment_of(proxy_image)}}})
+
+with_deployment(deployment) := proxy_of({"provider": {"type": "Kubernetes", "kubernetes": {"envoyService": good_service, "envoyDeployment": deployment}}})
 
 denied_proxy(proxy_file, fragment) if denied_with([cluster(both), proxy_file], [18080, 18443], fragment)
 
@@ -125,8 +134,61 @@ test_s05_ports_rejects_another_key_of_the_service if {
 }
 
 test_s05_ports_rejects_a_deployment_patch if {
-	kubernetes := {"envoyService": good_service, "envoyDeployment": {"patch": {"type": "StrategicMerge", "value": {"spec": {"template": {"spec": {"hostNetwork": true}}}}}}}
-	denied_proxy(proxy_of({"provider": {"type": "Kubernetes", "kubernetes": kubernetes}}), "provider.kubernetes holds envoyService only")
+	deployment := object.union(deployment_of(proxy_image), {"patch": {"type": "StrategicMerge", "value": {"spec": {"template": {"spec": {"hostNetwork": true}}}}}})
+	denied_proxy(with_deployment(deployment), "envoyDeployment holds container only")
+}
+
+test_s05_ports_rejects_another_key_of_the_kubernetes_provider if {
+	kubernetes := {"envoyService": good_service, "envoyDeployment": deployment_of(proxy_image), "envoyHpa": {"minReplicas": 1}}
+	denied_proxy(proxy_of({"provider": {"type": "Kubernetes", "kubernetes": kubernetes}}), "provider.kubernetes holds envoyService and envoyDeployment only")
+}
+
+# The image of the proxy, by digest (ADR-005, complement of 2026-11-26): the
+# field envoyDeployment.container.image of the EnvoyProxy, under the registry
+# of the controller, written the way the controller compiles its default.
+test_s05_ports_accepts_the_proxy_image_by_digest if {
+	accepted([cluster(both), with_deployment(deployment_of(proxy_image))], [18080, 18443])
+}
+
+test_s05_ports_rejects_a_proxy_without_image if {
+	denied_proxy(with_deployment({}), "the EnvoyProxy fixes no image")
+}
+
+test_s05_ports_rejects_a_proxy_image_by_tag_alone if {
+	denied_proxy(with_deployment(deployment_of("docker.io/envoyproxy/envoy:distroless-v1.40.2")), "by digest")
+}
+
+test_s05_ports_rejects_a_proxy_image_from_another_registry if {
+	other := "ghcr.io/envoyproxy/envoy:distroless-v1.40.2@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded"
+	denied_proxy(with_deployment(deployment_of(other)), "docker.io/envoyproxy/envoy")
+}
+
+test_s05_ports_rejects_a_proxy_image_from_another_repository if {
+	other := "docker.io/library/busybox:1.37@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded"
+	denied_proxy(with_deployment(deployment_of(other)), "docker.io/envoyproxy/envoy")
+}
+
+test_s05_ports_rejects_a_proxy_image_with_a_short_digest if {
+	denied_proxy(with_deployment(deployment_of("docker.io/envoyproxy/envoy:distroless-v1.40.2@sha256:09ca6f21")), "by digest")
+}
+
+test_s05_ports_rejects_a_proxy_image_that_is_not_a_string if {
+	denied_proxy(with_deployment(deployment_of(["docker.io/envoyproxy/envoy"])), "by digest")
+}
+
+test_s05_ports_rejects_an_image_repository_field if {
+	deployment := {"container": {"imageRepository": "docker.io/envoyproxy/envoy", "image": proxy_image}}
+	denied_proxy(with_deployment(deployment), "container holds image only")
+}
+
+test_s05_ports_rejects_a_container_override if {
+	deployment := {"container": {"image": proxy_image, "securityContext": {"privileged": true}}}
+	denied_proxy(with_deployment(deployment), "container holds image only")
+}
+
+test_s05_ports_rejects_a_replica_count_beside_the_container if {
+	deployment := {"replicas": 3, "container": {"image": proxy_image}}
+	denied_proxy(with_deployment(deployment), "envoyDeployment holds container only")
 }
 
 test_s05_ports_rejects_another_key_of_the_proxy_spec if {

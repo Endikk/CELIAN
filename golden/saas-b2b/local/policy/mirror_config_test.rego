@@ -3,10 +3,14 @@ package mirror_config
 
 registries := [{"namespace": "docker.io", "upstream": "https://index.docker.io"}]
 
+# zot 2.1.23 reads accessControl under http (pkg/api/config/config.go,
+# HTTPConfig); alone, it enables the "anonymous policy only" access control.
+read_only_access := {"repositories": {"**": {"anonymousPolicy": ["read"]}}}
+
 zot_config := {
 	"distSpecVersion": "1.1.1",
 	"storage": {"rootDirectory": "/var/lib/registry", "dedupe": false, "gc": false},
-	"http": {"address": "0.0.0.0", "port": "5000", "compat": ["docker2s2"]},
+	"http": {"address": "0.0.0.0", "port": "5000", "compat": ["docker2s2"], "accessControl": read_only_access},
 	"log": {"level": "info"},
 	"extensions": {"sync": {"enable": true, "registries": [{"urls": ["https://index.docker.io"], "onDemand": true, "tlsVerify": true}]}},
 }
@@ -77,6 +81,62 @@ test_s13_rejects_a_credentials_file if {
 test_s13_rejects_http_authentication if {
 	zot := object.union(zot_config, {"http": {"address": "0.0.0.0", "port": "5000", "auth": {"htpasswd": {"path": "/etc/zot/htpasswd"}}}})
 	denied_with(files(zot, {"docker.io": mirror_hosts}, kind_cluster), "http holds auth")
+}
+
+# The mirror is read-only for anonymous clients (ADR-011, complement of
+# 2026-11-26; tasks.md, gaps 29 and 78): http.accessControl is required, and
+# it is exactly the policy that grants read on every repository.
+with_access(access) := object.union(zot_config, {"http": {"accessControl": access}})
+
+without_access := {"distSpecVersion": "1.1.1", "storage": zot_config.storage, "http": {"address": "0.0.0.0", "port": "5000", "compat": ["docker2s2"]}, "log": zot_config.log, "extensions": zot_config.extensions}
+
+test_s13_rejects_a_mirror_without_access_control if {
+	denied_with(files(without_access, {"docker.io": mirror_hosts}, kind_cluster), "http.accessControl must be")
+}
+
+test_s13_rejects_an_anonymous_policy_that_creates if {
+	access := {"repositories": {"**": {"anonymousPolicy": ["read", "create"]}}}
+	denied_with(files(with_access(access), {"docker.io": mirror_hosts}, kind_cluster), "http.accessControl must be")
+}
+
+test_s13_rejects_an_anonymous_policy_that_updates if {
+	access := {"repositories": {"**": {"anonymousPolicy": ["read", "create", "update"]}}}
+	denied_with(files(with_access(access), {"docker.io": mirror_hosts}, kind_cluster), "http.accessControl must be")
+}
+
+test_s13_rejects_an_anonymous_policy_that_deletes if {
+	access := {"repositories": {"**": {"anonymousPolicy": ["read", "delete"]}}}
+	denied_with(files(with_access(access), {"docker.io": mirror_hosts}, kind_cluster), "http.accessControl must be")
+}
+
+test_s13_rejects_an_empty_anonymous_policy if {
+	access := {"repositories": {"**": {"anonymousPolicy": []}}}
+	denied_with(files(with_access(access), {"docker.io": mirror_hosts}, kind_cluster), "http.accessControl must be")
+}
+
+test_s13_rejects_a_second_repository_pattern if {
+	access := {"repositories": {"**": {"anonymousPolicy": ["read"]}, "tmp/**": {"anonymousPolicy": ["read", "create"]}}}
+	denied_with(files(with_access(access), {"docker.io": mirror_hosts}, kind_cluster), "http.accessControl must be")
+}
+
+test_s13_rejects_a_default_policy if {
+	access := {"repositories": {"**": {"anonymousPolicy": ["read"], "defaultPolicy": ["read", "create", "update", "delete"]}}}
+	denied_with(files(with_access(access), {"docker.io": mirror_hosts}, kind_cluster), "http.accessControl must be")
+}
+
+test_s13_rejects_an_admin_policy if {
+	access := {"adminPolicy": {"users": ["admin"], "actions": ["read", "create", "update", "delete"]}, "repositories": {"**": {"anonymousPolicy": ["read"]}}}
+	denied_with(files(with_access(access), {"docker.io": mirror_hosts}, kind_cluster), "http.accessControl must be")
+}
+
+test_s13_rejects_access_control_outside_http if {
+	zot := object.union(without_access, {"accessControl": read_only_access})
+	denied_with(files(zot, {"docker.io": mirror_hosts}, kind_cluster), "the zot configuration holds accessControl")
+}
+
+test_s13_still_rejects_a_password_under_access_control if {
+	access := {"repositories": {"**": {"anonymousPolicy": ["read"]}}, "password": "x"}
+	denied_with(files(with_access(access), {"docker.io": mirror_hosts}, kind_cluster), "no credential goes in the mirror")
 }
 
 test_s13_rejects_a_sync_entry_that_polls if {
