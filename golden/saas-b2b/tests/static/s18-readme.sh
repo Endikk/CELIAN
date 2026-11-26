@@ -270,6 +270,23 @@ for address in "http://localhost:$http_port/" "http://localhost:$http_port/api/"
   grep -q -F "$address" "$readme" || report "the address $address, printed by task up, is not in the README."
 done
 
+# The tools that the preflight checks look for, and the HTTPS listener with
+# its self-signed certificate (the second PR of step 7).
+# shellcheck disable=SC2016 # backticks of a Markdown heading, not a command
+controls="$(section '### Contrôles de `task up`')"
+for tool in openssl awk; do
+  if grep -q -F "command -v $tool" "$checks"; then
+    has "$controls" "\`$tool\`" ||
+      report "the preflight checks look for $tool, and the table of the checks does not list it."
+  fi
+done
+https_port="$(value_of GATEWAY_HTTPS_PORT "$root/local/tasks/local.yml")"
+if [ -n "$https_port" ]; then
+  https_lines="$(grep -F "$https_port" "$readme" || true)"
+  has "$https_lines" 'auto-signé' ||
+    report "no line gives the HTTPS port $https_port with its self-signed certificate (\"auto-signé\")."
+fi
+
 # ---- differences between the targets, secrets, teardown -------------------
 for headline in '## Écarts entre les cibles' '## Sécurité' '## Dépannage' '### Démontage en deux temps'; do
   has_heading "$headline" || report "no section \"$headline\"."

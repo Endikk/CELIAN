@@ -109,6 +109,11 @@ expect_fail mark-without-step "$case_file" "À venir"
   printf '\n```text\ntofu apply\n```\n'
 } >"$case_file"
 expect_fail apply-offered "$case_file" "OpenTofu apply or destroy"
+# shellcheck disable=SC2016 # backticks of Markdown code, not a command
+replace '`openssl` et `awk`' '`outil` et `autre`' >"$case_file"
+expect_fail tools-missing "$case_file" "openssl"
+replace 'auto-signé' 'signé' >"$case_file"
+expect_fail https-certificate "$case_file" "auto-signé"
 
 # The sums of kind are compared with the catalog only where the catalog is.
 if [ -f "$catalog" ]; then
