@@ -390,7 +390,7 @@ test_s11_rejects_a_probe_password_by_value if {
 }
 
 # A Job left by an interrupted task up must not keep its reference to cache-auth
-# for long (tasks.md, gap 110).
+# for long (tasks.md, gap 130).
 test_s11_rejects_a_probe_without_ttl_after_finished if {
 	ops := [{"op": "remove", "path": "/spec/ttlSecondsAfterFinished"}]
 	denied_with(with_patch(job, ops), "must set ttlSecondsAfterFinished")

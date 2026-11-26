@@ -17,7 +17,7 @@
 #   cache-auth, read-only and readable by the group of the pod only
 #   (contracts/secrets.md, contracts/layers.md).
 # - The label app.kubernetes.io/name: api is the one that the NetworkPolicies
-#   of the database and the cache admit (tasks.md, gaps 84 and 102).
+#   of the database and the cache admit (tasks.md, gaps 104 and 122).
 # - Readiness is /api/readyz, the database and the cache reachable; liveness
 #   is /api/healthz, the process alone. Kestrel listens on 8080.
 apiVersion: apps/v1

@@ -250,7 +250,7 @@ tls_pair_matches() {
 }
 
 # The host name that the HTTPRoutes of the local layer accept, and that task
-# up prints in the addresses (tasks.md, gap 120). Gateway API refuses an IP
+# up prints in the addresses (tasks.md, gap 141). Gateway API refuses an IP
 # in hostnames, so the address of the user is localhost, not 127.0.0.1; the
 # port stays published on 127.0.0.1 alone.
 E2E_HOST="localhost"

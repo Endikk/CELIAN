@@ -9,7 +9,7 @@
 # The HTTPRoutes of the common layer name no host. The local layer gives them
 # localhost, the host that task up prints: the gateway then answers no other
 # Host, so that a page of another site that points its name at 127.0.0.1 gets
-# no route (tasks.md, gaps 45 and 120). Gateway API refuses an IP in
+# no route (tasks.md, gaps 45 and 141). Gateway API refuses an IP in
 # hostnames, hence not 127.0.0.1. S07 allows this field, and
 # spec.gatewayClassName, to differ from the common layer.
 apiVersion: kustomize.config.k8s.io/v1alpha1

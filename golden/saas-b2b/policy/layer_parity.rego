@@ -6,7 +6,7 @@
 # 1. Each object of the common render is in the local render, equal to the
 #    field: the two fields that a target sets are left out of the comparison,
 #    spec.gatewayClassName of the Gateway and spec.hostnames of the HTTPRoutes
-#    (tasks.md, gap 120: the host of a target is its own, and Gateway API
+#    (tasks.md, gap 141: the host of a target is its own, and Gateway API
 #    refuses an IP in hostnames).
 # 2. An object that the local render holds and the common render does not
 #    comes from a file of the local layer (the third render, sources.yaml).

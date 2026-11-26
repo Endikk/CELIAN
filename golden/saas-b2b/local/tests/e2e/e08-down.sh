@@ -2,14 +2,14 @@
 # control: E08
 # carries: FR-007, FR-016; ADR-011, conditions 5 and 11; contracts/task-cli.md
 #
-# E08, steps 6 and 9 (tasks.md, gaps 2, 12 and 73): task app:down, task down
+# E08, steps 6 and 9 (tasks.md, gaps 2, 12 and 93): task app:down, task down
 # and task mirror:purge.
 # - task app:down keeps the cluster, removes the mirror container, the
 #   namespace of the application with the PVC and the Secrets of the database
 #   (and the volume behind the PVC), and says how much memory the cluster
 #   keeps; the next task up reuses the cluster, draws new Secrets, and the
 #   Gateway is Programmed again, the Role of its controller having gone with
-#   the namespace (gap 73);
+#   the namespace (gap 93);
 # - task down removes the cluster and the mirror container, keeps the mirror
 #   volume, and shows what stays on the machine: the volume with its size,
 #   and the command that removes it;
@@ -74,7 +74,7 @@ if [ "$(secret_value db-auth password | sha256_stdin)" = "$password_before" ]; t
   fail "task up after task app:down kept the old password of db-auth instead of drawing a new one"
 fi
 programmed="$(kube_e2e --namespace "$E2E_APP_NAMESPACE" get gateway "$E2E_GATEWAY" --output 'jsonpath={.status.conditions[?(@.type=="Programmed")].status}' 2>/dev/null)"
-[ "$programmed" = True ] || fail "the Gateway $E2E_GATEWAY is not Programmed after task app:down then task up (Programmed=$programmed; tasks.md, gap 73)"
+[ "$programmed" = True ] || fail "the Gateway $E2E_GATEWAY is not Programmed after task app:down then task up (Programmed=$programmed; tasks.md, gap 93)"
 container_exists "$E2E_MIRROR" || fail "task up after task app:down did not start the mirror container again"
 
 # --- task down --------------------------------------------------------------------

@@ -4,7 +4,7 @@
 #
 # A note is written to the database, read back, then served by the cache
 # (spec 001, T083), on the environment that task up left; and the API
-# survives a change of the password of the cache (tasks.md, gap 107):
+# survives a change of the password of the cache (tasks.md, gap 127):
 # 1. POST /api/notes answers 201 and an id; the first GET of that id says
 #    servedFrom database, the second servedFrom cache; the list holds it;
 # 2. WRONGPASS: cache-auth is replaced by a new password through a pipe and
@@ -91,7 +91,7 @@ if kube_e2e --namespace "$E2E_APP_NAMESPACE" delete secret "$E2E_CACHE_SECRET" -
     http_request GET "/api/notes/$id" || :
     serve_note "$id" cache
   else
-    fail "/api/readyz does not come back to 200 within $RECOVERY_SECONDS s after the password of the cache changed: the API keeps the old one (tasks.md, gap 107)"
+    fail "/api/readyz does not come back to 200 within $RECOVERY_SECONDS s after the password of the cache changed: the API keeps the old one (tasks.md, gap 127)"
   fi
 else
   fail "could not replace cache-auth and restart the cache"

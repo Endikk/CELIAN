@@ -3,7 +3,7 @@
 # carries: FR-009, FR-010; ADR-007, condition 5; ADR-012, condition 9
 #
 # The Deployments and Services of the API and the front, in the common layer
-# (spec 001, T087; tasks.md, gap 127): restricted profile with a read-only
+# (spec 001, T087; tasks.md, gap 148): restricted profile with a read-only
 # root filesystem, bounded emptyDir, requests and limits, probes on the paths
 # of the contract, Secrets by mounted files, the label that the
 # NetworkPolicies admit, routes that reach their Services

@@ -259,7 +259,7 @@ deny contains msg if {
 	msg := sprintf("%s: HTTPRoute %s sends to %s port %v, which no Service of the render serves", [label, doc.metadata.name, ref.name, ref.port])
 }
 
-# --- The host, the volumes that reach out, the pull policy (tasks.md, gap 134) ---------
+# --- The host, the volumes that reach out, the pull policy (tasks.md, gap 155) ---------
 
 deny contains msg if {
 	some app in apps

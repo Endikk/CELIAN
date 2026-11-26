@@ -13,7 +13,7 @@ namespace Api.Caching;
 /// A command that fails on a connection that is down drops that connection:
 /// the next call reads the settings again, the password file included, and
 /// connects anew. That is how the API follows a cache-auth that was created
-/// again, whose old password the cache now refuses (tasks.md, gap 107); the
+/// again, whose old password the cache now refuses (tasks.md, gap 127); the
 /// kubelet refreshes the mounted file within about a minute. A connection
 /// that is up after a failure stays: the failure came from the command.
 /// </summary>

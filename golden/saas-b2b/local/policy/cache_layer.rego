@@ -510,7 +510,7 @@ deny contains msg if {
 }
 
 # A Job left by an interrupted task up goes by itself, and with it its
-# reference to cache-auth (tasks.md, gap 110): a TTL after the end, from one
+# reference to cache-auth (tasks.md, gap 130): a TTL after the end, from one
 # minute to ten.
 probe_ttl_min := 60
 

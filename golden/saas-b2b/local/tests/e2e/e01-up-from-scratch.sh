@@ -8,7 +8,7 @@
 # wait of its own, what a user would try next:
 # - the output gives the address of the front and the one of the API, as
 #   http://localhost:<port>/ and http://localhost:<port>/api/, one per line
-#   (tasks.md, gap 120: the HTTPRoutes name localhost, since Gateway API
+#   (tasks.md, gap 141: the HTTPRoutes name localhost, since Gateway API
 #   refuses an IP in hostnames);
 # - an authenticated SELECT 1, as the user of db-auth, through the Service
 #   of the database, answers 1;
@@ -83,7 +83,7 @@ done
 unset E2E_REQUEST_HOST
 
 # A browser on http://localhost:<port>/ sends the port in Host. Envoy counts
-# the port when it picks the virtual host (tasks.md, gap 133): localhost:<port>
+# the port when it picks the virtual host (tasks.md, gap 154): localhost:<port>
 # must get the application, a foreign name with the same port must not.
 port="$E2E_GATEWAY_HTTP_PORT"
 for path in / /api/healthz; do

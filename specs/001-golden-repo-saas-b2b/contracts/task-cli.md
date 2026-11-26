@@ -30,7 +30,7 @@ Effets, dans l'ordre du [plan](../plan.md) (section « Ce que fait `task up` »)
 Sortie en cas de succès :
 
 - le profil retenu ;
-- l'adresse du front et celle de l'API, en `http://localhost:<port>/` et `http://localhost:<port>/api/`, une par ligne (`Front: ...`, `API: ...`). Le port est publié sur 127.0.0.1 seulement ; les HTTPRoute locales nomment l'hôte `localhost`, parce que Gateway API refuse une IP dans `hostnames` (écart 120) ;
+- l'adresse du front et celle de l'API, en `http://localhost:<port>/` et `http://localhost:<port>/api/`, une par ligne (`Front: ...`, `API: ...`). Le port est publié sur 127.0.0.1 seulement ; les HTTPRoute locales nomment l'hôte `localhost`, parce que Gateway API refuse une IP dans `hostnames` (écart 141) ;
 - la durée de chaque étape, une ligne `Step <nom>: <n> s.` dans l'ordre du plan (preflight, cluster, mirror, secrets, platform, images, application, database, cache, ready), puis `Total: <n> s.` en dernière ligne de durée (FR-015) ;
 - la taille du volume du miroir, `Mirror volume <nom>: <taille>.`.
 

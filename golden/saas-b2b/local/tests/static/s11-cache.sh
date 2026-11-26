@@ -47,7 +47,7 @@ conftest test --no-color --combine --policy local/policy --namespace cache_layer
 # file: CacheSettings.cs. No other file of the API names ConfigurationOptions
 # (a word of its own; ToConfigurationOptions is the method that hands them
 # out), so that no connection string, log line or second client takes the
-# password along (SECU review of step 19; tasks.md, gap 110).
+# password along (SECU review of step 19; tasks.md, gap 130).
 options_owner="src/Api/Caching/CacheSettings.cs"
 if ! grep -q -w ConfigurationOptions "$options_owner"; then
   echo "$options_owner does not name ConfigurationOptions: the check below would prove nothing." >&2
@@ -55,7 +55,7 @@ if ! grep -q -w ConfigurationOptions "$options_owner"; then
 fi
 strays="$(grep -r -n -w --include='*.cs' ConfigurationOptions src/Api | grep -v "^$options_owner:" | grep -v '/obj/' | grep -v '/bin/' || true)"
 if [ -n "$strays" ]; then
-  echo "ConfigurationOptions is named outside $options_owner, which alone builds the options of the cache client (gap 110):" >&2
+  echo "ConfigurationOptions is named outside $options_owner, which alone builds the options of the cache client (gap 130):" >&2
   printf '%s\n' "$strays" >&2
   exit 1
 fi

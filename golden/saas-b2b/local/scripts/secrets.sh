@@ -168,7 +168,7 @@ restart_cache() {
 # restart_api: the API reads the password of the cache from its mounted file
 # and keeps it in memory. A new cache-auth leaves it with the old password,
 # which the cache now refuses (WRONGPASS), so the Deployment api restarts too
-# when it is there (tasks.md, gap 107). The client also reads the file again
+# when it is there (tasks.md, gap 127). The client also reads the file again
 # after a failure, once the kubelet has refreshed it; this restart makes it
 # immediate.
 restart_api() {

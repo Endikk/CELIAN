@@ -1,4 +1,4 @@
-# Who reaches Postgres on the local layer (ADR-012; tasks.md, gap 84): on TCP
+# Who reaches Postgres on the local layer (ADR-012; tasks.md, gap 104): on TCP
 # 5432, the pods of the API (label app.kubernetes.io/name: api, which the
 # Deployment of the API carries) and Postgres itself, in this namespace
 # alone. Postgres itself, because task up and the tests run psql inside its
@@ -13,7 +13,7 @@
 # its label, and task up needs the pod itself admitted (its psql goes through
 # the Service, ADR-012, condition 6). Accepted on the local layer, where whoever
 # can create a pod already holds the cluster; to reopen with an RBAC that
-# forbids creating pods on GKE (tasks.md, gap 136).
+# forbids creating pods on GKE (tasks.md, gap 157).
 #
 # Ingress alone: the pod opens no connection, but nothing here depends on
 # that. The kubelet still reaches the pod for its probes (traffic from the

@@ -96,7 +96,7 @@ readonly GATEWAY_SECONDS=120
 readonly GATEWAY_PAUSE_SECONDS=2
 readonly GATEWAY_READ_SECONDS=5
 # The host that the HTTPRoutes of the local layer name, and that the user
-# types (tasks.md, gap 120; local/k8s/component/kustomization.yaml).
+# types (tasks.md, gap 141; local/k8s/component/kustomization.yaml).
 readonly GATEWAY_HOST="localhost"
 # The node container of the cluster, whose memory task app:down reports.
 readonly NODE_CONTAINER="$CLUSTER_NAME-control-plane"

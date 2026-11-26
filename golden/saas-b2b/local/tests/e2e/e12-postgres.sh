@@ -9,7 +9,7 @@
 #   app.kubernetes.io/name: api), psql without a password is refused, for the
 #   user of db-auth and for the superuser: fe_sendauth (condition 2); a pod
 #   of the namespace without that label, and a pod of another namespace,
-#   reach nothing on 5432 (tasks.md, gap 84);
+#   reach nothing on 5432 (tasks.md, gap 104);
 # - the role of db-auth logs in without SUPERUSER, CREATEDB, CREATEROLE,
 #   REPLICATION nor BYPASSRLS, and owns the database app (condition 8);
 # - server_version_num has the major postgres_major of platform.yaml
@@ -69,7 +69,7 @@ refused="$(kube_e2e -n "$E2E_APP_NAMESPACE" get events --field-selector reason=F
   --output 'jsonpath={range .items[*]}{.message}{"\n"}{end}' 2>/dev/null | grep -F 'violates PodSecurity' || true)"
 [ -z "$refused" ] || fail "Pod Security refused a pod of $E2E_APP_NAMESPACE: $refused"
 
-# Who reaches port 5432 (tasks.md, gap 84): the NetworkPolicy postgres admits
+# Who reaches port 5432 (tasks.md, gap 104): the NetworkPolicy postgres admits
 # the pods of the API (label app.kubernetes.io/name: api) and Postgres
 # itself, on TCP 5432, and no other. kind applies NetworkPolicy, and this
 # part proves it: a pod that the policy admits reaches the server and is

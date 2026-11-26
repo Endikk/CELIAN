@@ -30,7 +30,7 @@ readonly SERVE_SECONDS=60
 # The test changes two tracked files and puts them back by a trap, which a
 # kill -9 skips. It starts only on a clean tracked tree, so that a copy it
 # left behind is seen at the next start and never taken for the original
-# (tasks.md, gap 135); out of a Git repository, the two files must hold their
+# (tasks.md, gap 156); out of a Git repository, the two files must hold their
 # original text.
 if tracked_changes="$(git -C "$E2E_ROOT" status --porcelain --untracked-files=no 2>/dev/null)"; then
   if [ -n "$tracked_changes" ]; then

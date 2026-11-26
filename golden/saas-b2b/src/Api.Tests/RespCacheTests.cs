@@ -100,7 +100,7 @@ public sealed class RespCacheTests : IDisposable
         Assert.DoesNotContain(Password, error.ToString(), StringComparison.Ordinal);
     }
 
-    // --- A password that changes under the API (tasks.md, gap 107) -------------
+    // --- A password that changes under the API (tasks.md, gap 127) -------------
 
     private const string NewPassword = "newCachePasswordFromTheRecreatedSecret01234";
 
