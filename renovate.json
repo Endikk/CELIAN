@@ -54,11 +54,12 @@
     },
     {
       "customType": "regex",
-      "description": "Images of the local layer of the golden repo, by tag and digest under a # renovate: comment: the node image of local/kind/cluster.yaml, under the key image; in local/tasks/local.yml the zot mirror, under MIRROR_IMAGE, and the controller of Envoy Gateway and the OCI artifacts of its two charts, under ENVOY_GATEWAY_*_IMAGE; the Postgres image of local/data/statefulset.yaml, under the key image (ADR-004, version rule; ADR-005, updates; ADR-011, condition 8; ADR-012, condition 5; ADR-016).",
+      "description": "Images of the local layer of the golden repo, by tag and digest under a # renovate: comment: the node image of local/kind/cluster.yaml, under the key image; in local/tasks/local.yml the zot mirror, under MIRROR_IMAGE, and the controller of Envoy Gateway and the OCI artifacts of its two charts, under ENVOY_GATEWAY_*_IMAGE; the Postgres image of local/data/statefulset.yaml and the proxy of Envoy Gateway of local/platform/envoy-proxy.yaml, under the key image; Renovate follows the digest of the proxy tag, which docker versioning cannot order, and the tag moves by hand with Envoy Gateway (ADR-004, version rule; ADR-005, updates; ADR-011, condition 8; ADR-012, condition 5; ADR-016).",
       "managerFilePatterns": [
         "/^golden/saas-b2b/local/kind/cluster\\.yaml$/",
         "/^golden/saas-b2b/local/tasks/.+\\.ya?ml$/",
-        "/^golden/saas-b2b/local/data/.+\\.ya?ml$/"
+        "/^golden/saas-b2b/local/data/.+\\.ya?ml$/",
+        "/^golden/saas-b2b/local/platform/.+\\.ya?ml$/"
       ],
       "matchStrings": [
         "# renovate: datasource=(?<datasource>docker) depName=(?<depName>\\S+)\\s+(?:image|[A-Z0-9_]+_IMAGE)\\s*:\\s*\\S+?:(?<currentValue>[^\\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)"

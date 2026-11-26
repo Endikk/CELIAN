@@ -13,8 +13,9 @@
 # - Task and conftest, pinned in tests/tools/install.sh next to
 #   platform.yaml, and kind, pinned in local/scripts/lib/preflight-checks.sh,
 #   keep their custom manager; the node image of local/kind/cluster.yaml,
-#   the zot image of local/tasks/ and the Postgres image of local/data/
-#   keep theirs; customManagers holds only those two and the one of the
+#   the zot image of local/tasks/, the Postgres image of local/data/ and the
+#   proxy image of local/platform/ keep theirs; customManagers holds only
+#   those two and the one of the
 #   _IMAGE variables of the workflows, and the regex managers see tests/,
 #   which config:recommended hides (research RS-17).
 #
@@ -429,9 +430,10 @@ images_manager := {
 
 # The manager of the images of the local layer, written once as well: the
 # node image of local/kind/cluster.yaml, under the key image, the zot image
-# of the Taskfile of the layer, under MIRROR_IMAGE, and the Postgres image of
-# local/data/, under the key image (ADR-004, version rule, point 5; ADR-011,
-# condition 8; ADR-012, condition 5; ADR-016). All are pinned by tag and
+# of the Taskfile of the layer, under MIRROR_IMAGE, the Postgres image of
+# local/data/ and the proxy image of local/platform/, under the key image
+# (ADR-004, version rule, point 5; ADR-005, complement of 2026-11-26;
+# ADR-011, condition 8; ADR-012, condition 5; ADR-016). All are pinned by tag and
 # digest, so the expression is the one of the _IMAGE variables, with the key
 # image as well.
 local_manager := {
@@ -440,6 +442,7 @@ local_manager := {
 		sprintf("/^%slocal/kind/cluster\\.yaml$/", [escaped_prefix]),
 		sprintf("/^%slocal/tasks/.+\\.ya?ml$/", [escaped_prefix]),
 		sprintf("/^%slocal/data/.+\\.ya?ml$/", [escaped_prefix]),
+		sprintf("/^%slocal/platform/.+\\.ya?ml$/", [escaped_prefix]),
 	],
 	"matchStrings": [`# renovate: datasource=(?<datasource>docker) depName=(?<depName>\S+)\s+(?:image|[A-Z0-9_]+_IMAGE)\s*:\s*\S+?:(?<currentValue>[^\s@]+)@(?<currentDigest>sha256:[a-f0-9]+)`],
 }
@@ -484,7 +487,7 @@ deny contains msg if {
 	is_array(managers)
 	some i, manager in managers
 	not known_manager(manager)
-	msg := sprintf("%s: customManagers[%v] is not one of the three known managers, to the letter apart from the description: the _IMAGE variables of the workflows, %stests/tools/install.sh with %slocal/scripts/lib/preflight-checks.sh, and the images of %slocal/kind/cluster.yaml, %slocal/tasks/ and %slocal/data/; a template of another entry picks the datasource, the package and the registry, hence who dates the release", [label_tools, i, tools_prefix, tools_prefix, tools_prefix, tools_prefix, tools_prefix])
+	msg := sprintf("%s: customManagers[%v] is not one of the three known managers, to the letter apart from the description: the _IMAGE variables of the workflows, %stests/tools/install.sh with %slocal/scripts/lib/preflight-checks.sh, and the images of %slocal/kind/cluster.yaml, %slocal/tasks/, %slocal/data/ and %slocal/platform/; a template of another entry picks the datasource, the package and the registry, hence who dates the release", [label_tools, i, tools_prefix, tools_prefix, tools_prefix, tools_prefix, tools_prefix, tools_prefix])
 }
 
 deny contains msg if {
@@ -524,5 +527,5 @@ deny contains msg if {
 	is_object(config)
 	is_string(tools_prefix)
 	not local_manager_found
-	msg := sprintf("%s: no customManagers entry is the manager of the images of %slocal/kind/cluster.yaml, %slocal/tasks/ and %slocal/data/, to the letter apart from its description (regex, docker, key image or <NAME>_IMAGE, tag and digest); without it, Renovate never updates the node image of kind, the zot image and the Postgres image", [label_kind, tools_prefix, tools_prefix, tools_prefix])
+	msg := sprintf("%s: no customManagers entry is the manager of the images of %slocal/kind/cluster.yaml, %slocal/tasks/, %slocal/data/ and %slocal/platform/, to the letter apart from its description (regex, docker, key image or <NAME>_IMAGE, tag and digest); without it, Renovate never updates the node image of kind, the zot image and the Postgres image", [label_kind, tools_prefix, tools_prefix, tools_prefix, tools_prefix])
 }
