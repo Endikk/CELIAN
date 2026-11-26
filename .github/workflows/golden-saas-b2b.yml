@@ -209,9 +209,11 @@ jobs:
   # artifacts that local/tasks/local.yml names by digest, with the commands of
   # research RS-02, and compared byte for byte. S02 and S22 compare the
   # vendored files to their own sums and to references: they would pass a
-  # render edited by hand and a SHA256SUMS redone. Not a required check of
-  # the ruleset of main yet: the DSI decides once it has run on main.
-  # Pulls from docker.io, anonymously; no credential.
+  # render edited by hand and a SHA256SUMS redone. It also checks that the
+  # proxy image of envoy-proxy.yaml is the default that the controller compiles.
+  # A required check of the ruleset of main since the PR that pinned the proxy.
+  # Pulls from docker.io, and reads shared_types.go of the controller tag from
+  # raw.githubusercontent.com, anonymously; no credential.
   envoy-render:
     name: envoy-render
     runs-on: ubuntu-latest

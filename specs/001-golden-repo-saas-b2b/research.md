@@ -167,6 +167,8 @@ Renovate 44.247.1. `lib/modules/versioning/docker/index.ts` : `versionPattern` e
 
 Essai sur kind, même suite : l'`EnvoyProxy` du cluster porte `envoyDeployment.container.image` égal au fichier, et le conteneur `envoy` du pod du proxy, trouvé par l'étiquette `gateway.envoyproxy.io/owning-gateway-name=saas-b2b`, tourne avec cette référence (E03).
 
+Garde de la relecture [SECU] (C1). Le champ `image` de l'`EnvoyProxy` prime sur le défaut compilé : un contrôleur monté seul laisserait l'ancien Envoy, et E03, qui compare le pod au fichier, passerait. Lecture du 2026-11-26 par `gh api`, au tag v1.10.0 : le fichier est `api/v1alpha1/shared_types.go`, la constante `DefaultEnvoyProxyImage` (ligne 30), seule ligne du fichier à porter ce nom suivi d'un `=` ; le commentaire qui la précède n'en porte pas. `scripts/ci/check-envoy-gateway-render.sh` (job `envoy-render`) lit ce fichier à l'adresse `https://raw.githubusercontent.com/envoyproxy/gateway/<tag>/api/v1alpha1/shared_types.go`, le tag étant celui de `ENVOY_GATEWAY_IMAGE` de `local/tasks/local.yml`, et échoue en nommant les deux valeurs si la référence de `envoy-proxy.yaml` diffère. Essai avec le fichier lu par `gh api` au tag v1.10.0 : les deux valeurs sont identiques. Son test (`tests/ci/check-envoy-gateway-render-test.sh`) lit un `shared_types.go` simulé : référence plus ancienne, même tag et autre condensat, fichier absent, fichier sans image, source sans constante, chacun refusé ; vu échouer avant la correction (7 cas).
+
 | Source | Lue le | Ce qu'on y prend |
 | --- | --- | --- |
 | <https://github.com/envoyproxy/gateway/blob/v1.10.0/api/v1alpha1/envoyproxy_types.go> | 2026-11-26 | Ligne 663 : `envoyDeployment` |

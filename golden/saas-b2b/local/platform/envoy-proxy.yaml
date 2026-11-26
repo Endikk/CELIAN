@@ -17,8 +17,11 @@
 # digest, and S05 refuses any other form. A new release of Envoy Gateway
 # changes its default: the tag moves here by hand, in the same PR as the
 # controller, the charts and the render (the tag is not a version that
-# Renovate can order). The mirror serves it read-only (S13, E03), so a pod
-# cannot swap what the next cluster pulls.
+# Renovate can order). This field takes precedence over the default of the
+# controller, so a controller moved alone would keep the old Envoy: the job
+# envoy-render (scripts/ci/check-envoy-gateway-render.sh) reads
+# DefaultEnvoyProxyImage at the tag of the controller and refuses a different
+# reference. The mirror serves the image read-only (S13, E03).
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
