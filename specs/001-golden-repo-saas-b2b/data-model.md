@@ -113,12 +113,13 @@ Une vulnérabilité admise malgré le seuil (FR-022). Un fichier par couche : `s
 
 ## Valeurs partagées
 
-Valeurs tenues une fois pour les deux couches (ADR-004, règle de version ; ADR-012, condition 5), dans `platform.yaml` à la racine :
+Valeurs tenues une fois pour les deux couches (ADR-004, règle de version ; ADR-012, condition 5 ; ADR-015, conditions 16 et 17), dans `platform.yaml` à la racine :
 
 | Clé | Valeur | Lue par |
 | --- | --- | --- |
 | `kubernetes_minor` | `"1.36"` | test S21 face à l'image de nœud de `local/kind/cluster.yaml` ; couche OpenTofu, selon ce qu'[OPS] retiendra |
 | `postgres_major` | `"18"` | test S21 face à l'image Postgres de `local/data/` ; version de l'instance Cloud SQL |
+| `cache_engine_line` | `"9.1"` | test S21 face aux tags des images de `local/data/cache/` (`X.Y.Z-alpine`) ; version du moteur de l'instance Memorystore, à l'étape 20. Nom neutre, `platform.yaml` étant commun (condition 17) |
 
 En phase 3, ces valeurs deviendront des variables du blueprint. Dans le golden repo, le test S21 garde d'accord chaque endroit qui les répète.
 
