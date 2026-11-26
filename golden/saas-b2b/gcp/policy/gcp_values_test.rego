@@ -17,6 +17,22 @@ ca_pem := concat("\n", [
 	"",
 ])
 
+# A CA (CA:TRUE) valid from 2020-01-01 to 2020-01-02 only.
+expired_pem := concat("\n", [
+	"-----BEGIN CERTIFICATE-----",
+	"MIIBfTCCASSgAwIBAgIUFXxcMvLhv7+JPh7g4FIF2xWyLVQwCgYIKoZIzj0EAwIw",
+	"HTEbMBkGA1UEAwwSZXhwaXJlZC1jYS5pbnZhbGlkMB4XDTIwMDEwMTAwMDAwMFoX",
+	"DTIwMDEwMjAwMDAwMFowHTEbMBkGA1UEAwwSZXhwaXJlZC1jYS5pbnZhbGlkMFkw",
+	"EwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEw+U1BTaiZEit0C6iDjFEig+Tt5PzZWQv",
+	"kpE5V0jHSLysnBBAFgsb4jEzm4IxU6tK9WQfR99D9fz/l4JUynORIqNCMEAwHQYD",
+	"VR0OBBYEFMUWYEpT/Zm9MJPWiYPc6eNQqjcWMA8GA1UdEwEB/wQFMAMBAf8wDgYD",
+	"VR0PAQH/BAQDAgIEMAoGCCqGSM49BAMCA0cAMEQCIERVsrbwX0vVIZj7h/BtzZi1",
+	"e4B/mgirQH2lC+Eh9demAiBYTEi4xIG3YGcbjIYmlt5RL34C2zc1ZULY/qkyc59z",
+	"PA==",
+	"-----END CERTIFICATE-----",
+	"",
+])
+
 leaf_pem := concat("\n", [
 	"-----BEGIN CERTIFICATE-----",
 	"MIIBXzCCAQWgAwIBAgIUVswsqu74m3F7dpH4rH7g0NXuQlUwCgYIKoZIzj0EAwIw",
@@ -238,6 +254,45 @@ test_s31_rejects_an_empty_host if {
 	denied_with(config_with("CACHE_HOST", ""), "CACHE_HOST is \"\"")
 }
 
+# The outputs of OpenTofu are IP addresses: a DNS name other than the
+# placeholder is a way to send the connection elsewhere (SECU review of
+# the PR 87).
+test_s31_rejects_localhost_localdomain if {
+	denied_with(config_with("DATABASE_HOST", "localhost.localdomain"), "DATABASE_HOST is \"localhost.localdomain\"")
+}
+
+test_s31_rejects_a_localhost_subdomain if {
+	denied_with(config_with("CACHE_HOST", "foo.localhost"), "CACHE_HOST is \"foo.localhost\"")
+}
+
+test_s31_rejects_a_loopback_in_a_resolver_name if {
+	denied_with(config_with("DATABASE_HOST", "127.0.0.1.nip.io"), "DATABASE_HOST is \"127.0.0.1.nip.io\"")
+}
+
+test_s31_rejects_the_metadata_server if {
+	denied_with(config_with("DATABASE_HOST", "metadata.google.internal"), "DATABASE_HOST is \"metadata.google.internal\"")
+}
+
+test_s31_rejects_a_public_name if {
+	denied_with(config_with("CACHE_HOST", "evil.example.com"), "CACHE_HOST is \"evil.example.com\"")
+}
+
+test_s31_rejects_an_address_with_a_leading_zero if {
+	denied_with(config_with("DATABASE_HOST", "010.0.0.1"), "DATABASE_HOST is \"010.0.0.1\"")
+}
+
+test_s31_rejects_an_address_out_of_range if {
+	denied_with(config_with("DATABASE_HOST", "10.0.0.256"), "DATABASE_HOST is \"10.0.0.256\"")
+}
+
+test_s31_accepts_a_172_16_address if {
+	accepted(config_with("DATABASE_HOST", "172.20.1.9"))
+}
+
+test_s31_accepts_a_192_168_address if {
+	accepted(config_with("CACHE_HOST", "192.168.4.4"))
+}
+
 test_s31_rejects_another_ca_path if {
 	denied_with(config_with("CACHE_TLS_CA_FILE", "/tmp/ca.pem"), "CACHE_TLS_CA_FILE is \"/tmp/ca.pem\"")
 }
@@ -286,6 +341,62 @@ test_s31_rejects_a_private_key_in_app_ca if {
 
 test_s31_rejects_a_server_certificate_as_a_ca if {
 	denied_with(patched(ca_map, [{"op": "replace", "path": "/data/database-ca.pem", "value": leaf_pem}]), "is not a CA")
+}
+
+test_s31_rejects_an_expired_ca if {
+	denied_with(patched(ca_map, [{"op": "replace", "path": "/data/database-ca.pem", "value": expired_pem}]), "expired")
+}
+
+test_s31_rejects_an_expired_ca_among_valid_ones if {
+	mixed := concat("", [ca_pem, expired_pem])
+	denied_with(patched(ca_map, [{"op": "replace", "path": "/data/cache-ca.pem", "value": mixed}]), "expired")
+}
+
+# --- The service account of the sync -----------------------------------------
+
+pod_with(spec) := {
+	"apiVersion": "apps/v1",
+	"kind": "Deployment",
+	"metadata": {"name": "api", "namespace": "saas-b2b"},
+	"spec": {"template": {"spec": spec}},
+}
+
+test_s31_accepts_a_pod_on_another_account if {
+	accepted(array.concat(valid_objects, [pod_with({"serviceAccountName": "api", "containers": []})]))
+}
+
+test_s31_accepts_a_pod_without_an_account if {
+	accepted(array.concat(valid_objects, [pod_with({"containers": []})]))
+}
+
+test_s31_rejects_a_pod_on_the_account_of_the_sync if {
+	bad := pod_with({"serviceAccountName": "secret-sync", "containers": []})
+	denied_with(array.concat(valid_objects, [bad]), "runs as the service account secret-sync")
+}
+
+test_s31_rejects_a_pod_on_the_deprecated_field if {
+	bad := pod_with({"serviceAccount": "secret-sync", "containers": []})
+	denied_with(array.concat(valid_objects, [bad]), "runs as the service account secret-sync")
+}
+
+test_s31_rejects_a_cron_job_on_the_account_of_the_sync if {
+	bad := {
+		"apiVersion": "batch/v1",
+		"kind": "CronJob",
+		"metadata": {"name": "tick", "namespace": "saas-b2b"},
+		"spec": {"jobTemplate": {"spec": {"template": {"spec": {"serviceAccountName": "secret-sync", "containers": []}}}}},
+	}
+	denied_with(array.concat(valid_objects, [bad]), "runs as the service account secret-sync")
+}
+
+test_s31_rejects_a_bare_pod_on_the_account_of_the_sync if {
+	bad := {
+		"apiVersion": "v1",
+		"kind": "Pod",
+		"metadata": {"name": "p", "namespace": "saas-b2b"},
+		"spec": {"serviceAccountName": "secret-sync", "containers": []},
+	}
+	denied_with(array.concat(valid_objects, [bad]), "runs as the service account secret-sync")
 }
 
 test_s31_rejects_five_certificates if {

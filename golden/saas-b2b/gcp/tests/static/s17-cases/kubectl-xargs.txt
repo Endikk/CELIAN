@@ -1,0 +1,4 @@
+# Failing case of S17: kubectl behind xargs.
+# expect: kubectl in the gcp layer, other than a render of files
+
+xargs -a l kubectl apply -f

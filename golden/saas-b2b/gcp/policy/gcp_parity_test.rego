@@ -199,6 +199,51 @@ test_s07_rejects_a_bootstrap_namespace_the_common_layer_lacks if {
 	denied_with(with_bootstrap(other), "which the common layer does not hold")
 }
 
+# --- 6. The admission objects, applied first -----------------------------------
+# Config Sync updates them by name and never creates them (the ClusterRole of
+# the RootSync has no create verb), so the bootstrap holds them too.
+
+admission_policy := {
+	"apiVersion": "admissionregistration.k8s.io/v1",
+	"kind": "ValidatingAdmissionPolicy",
+	"metadata": {"name": "saas-b2b-require-requests"},
+	"spec": {"failurePolicy": "Fail"},
+}
+
+admission_binding := {
+	"apiVersion": "admissionregistration.k8s.io/v1",
+	"kind": "ValidatingAdmissionPolicyBinding",
+	"metadata": {"name": "saas-b2b-require-requests"},
+	"spec": {"policyName": "saas-b2b-require-requests", "validationActions": ["Deny"]},
+}
+
+with_admission := render(
+	common_objects,
+	array.concat(gcp_objects, [admission_policy, admission_binding]),
+	array.concat(layer_objects, [admission_policy, admission_binding]),
+)
+
+test_s07_accepts_admission_objects_that_the_bootstrap_holds if {
+	accepted(array.concat(with_admission, entries("bootstrap.yaml", [admission_policy, admission_binding])))
+}
+
+test_s07_rejects_an_admission_policy_the_bootstrap_lacks if {
+	denied_with(array.concat(with_admission, entries("bootstrap.yaml", [admission_binding])), "ValidatingAdmissionPolicy")
+}
+
+test_s07_rejects_an_admission_binding_the_bootstrap_lacks if {
+	denied_with(array.concat(with_admission, entries("bootstrap.yaml", [admission_policy])), "ValidatingAdmissionPolicyBinding")
+}
+
+test_s07_rejects_admission_objects_without_any_bootstrap if {
+	denied_with(with_admission, "is not in the bootstrap")
+}
+
+test_s07_rejects_an_admission_policy_that_differs_in_the_bootstrap if {
+	other := json.patch(admission_policy, [{"op": "replace", "path": "/spec/failurePolicy", "value": "Ignore"}])
+	denied_with(array.concat(with_admission, entries("bootstrap.yaml", [other, admission_binding])), "differs from the one that Config Sync syncs")
+}
+
 # --- 4. The producers ---------------------------------------------------------
 
 test_s07_rejects_a_secret_without_a_producer if {

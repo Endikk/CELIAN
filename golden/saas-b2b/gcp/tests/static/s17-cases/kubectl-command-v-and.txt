@@ -1,0 +1,4 @@
+# Failing case of S17: a presence test that does more.
+# expect: kubectl in the gcp layer, other than a render of files
+
+command -v kubectl && kubectl apply -f x.yaml

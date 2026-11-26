@@ -1,4 +1,4 @@
 # Failing case of S17: a kubectl call on a named context, whatever its command.
-# expect: kubectl command outside the allowlist of the gcp layer
+# expect: kubectl in the gcp layer, other than a render of files
 
       - kubectl --context gke_project_region_cluster get nodes

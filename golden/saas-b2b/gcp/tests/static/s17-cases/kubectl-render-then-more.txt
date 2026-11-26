@@ -1,0 +1,4 @@
+# Failing case of S17: a render followed by another command.
+# expect: kubectl in the gcp layer, other than a render of files
+
+kubectl kustomize d; kubectl apply -f x.yaml

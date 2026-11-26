@@ -1,0 +1,5 @@
+# Failing case of S17: the verb on the next line.
+# expect: kubectl in the gcp layer, other than a render of files
+
+kubectl \
+  apply -f x.yaml

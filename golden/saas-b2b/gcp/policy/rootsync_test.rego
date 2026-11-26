@@ -46,11 +46,6 @@ cluster_role := {
 			"resourceNames": ["require-requests"],
 			"verbs": ["update", "patch", "delete"],
 		},
-		{
-			"apiGroups": ["admissionregistration.k8s.io"],
-			"resources": ["validatingadmissionpolicies", "validatingadmissionpolicybindings"],
-			"verbs": ["create"],
-		},
 	],
 }
 
@@ -241,7 +236,38 @@ test_s10_rejects_a_cluster_write_without_names if {
 
 test_s10_rejects_creating_namespaces_for_the_cluster if {
 	bad := json.patch(cluster_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": [""], "resources": ["namespaces"], "verbs": ["create"]}}])
-	denied_with([namespace_role, bad, root_sync], "creates namespaces")
+	denied_with([namespace_role, bad, root_sync], "grants create for the whole cluster")
+}
+
+test_s10_rejects_creating_admission_policies_for_the_cluster if {
+	bad := json.patch(cluster_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": ["admissionregistration.k8s.io"], "resources": ["validatingadmissionpolicies", "validatingadmissionpolicybindings"], "verbs": ["create"]}}])
+	denied_with([namespace_role, bad, root_sync], "grants create for the whole cluster")
+}
+
+# The kinds of the Role are a closed list too (SECU review of the PR 87).
+test_s10_rejects_pods_in_a_role if {
+	bad := json.patch(namespace_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": [""], "resources": ["pods"], "verbs": ["get"]}}])
+	denied_with([bad, cluster_role, root_sync], "outside the closed list of kinds")
+}
+
+test_s10_rejects_jobs_in_a_role if {
+	bad := json.patch(namespace_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": ["batch"], "resources": ["jobs"], "verbs": ["create"]}}])
+	denied_with([bad, cluster_role, root_sync], "outside the closed list of kinds")
+}
+
+test_s10_rejects_network_policies_in_a_role_until_the_layer_has_one if {
+	bad := json.patch(namespace_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": ["networking.k8s.io"], "resources": ["networkpolicies"], "verbs": ["create"]}}])
+	denied_with([bad, cluster_role, root_sync], "outside the closed list of kinds")
+}
+
+test_s10_rejects_a_known_kind_in_a_foreign_group if {
+	bad := json.patch(namespace_role, [{"op": "replace", "path": "/rules/1/apiGroups", "value": ["extensions"]}])
+	denied_with([bad, cluster_role, root_sync], "outside the closed list of kinds")
+}
+
+test_s10_rejects_a_subresource_in_a_role if {
+	bad := json.patch(namespace_role, [{"op": "add", "path": "/rules/0/resources/-", "value": "services/proxy"}])
+	denied_with([bad, cluster_role, root_sync], "outside the closed list of kinds")
 }
 
 test_s10_accepts_a_cluster_role_bound_in_a_namespace if {
