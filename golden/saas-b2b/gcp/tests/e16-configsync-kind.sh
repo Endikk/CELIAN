@@ -187,13 +187,22 @@ wait_for 600 k -n resource-group-system rollout status deployment/resource-group
 # --- 2. The bootstrap and the RootSync ----------------------------------------------
 
 k apply -k gcp/k8s/bootstrap >/dev/null || die "the bootstrap of the layer does not apply."
-patch="$(printf '{"spec":{"git":{"repo":"%s","revision":"%s","dir":"%s","auth":"none","secretRef":null}}}' "$repo" "$revision" "$dir")"
+# Two changes for the test, and no other: the source (the commit under test, read
+# without a credential) and reconcileTimeout (default 5 m, field of
+# RootSyncOverrideSpec, kpt-config-sync v1.25.2, read on 2026-11-26). On kind the
+# Deployments api and front never become ready (no image of the application is
+# there), and the apply waits for them up to that timeout before it records the
+# status of the ResourceGroup, which the checks below read. Their readiness is
+# not what E16 tests; it belongs to the test on GKE (tasks.md, gap 201).
+patch="$(printf '{"spec":{"git":{"repo":"%s","revision":"%s","dir":"%s","auth":"none","secretRef":null},"override":{"reconcileTimeout":"60s"}}}' "$repo" "$revision" "$dir")"
 k -n config-management-system patch rootsync root-sync --type merge -p "$patch" >/dev/null || die "the RootSync does not take the source of the test."
 
+# The commit is recorded when the sync starts: it is done when Syncing turns false.
 synced() {
   local commit
   commit="$(k -n config-management-system get rootsync root-sync -o 'jsonpath={.status.sync.commit}')"
   [ "$commit" = "$revision" ] &&
+    [ "$(k -n config-management-system get rootsync root-sync -o 'jsonpath={.status.conditions[?(@.type=="Syncing")].status}')" = False ] &&
     [ -z "$(k -n config-management-system get rootsync root-sync -o 'jsonpath={.status.sync.errors}{.status.rendering.errors}{.status.source.errors}')" ]
 }
 wait_for "$sync_timeout" synced || die "the RootSync does not sync $revision of $repo, dir $dir, in ${sync_timeout} s."
