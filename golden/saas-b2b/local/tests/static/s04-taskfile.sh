@@ -19,8 +19,10 @@
 #   kubectl create secret, --from-literal, --from-env-file nor --save-config,
 #   which put a value in an argument or an annotation; kubectl create -f -
 #   in local/scripts/secrets.sh alone;
-# - in local/scripts/secrets.sh, no trace (set -x, xtrace, bash -x), and the
-#   output of /dev/urandom never lands in a variable;
+# - no trace (set -x, set -o xtrace, bash -x) in local/scripts/secrets.sh,
+#   in local/scripts/app.sh nor in local/tests/e2e/: a trace in E04 or E06
+#   would print a password. In local/scripts/secrets.sh, the output of
+#   /dev/urandom also never lands in a variable;
 # - no Task variable named after a password, a secret or a token, and no
 #   dynamic variable (sh:) that reads one;
 # - every task that runs local/scripts/secrets.sh is silent: Task prints a
@@ -109,9 +111,6 @@ secret_findings() {
       printf '%s:%s: kubectl create from the standard input outside %s: %s\n' "$file" "$number" "$secrets_script" "$text"
     fi
     if [ "${file##*/}" = "${secrets_script##*/}" ]; then
-      if [[ $text =~ set\ -[a-zA-Z]*x|xtrac[e]|bash\ -[a-zA-Z]*x ]]; then
-        printf '%s:%s: a trace, which prints the commands and their values: %s\n' "$file" "$number" "$text"
-      fi
       if [[ $text =~ /dev/urando[m] ]] && [[ $text =~ $urandom_capture ]]; then
         printf '%s:%s: the output of /dev/urandom in a variable: %s\n' "$file" "$number" "$text"
       fi
@@ -123,6 +122,35 @@ secret_findings() {
         fi
         ;;
     esac
+  done < <(logical_lines "$file")
+}
+
+# traced FILE: success when a trace in FILE could print a password: the
+# script that creates the Secrets, the script that reads them, and every
+# file of the end-to-end tests (spaces in the pattern kept out of the way).
+traced() {
+  case "/$1" in
+    */secrets.sh | */local/scripts/app.sh | */local/tests/e2e/*) return 0 ;;
+  esac
+  return 1
+}
+
+# trace_files: the real files that traced accepts, one per line.
+trace_files() {
+  local file
+  for file in "$secrets_script" local/scripts/app.sh local/tests/e2e/*.sh local/tests/e2e/lib/*.sh; do
+    [ -f "$file" ] && printf '%s\n' "$file"
+  done
+}
+
+# trace_findings FILE: one line per command of FILE that turns a trace on.
+trace_findings() {
+  local file="$1" number text
+  traced "$file" || return 0
+  while IFS=$'\t' read -r number text; do
+    if [[ $text =~ set\ -[a-zA-Z]*x|set\ .*-o\ xtrac[e]|xtrac[e]|bash\ -[a-zA-Z]*x ]]; then
+      printf '%s:%s: a trace, which prints the commands and their values: %s\n' "$file" "$number" "$text"
+    fi
   done < <(logical_lines "$file")
 }
 
@@ -188,9 +216,27 @@ printf '%s\n' \
 mkdir "$samples/good"
 cp "$samples/good-secrets.sh" "$samples/good/secrets.sh"
 bad_count="$({ secret_findings "$samples/bad-other.sh"; secret_findings "$samples/secrets.sh"; secret_findings "$samples/bad.yml"; } | wc -l | tr -d ' ')"
-if [ "$bad_count" != 13 ]; then
-  echo "the rules of the secret part caught $bad_count of the 13 findings of their bad samples:" >&2
+if [ "$bad_count" != 12 ]; then
+  echo "the rules of the secret part caught $bad_count of the 12 findings of their bad samples:" >&2
   { secret_findings "$samples/bad-other.sh"; secret_findings "$samples/secrets.sh"; secret_findings "$samples/bad.yml"; } >&2
+  exit 1
+fi
+# The trace: the three places where a password could be printed, and a file
+# outside them that the rule leaves alone.
+mkdir -p "$samples/local/scripts" "$samples/local/tests/e2e/lib"
+printf '%s\n' 'set -x' 'bash -x other.sh' >"$samples/local/scripts/app.sh"
+printf '%s\n' 'set -euxo pipefail' 'set -o xtrace' >"$samples/local/tests/e2e/e99-bad.sh"
+printf '%s\n' 'echo ok' 'set -x' >"$samples/local/tests/e2e/lib/helper.sh"
+printf '%s\n' 'set -x' >"$samples/other.sh"
+printf '%s\n' '# set -x in a comment' 'set -euo pipefail' 'bash local/scripts/app.sh' >"$samples/local/tests/e2e/e98-good.sh"
+trace_bad="$({ for f in "$samples/secrets.sh" "$samples/local/scripts/app.sh" "$samples/local/tests/e2e/e99-bad.sh" "$samples/local/tests/e2e/lib/helper.sh"; do trace_findings "$f"; done; } | wc -l | tr -d ' ')"
+if [ "$trace_bad" != 6 ]; then
+  echo "the rule of the trace caught $trace_bad of the 6 findings of its bad samples (secrets.sh, app.sh, e2e):" >&2
+  exit 1
+fi
+trace_good="$({ trace_findings "$samples/other.sh"; trace_findings "$samples/local/tests/e2e/e98-good.sh"; trace_findings "$samples/good/secrets.sh"; } | wc -l | tr -d ' ')"
+if [ "$trace_good" != 0 ]; then
+  echo "the rule of the trace refused good samples or a file outside its scope" >&2
   exit 1
 fi
 good_found="$(secret_findings "$samples/good/secrets.sh")"
@@ -233,6 +279,12 @@ secret_problems="$(command_files | while IFS= read -r file; do secret_findings "
 if [ -n "$secret_problems" ]; then
   echo "Commands that could expose a secret (ADR-007, condition 1):" >&2
   printf '  %s\n' "$secret_problems" >&2
+  status=1
+fi
+trace_problems="$(trace_files | while IFS= read -r file; do trace_findings "$file"; done)"
+if [ -n "$trace_problems" ]; then
+  echo "Traces that could print a password (ADR-007, condition 1):" >&2
+  printf '  %s\n' "$trace_problems" >&2
   status=1
 fi
 runs="$(for file in Taskfile.yml local/tasks/*.yml; do [ -f "$file" ] && secret_tasks "$file"; done)"
