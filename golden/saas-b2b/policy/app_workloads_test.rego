@@ -54,15 +54,18 @@ api := make_deployment(
 		"readinessProbe": probe("/api/readyz"),
 		"livenessProbe": probe("/api/healthz"),
 		"envFrom": [{"configMapRef": {"name": "app-config"}}],
+		"env": [{"name": "PGSSLROOTCERT", "value": "/run/config/ca/database-ca.pem"}],
 		"volumeMounts": [
 			{"name": "db-auth", "mountPath": "/run/secrets/db-auth"},
 			{"name": "cache-auth", "mountPath": "/run/secrets/cache-auth"},
+			{"name": "app-ca", "mountPath": "/run/config/ca", "readOnly": true},
 			{"name": "tmp", "mountPath": "/tmp"},
 		],
 	},
 	{"volumes": [
 		{"name": "db-auth", "secret": {"secretName": "db-auth", "defaultMode": 288}},
 		{"name": "cache-auth", "secret": {"secretName": "cache-auth", "defaultMode": 288}},
+		{"name": "app-ca", "configMap": {"name": "app-ca", "optional": true}},
 		{"name": "tmp", "emptyDir": {"sizeLimit": "64Mi"}},
 	]},
 )
@@ -164,6 +167,58 @@ test_s30_rejects_a_secret_read_by_env_from if {
 test_s30_rejects_an_api_without_the_cache_secret if {
 	changed := with_pod(api, {"volumes": [{"name": "db-auth", "secret": {"secretName": "db-auth", "defaultMode": 288}}, {"name": "tmp", "emptyDir": {"sizeLimit": "64Mi"}}]})
 	denied_with(array.concat(others("api"), [changed]), "the API must mount db-auth and cache-auth")
+}
+
+# The CA bundles of the managed services: an optional ConfigMap that the gcp
+# layer provides, mounted read-only, and the variable of Npgsql that names the
+# bundle of the database (research RS-12; tasks.md, gap 166).
+test_s30_rejects_an_api_without_the_ca_volume if {
+	changed := with_pod(api, {"volumes": [
+		{"name": "db-auth", "secret": {"secretName": "db-auth", "defaultMode": 288}},
+		{"name": "cache-auth", "secret": {"secretName": "cache-auth", "defaultMode": 288}},
+		{"name": "tmp", "emptyDir": {"sizeLimit": "64Mi"}},
+	]})
+	denied_with(array.concat(others("api"), [changed]), "must mount the ConfigMap app-ca")
+}
+
+test_s30_rejects_a_required_ca_volume if {
+	changed := with_pod(api, {"volumes": [
+		{"name": "db-auth", "secret": {"secretName": "db-auth", "defaultMode": 288}},
+		{"name": "cache-auth", "secret": {"secretName": "cache-auth", "defaultMode": 288}},
+		{"name": "app-ca", "configMap": {"name": "app-ca"}},
+		{"name": "tmp", "emptyDir": {"sizeLimit": "64Mi"}},
+	]})
+	denied_with(array.concat(others("api"), [changed]), "must mount the ConfigMap app-ca")
+}
+
+test_s30_rejects_a_ca_mount_that_is_not_read_only if {
+	changed := with_container(api, {"volumeMounts": [
+		{"name": "db-auth", "mountPath": "/run/secrets/db-auth"},
+		{"name": "cache-auth", "mountPath": "/run/secrets/cache-auth"},
+		{"name": "app-ca", "mountPath": "/run/config/ca"},
+		{"name": "tmp", "mountPath": "/tmp"},
+	]})
+	denied_with(array.concat(others("api"), [changed]), "must mount the ConfigMap app-ca")
+}
+
+test_s30_rejects_a_ca_mount_elsewhere if {
+	changed := with_container(api, {"volumeMounts": [
+		{"name": "db-auth", "mountPath": "/run/secrets/db-auth"},
+		{"name": "cache-auth", "mountPath": "/run/secrets/cache-auth"},
+		{"name": "app-ca", "mountPath": "/etc/ssl/ca", "readOnly": true},
+		{"name": "tmp", "mountPath": "/tmp"},
+	]})
+	denied_with(array.concat(others("api"), [changed]), "must mount the ConfigMap app-ca")
+}
+
+test_s30_rejects_an_api_without_the_database_ca_variable if {
+	changed := with_container(api, {"env": []})
+	denied_with(array.concat(others("api"), [changed]), "must set PGSSLROOTCERT")
+}
+
+test_s30_rejects_another_database_ca_path if {
+	changed := with_container(api, {"env": [{"name": "PGSSLROOTCERT", "value": "/tmp/ca.pem"}]})
+	denied_with(array.concat(others("api"), [changed]), "must set PGSSLROOTCERT")
 }
 
 test_s30_rejects_a_secret_volume_without_a_mode if {

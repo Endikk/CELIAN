@@ -127,6 +127,22 @@ test_s07_rejects_a_config_map_that_the_target_does_not_provide if {
 	denied_with(renders(valid_common, target, valid_sources), "names the ConfigMap app-config, which the local render does not provide")
 }
 
+# An optional volume names a ConfigMap that a target may not provide: app-ca,
+# which only the gcp layer writes (tasks.md, gap 166).
+test_s07_accepts_an_optional_config_map_volume_that_the_target_lacks if {
+	optional := json.patch(api_deployment, [{"op": "add", "path": "/spec/template/spec/volumes/-", "value": {"name": "ca", "configMap": {"name": "app-ca", "optional": true}}}])
+	common := [gateway("saas-b2b"), route_without_hosts("api"), route_without_hosts("front"), optional]
+	target := [gateway("envoy"), route("api", ["localhost"]), route("front", ["localhost"]), optional, app_config, postgres]
+	accepted(renders(common, target, valid_sources))
+}
+
+test_s07_rejects_a_required_config_map_volume_that_the_target_lacks if {
+	required := json.patch(api_deployment, [{"op": "add", "path": "/spec/template/spec/volumes/-", "value": {"name": "ca", "configMap": {"name": "app-ca"}}}])
+	common := [gateway("saas-b2b"), route_without_hosts("api"), route_without_hosts("front"), required]
+	target := [gateway("envoy"), route("api", ["localhost"]), route("front", ["localhost"]), required, app_config, postgres]
+	denied_with(renders(common, target, valid_sources), "names the ConfigMap app-ca, which the local render does not provide")
+}
+
 test_s07_rejects_a_secret_outside_the_contract if {
 	changed := object.union(api_deployment, {"spec": {"template": {"spec": {"volumes": [{"name": "x", "secret": {"secretName": "db-superuser"}}]}}}})
 	common := [gateway("saas-b2b"), route_without_hosts("api"), route_without_hosts("front"), changed]
