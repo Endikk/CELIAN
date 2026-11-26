@@ -128,3 +128,13 @@ tasks:
       PROFILE: '{{.PROFILE}}'
     cmds:
       - bash local/tests/e2e/run.sh
+
+  # The tests without a public registry of the current profile: E20, E23, E10
+  # and E28 (contracts/task-cli.md). They start with the network, then cut the
+  # registries in a copy of the golden repo; the cluster is created, then
+  # deleted. Until step 12, PROFILE=lite.
+  test-offline:
+    env:
+      PROFILE: '{{.PROFILE}}'
+    cmds:
+      - bash local/tests/offline/run.sh

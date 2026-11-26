@@ -204,6 +204,38 @@ jobs:
           PROFILE: lite
         run: task test:e2e
 
+  # T2 of the lite profile and its companions (spec 001, T128): E20, E23,
+  # E10 and E28. The runner starts with the network, then the tests cut the
+  # public registries in a copy of the golden repo, as BENCH-010 did, and
+  # restart without them: the machine's network is never touched. Same tools
+  # as e2e-lite. Outside the required checks of the ruleset of main until the
+  # DSI decides (tasks.md, notes).
+  offline-lite:
+    name: offline-lite
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Task and conftest
+        working-directory: golden/saas-b2b
+        run: |
+          bash tests/tools/install.sh "$RUNNER_TEMP/golden-tools"
+          echo "$RUNNER_TEMP/golden-tools" >> "$GITHUB_PATH"
+
+      - name: Install kind and kubectl
+        run: |
+          bash scripts/ci/install-kind-kubectl.sh "$RUNNER_TEMP/kind-tools"
+          echo "$RUNNER_TEMP/kind-tools" >> "$GITHUB_PATH"
+
+      - name: Run the tests without a public registry (lite profile)
+        working-directory: golden/saas-b2b
+        env:
+          PROFILE: lite
+        run: task test:offline
+
   # Gap 44 of spec 001 (tasks.md): the render of Envoy Gateway in
   # local/vendor/envoy-gateway/ is redone with helm template from the OCI
   # artifacts that local/tasks/local.yml names by digest, with the commands of

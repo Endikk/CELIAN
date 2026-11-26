@@ -79,3 +79,8 @@ tasks:
     desc: Run the tests on kind of the current profile; the cluster is created, then deleted.
     cmds:
       - task: local:test-e2e
+
+  test:offline:
+    desc: Run the tests without a public registry of the current profile; the cluster is created, then deleted. Needs the network for its first starts.
+    cmds:
+      - task: local:test-offline
