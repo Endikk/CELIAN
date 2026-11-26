@@ -16,16 +16,16 @@
 #
 # TLS: VerifyCA for the database, with the CA of the instance alone, which
 # Cloud SQL gives by default and the root writes out (server_ca_mode,
-# tasks.md, gap 142). VerifyFull cannot hold: the certificate of a private IP
+# tasks.md, gap 165). VerifyFull cannot hold: the certificate of a private IP
 # instance has no host name to verify, and the page of Google says that a
 # per-instance CA makes the check of the CA enough. Require is refused, it
 # encrypts without checking the server (decision of the DSI, 2026-11-26). The
 # cache takes VerifyCA as well, its mode written by the instance (research
 # RS-11, ADR-015 condition 7); the choice stays open to step 20 (tasks.md,
-# gap 147).
+# gap 170).
 #
 # CACHE_TLS_CA_FILE is where the common Deployment of the API mounts app-ca
-# (tasks.md, gap 143).
+# (tasks.md, gap 166).
 apiVersion: v1
 kind: ConfigMap
 metadata:

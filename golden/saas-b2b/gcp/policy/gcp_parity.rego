@@ -1,7 +1,7 @@
 # S07, gcp part: the render of the gcp layer holds the common layer as it is,
 # and what it adds comes from the gcp layer (spec 001, plan, matrix S07;
 # contracts/layers.md, "Règle de parité"; ADR-005, condition 5; ADR-007,
-# condition 5; tasks.md, gap 140).
+# condition 5; tasks.md, gap 163).
 #
 # Three renders come in, told apart by the name of the file:
 # - common.yaml: the overlay of the environment alone (k8s/overlays/prod);
@@ -157,7 +157,7 @@ deny contains msg if {
 # Config Sync syncs, are in the bootstrap too, identical. The ClusterRole of the
 # RootSync has no create verb (S10): Config Sync updates these two objects by
 # name and cannot create them, so the user applies them first with the
-# bootstrap (SECU review of the PR 87; tasks.md, gap 145).
+# bootstrap (SECU review of the PR 87; tasks.md, gap 168).
 admission_kinds := {"ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding"}
 
 deny contains msg if {

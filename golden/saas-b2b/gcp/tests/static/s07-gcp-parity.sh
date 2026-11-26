@@ -2,7 +2,7 @@
 # control: S07
 # carries: FR-010; ADR-005, condition 5; ADR-007, condition 5
 #
-# gcp part of S07 (contracts/layers.md, "Règle de parité"; tasks.md, gap 140).
+# gcp part of S07 (contracts/layers.md, "Règle de parité"; tasks.md, gap 163).
 # The local part, tests/static/s07-parity.sh, is written with step 9 (T086);
 # the two meet when that file lands, and the DSI decides whether they merge.
 #

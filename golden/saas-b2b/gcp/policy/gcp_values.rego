@@ -1,7 +1,7 @@
 # S31: the values of the gcp layer that the user writes after the first apply,
 # and the producer of db-auth (spec 001, plan, matrix S31; contracts/layers.md,
 # "app-config"; contracts/secrets.md; ADR-007, conditions 2 and 5; ADR-012;
-# ADR-015, condition 7; research RS-16 and RS-12; tasks.md, gaps 75 and 108).
+# ADR-015, condition 7; research RS-16 and RS-12; tasks.md, gaps 95 and 128).
 #
 # The host of the database and the CA of Cloud SQL exist only after the apply,
 # and Config Sync reads a manifest from Git. The values are written into three
@@ -15,8 +15,8 @@
 #   else, every value a string. DATABASE_SSL_MODE is VerifyCA or VerifyFull:
 #   Disable, Allow and Prefer encrypt nothing or fall back, and Require
 #   encrypts without checking the server (decision of the DSI, 2026-11-26,
-#   gap 75; Npgsql, security page). CACHE_TLS_MODE is VerifyCA or VerifyFull
-#   as well: Disable is refused on gcp (gap 108). A host is a placeholder
+#   gap 95; Npgsql, security page). CACHE_TLS_MODE is VerifyCA or VerifyFull
+#   as well: Disable is refused on gcp (gap 128). A host is a placeholder
 #   under .invalid (RFC 6761) or a private IPv4 address of RFC 1918, nothing
 #   else: the outputs of OpenTofu are addresses, and any other name, a public
 #   one, localhost.localdomain, a name of a resolver that answers 127.0.0.1,
@@ -24,7 +24,7 @@
 #   PR 87). No URL, no port.
 # - no pod runs as the service account of the sync: an account that reads
 #   the secrets of Secret Manager is not an account that a workload may take
-#   (tasks.md, gap 151).
+#   (tasks.md, gap 174).
 # - app-ca: one ConfigMap with the bundles of the two CAs, public by nature.
 #   Each value is empty (placeholder) or one to four PEM certificates that
 #   parse, each a CA. A private key inside is refused.
@@ -51,7 +51,7 @@ config_keys := {
 
 ca_keys := {"database-ca.pem", "cache-ca.pem"}
 
-# Where the common Deployment mounts app-ca (tasks.md, gap 143).
+# Where the common Deployment mounts app-ca (tasks.md, gap 166).
 cache_ca_path := "/run/config/ca/cache-ca.pem"
 
 tls_modes := {"verifyca", "verifyfull"}

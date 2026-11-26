@@ -265,7 +265,7 @@ deny contains msg if {
 
 # No create for the whole cluster, whatever the kind: the admission objects and
 # the Namespace are applied first by the user with the bootstrap, and Config
-# Sync updates them by name (SECU review of the PR 87; tasks.md, gap 145).
+# Sync updates them by name (SECU review of the PR 87; tasks.md, gap 168).
 deny contains msg if {
 	some [path, role] in roles
 	role.kind == "ClusterRole"

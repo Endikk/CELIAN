@@ -1,6 +1,6 @@
 # S15: the server certificate of Cloud SQL, written out, and the two values
 # that the user copies into the manifests of the gcp layer after the apply
-# (spec 001, FR-011; ADR-012; research RS-12 and RS-16; tasks.md, gaps 75
+# (spec 001, FR-011; ADR-012; research RS-12 and RS-16; tasks.md, gaps 95
 # and 142).
 #
 # - settings.ip_configuration.server_ca_mode is written
