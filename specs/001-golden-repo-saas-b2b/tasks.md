@@ -655,7 +655,7 @@ Aucun ne demande de modifier spec.md ni plan.md avant de commencer. Chacun est r
 76. Relevé par la relecture [FINOPS] de T110 : fixer `budget_amount`, en coût brut, avant la GATE 2, depuis les grilles de la région retenue (R-05). Le dépôt n'a pas d'estimation exploitable (ADR-008, « le coût reste inconnu »), et les chiffres de BENCH-008 sont en USD alors que la devise du budget est celle du compte.
 77. Relevé par la relecture [FINOPS] de T110 : vérifier si un seuil au-delà de 100 % est accepté par le provider et par l'API, et s'il apporte quelque chose.
 78. Relevé par la relecture [FINOPS] de T110 : un canal de notification Cloud Monitoring est reporté après le MVP, sauf si le premier apply montre que Lucas ne reçoit rien aux destinataires par défaut.
-79. Relevé par la relecture [FINOPS] de T110 : les quotas abaissés sont le seul plafond dur prévu par R-05, et aucune tâche de ce fichier ne les nomme (recherche du mot « quota », le 2026-11-26). Mécanisme à vérifier sur la documentation Cloud Quotas (R-05), puis à porter par une tâche avant la GATE 2.
+79. Relevé par la relecture [FINOPS] de T110 : les quotas abaissés sont le seul plafond dur prévu par R-05, et aucune tâche de ce fichier ne les nomme (recherche du mot « quota », le 2026-11-26). Mécanisme à vérifier sur la documentation Cloud Quotas (R-05), puis à porter par une tâche avant la GATE 2. Décision du DSI du 2026-11-26 : [FINOPS] porte cette tâche avec [OPS], ajoutée à l'étape 14 au moment de son plan.
 
 ## Notes
 
