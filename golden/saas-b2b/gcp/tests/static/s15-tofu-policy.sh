@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # control: S15
-# carries: FR-011, FR-012; ADR-008, conditions 1 to 6 and 8; ADR-007, condition 2; ADR-010; R-32; R-05, R-17, R-18
+# carries: FR-011, FR-012; ADR-008, conditions 1 to 6 and 8, question 1; ADR-007, condition 2; ADR-010; R-32; R-05, R-17, R-18
 #
-# Two parts, both on the HCL of gcp/tofu/, without any credential:
+# Two parts, both on the HCL of the two roots, gcp/tofu/ and the budget root
+# gcp/budget/ (T110), without any credential:
 # - policy: the tests of the conftest packages of gcp/policy/, then each
 #   failing case of gcp/policy/testdata/, which must be refused with the
-#   message its "# expect:" line gives, then the packages on the root;
+#   message its "# expect:" line gives (a "# with:" line names a file of the
+#   repository that the case is read together with), then the packages on the
+#   roots. tofu_budget reads both roots at once: the alert, and the identity
+#   of the main root that must not hold a budget role;
 # - scan: Trivy on the root, with the checks embedded in its binary. Each
 #   finding is fixed, or justified in writing right above its resource with a
 #   "#trivy:ignore:<ID>" comment (T109), and only the closed list of this
@@ -25,8 +29,11 @@ CDPATH='' cd -- "$root"
 
 part="${1:-both}"
 dir="gcp/tofu"
+budget_dir="gcp/budget"
 policies="gcp/policy"
 packages="tofu_adr008 tofu_secret_sync tofu_config_sync tofu_finops"
+# Run on the two roots together, so it is not in the list above.
+budget_package="tofu_budget"
 problems=0
 
 # The closed list of Trivy ignore comments: "<comment line>|<resource>". A
@@ -58,11 +65,11 @@ header_value() {
     'NR > 10 { exit } index($0, key) == 1 { print substr($0, length(key) + 1); exit }' "$2"
 }
 
-# True when the root has its .tf files; says what is missing otherwise.
+# True when root $1 has its .tf files; says what is missing otherwise.
 root_present() {
-  set -- "$dir"/*.tf
+  set -- "$1"/*.tf
   if [ ! -f "$1" ]; then
-    echo "$dir holds no .tf file: the OpenTofu root of the gcp layer is missing (T106 to T108)." >&2
+    echo "${1%/*} holds no .tf file: an OpenTofu root of the gcp layer is missing (T106 to T108 for gcp/tofu, T110 for gcp/budget)." >&2
     problems=$((problems + 1))
     return 1
   fi
@@ -71,18 +78,27 @@ root_present() {
 
 # Each failing case is refused, by a message that holds its "# expect:" text.
 check_cases() {
-  local case_file package expect out found=0
+  local case_file package expect with out found=0
   for case_file in "$policies"/testdata/*.tf; do
     [ -f "$case_file" ] || continue
     found=$((found + 1))
     package="$(header_value package "$case_file")"
     expect="$(header_value expect "$case_file")"
+    # Optional: a file of the repository, read together with the case.
+    with="$(header_value with "$case_file")"
     if [ -z "$package" ] || [ -z "$expect" ]; then
       echo "$case_file: no '# package:' or '# expect:' line." >&2
       problems=$((problems + 1))
       continue
     fi
-    if out="$(conftest test --no-color --combine --policy "$policies" --namespace "$package" "$case_file" platform.yaml 2>&1)"; then
+    if [ -n "$with" ] && [ ! -f "$with" ]; then
+      echo "$case_file: the '# with:' file $with does not exist." >&2
+      problems=$((problems + 1))
+      continue
+    fi
+    # $with is a path without spaces, or empty: left unquoted on purpose.
+    # shellcheck disable=SC2086
+    if out="$(conftest test --no-color --combine --policy "$policies" --namespace "$package" "$case_file" $with platform.yaml 2>&1)"; then
       echo "$case_file: accepted by $package, yet it is a failing case: $expect" >&2
       problems=$((problems + 1))
     elif ! printf '%s\n' "$out" | grep -F -q -e "$expect"; then
@@ -98,20 +114,31 @@ check_cases() {
 }
 
 run_policy() {
-  local package
+  local package main_present budget_present
   need conftest
   # One package per run: conftest says nothing about a package it does not
   # find (research RS-18), and tests/run-static.sh refuses a policy that no
   # control script names.
-  for package in $packages; do
+  for package in $packages $budget_package; do
     conftest verify --no-color --policy "$policies" --namespace "$package" || problems=$((problems + 1))
   done
   check_cases
-  root_present || return 0
-  for package in $packages; do
-    conftest test --no-color --combine --policy "$policies" --namespace "$package" "$dir"/*.tf platform.yaml ||
-      problems=$((problems + 1))
-  done
+  main_present=0
+  budget_present=0
+  if root_present "$dir"; then main_present=1; fi
+  if root_present "$budget_dir"; then budget_present=1; fi
+  if [ "$main_present" -eq 1 ]; then
+    for package in $packages; do
+      conftest test --no-color --combine --policy "$policies" --namespace "$package" "$dir"/*.tf platform.yaml ||
+        problems=$((problems + 1))
+    done
+  fi
+  # The budget policy reads both roots: the alert, and the identity of the
+  # main root, which must not hold a role that writes budgets.
+  if [ "$main_present" -eq 1 ] && [ "$budget_present" -eq 1 ]; then
+    conftest test --no-color --combine --policy "$policies" --namespace "$budget_package" \
+      "$budget_dir"/*.tf "$dir"/*.tf || problems=$((problems + 1))
+  fi
 }
 
 # Trivy in an emptied environment, with its cache in a temporary directory.
@@ -240,22 +267,37 @@ check_scan_applies_checks() {
 
 # Trivy in an emptied environment. Its cache is a temporary directory.
 run_scan() {
-  local work out
+  local work out scanned root_dir main_present=0
   need trivy
-  root_present || return 0
+  scanned=()
+  if root_present "$dir"; then
+    main_present=1
+    scanned+=("$dir")
+  fi
+  if root_present "$budget_dir"; then
+    scanned+=("$budget_dir")
+  fi
+  if [ "${#scanned[@]}" -eq 0 ]; then
+    return 0
+  fi
   work="$(mktemp -d)"
   mkdir -p "$work/home"
-  if ! trivy_scan "$work" "$dir"; then
-    echo "Trivy refuses $dir: fix each finding, or justify it right above its resource (T109)." >&2
-    problems=$((problems + 1))
+  for root_dir in "${scanned[@]}"; do
+    if ! trivy_scan "$work" "$root_dir"; then
+      echo "Trivy refuses $root_dir: fix each finding, or justify it right above its resource (T109, T110)." >&2
+      problems=$((problems + 1))
+    fi
+    out="$(ignore_findings "$root_dir"/*.tf "$root_dir"/*.tf.json "$root_dir"/*.tfvars "$root_dir"/*.tfvars.json)"
+    if [ -n "$out" ]; then
+      printf '%s\n' "$out" >&2
+      problems=$((problems + 1))
+    fi
+  done
+  # The proof that Trivy applies the Cloud SQL checks is on the main root.
+  if [ "$main_present" -eq 1 ]; then
+    check_scan_applies_checks "$work"
   fi
-  check_scan_applies_checks "$work"
   check_ignore_cases
-  out="$(ignore_findings "$dir"/*.tf "$dir"/*.tf.json "$dir"/*.tfvars "$dir"/*.tfvars.json)"
-  if [ -n "$out" ]; then
-    printf '%s\n' "$out" >&2
-    problems=$((problems + 1))
-  fi
   rm -rf "$work"
 }
 
