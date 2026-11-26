@@ -233,10 +233,9 @@
           "items": { "$ref": "#/$defs/pendingItem" }
         },
         "notes": { "$ref": "#/$defs/text500" },
-        "managed_gap": {
-          "description": "Cloud targets only: why no managed service of the provider covers the need (principle III).",
-          "$ref": "#/$defs/text500"
-        }
+        "choose_when": { "$ref": "#/$defs/chooseWhen" },
+        "validation": { "$ref": "#/$defs/validation" },
+        "offered": { "$ref": "#/$defs/offered" }
       }
     },
     "managedTarget": {
@@ -274,24 +273,55 @@
           "maxItems": 20,
           "items": { "$ref": "#/$defs/pendingItem" }
         },
-        "notes": { "$ref": "#/$defs/text500" }
+        "notes": { "$ref": "#/$defs/text500" },
+        "choose_when": { "$ref": "#/$defs/chooseWhen" },
+        "validation": { "$ref": "#/$defs/validation" },
+        "offered": { "$ref": "#/$defs/offered" }
       }
     },
+    "chooseWhen": {
+      "description": "Cloud options only: when the interview should pick this option over the other, in one line (criteria of principle III: cost, operating load, service level, compliance, data residency, portability, skills, volume).",
+      "$ref": "#/$defs/line300"
+    },
+    "validation": {
+      "description": "Cloud options only. covered: the validation matrix exercises this option. not-covered: it does not, and the interview never proposes it (principle I).",
+      "enum": ["covered", "not-covered"]
+    },
+    "offered": {
+      "description": "Cloud options only: the interview may propose this option. Never true when validation is not-covered, and never without a validation status.",
+      "type": "boolean"
+    },
+    "hostingFields": {
+      "description": "Fields every self-hosted cloud option and every option of a list carries.",
+      "required": ["choose_when", "validation", "offered"]
+    },
+    "offerRules": {
+      "description": "An option that the validation matrix does not cover is never offered.",
+      "dependentRequired": { "offered": ["validation"] },
+      "if": {
+        "required": ["validation"],
+        "properties": { "validation": { "const": "not-covered" } }
+      },
+      "then": { "properties": { "offered": { "const": false } } }
+    },
     "localTarget": {
-      "description": "PC target: free and open source only (principle III).",
+      "description": "PC target: free and open source only, the best free option (principle III). No hosting choice here: the cloud option fields are refused.",
       "allOf": [
         { "$ref": "#/$defs/ossTarget" },
-        { "not": { "required": ["managed_gap"] } }
+        { "not": { "required": ["choose_when"] } },
+        { "not": { "required": ["validation"] } },
+        { "not": { "required": ["offered"] } }
       ]
     },
-    "gcpTarget": {
-      "description": "GCP target: the provider managed service, or an open source component with the reason no managed service covers the need (principle III).",
+    "cloudOption": {
+      "description": "One option of a cloud target: the provider managed service, or an open source component hosted in the cluster. A self-hosted option carries hostingFields; a managed option carries them when it sits in a list, and may omit them in an entry written before ADR-009 changed.",
       "type": "object",
       "required": ["type"],
       "properties": {
         "type": { "enum": ["managed", "oss"] }
       },
       "allOf": [
+        { "$ref": "#/$defs/offerRules" },
         {
           "if": {
             "required": ["type"],
@@ -307,11 +337,37 @@
           "then": {
             "allOf": [
               { "$ref": "#/$defs/ossTarget" },
-              { "required": ["managed_gap"] }
+              { "$ref": "#/$defs/hostingFields" }
             ]
           }
         }
       ]
+    },
+    "gcpTarget": {
+      "description": "GCP target (principle III, constitution 2.0.0; ADR-009, complement of 2026-11-26). Either one option, or a list of two: the managed service first, then the self-hosted component. The interview chooses between them.",
+      "if": { "type": "array" },
+      "then": {
+        "minItems": 2,
+        "maxItems": 2,
+        "prefixItems": [
+          {
+            "allOf": [
+              { "$ref": "#/$defs/offerRules" },
+              { "$ref": "#/$defs/managedTarget" },
+              { "$ref": "#/$defs/hostingFields" }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/$defs/offerRules" },
+              { "$ref": "#/$defs/ossTarget" },
+              { "$ref": "#/$defs/hostingFields" }
+            ]
+          }
+        ],
+        "items": false
+      },
+      "else": { "$ref": "#/$defs/cloudOption" }
     }
   }
 }

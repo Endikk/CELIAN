@@ -56,10 +56,18 @@ def entry_findings(
         *(
             finding
             for name, target in targets.items()
-            for finding in _target_findings(target, ("targets", name), shown, ctx)
+            for suffix, option in _options(target)
+            for finding in _target_findings(option, ("targets", name, *suffix), shown, ctx)
         ),
         *_standards_findings(targets, shown),
     ]
+
+
+def _options(target: Mapping[str, Any] | list[Mapping[str, Any]]) -> list[tuple[PathParts, Any]]:
+    """The options of a target with their path suffix: a list holds several (ADR-009)."""
+    if isinstance(target, list):
+        return [((index,), option) for index, option in enumerate(target)]
+    return [((), target)]
 
 
 def duplicate_id_findings(entries: list[tuple[str, str]]) -> list[Finding]:
@@ -271,8 +279,14 @@ def _pending_findings(
     return [warning(shown, json_path(parts), "pending", message)]
 
 
-def _standards_findings(targets: Mapping[str, Mapping[str, Any]], shown: str) -> list[Finding]:
-    shared = set.intersection(*(set(target["standards"]) for target in targets.values()))
+def _standards_findings(targets: Mapping[str, Any], shown: str) -> list[Finding]:
+    """A target exposes the standards of all its options, so that one of them may share."""
+    shared = set.intersection(
+        *(
+            {standard for _, option in _options(target) for standard in option["standards"]}
+            for target in targets.values()
+        )
+    )
     if shared:
         return []
     return [warning(shown, "targets", "standards", STANDARDS_MESSAGE)]

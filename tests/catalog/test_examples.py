@@ -47,9 +47,10 @@ def errors_of(findings: list[Finding]) -> set[Expected]:
 def latest_verification(directory: Path) -> date:
     """The most recent verified_on of a catalog, read with plain safe_load."""
     dates = [
-        date.fromisoformat(target["verified_on"])
+        date.fromisoformat(option["verified_on"])
         for path in directory.glob("*.yaml")
         for target in yaml.safe_load(path.read_text(encoding="utf-8"))["targets"].values()
+        for option in (target if isinstance(target, list) else [target])
     ]
     return max(dates)
 

@@ -1,10 +1,11 @@
-# Must fail: managed_gap on the local target, which takes open source only
-# and has no managed service to fall back on (principle III).
+# Must fail: managed_gap on the local target. The field is retired on every
+# target (constitution 2.0.0, principle III; ADR-009, complement of
+# 2026-11-26), and the local target takes open source only.
 # Based on tests/catalog/valid/minimal.yaml, with targets.local.managed_gap
 # added.
 # Expected error, and only this one:
-#   path: targets/local   validator: not
-#   message: 'managed_gap' is not allowed here
+#   path: targets/local   validator: additionalProperties
+#   message: Additional properties are not allowed ('managed_gap' was unexpected)
 schema_version: 1
 id: minimal
 summary: Brique fictive pour les tests du contrôle du catalogue.
