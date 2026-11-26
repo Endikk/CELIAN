@@ -487,7 +487,7 @@ Les questions ci-dessous sortent du tableau des points ouverts. Chacune garde sa
 | `Kustomization` suspendue sans objet source | à vérifier sur la documentation de Flux 2.10 | [DEV] | Lecture, puis repli décrit dans research RS-14 | 12 |
 | Attributs OpenTofu des activations GKE | non vérifiés (ADR-005, 007, 010) | [OPS] | Documentation du provider `google` | 13 |
 | Validation OpenTofu hors ligne avec chiffrement et verrou multi-plateformes | non vérifiée (ADR-008, question 5) | [OPS] | Essai sur la racine du golden repo | 13 |
-| Alerte budget | ouverte (ADR-008, question 1) | [OPS], [SECU] | Racine séparée ou alias de provider | 13 |
+| Alerte budget | tranchée par le DSI le 2026-11-25 : racine séparée `gcp/budget/` (T110, RS-26) | [OPS], [SECU] | Racine séparée ou alias de provider | 13 |
 | Signature cosign d'Envoy Gateway | emplacement non trouvé | [SECU] | Commande vérifiée sur la documentation de cosign ; un échec rouvre l'ADR-005 | S24 |
 | Débit visé du critère des 15 minutes | à fixer après le golden repo | [FINOPS] | Mesure D02 | 17 |
 | Méthode de mesure du volume en démo | à reprendre des scripts de BENCH | [BENCH] | Protocole de l'étape 17 | 17 |

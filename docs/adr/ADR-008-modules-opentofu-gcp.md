@@ -146,6 +146,10 @@ La porte reste ouverte. La couche `gcp` est propre à GCP par construction, et r
   pas les afficher.
 - Aucun contexte ni identifiant GKE sur le poste avant la GATE 2.
 
+### Complément du 2026-11-26
+
+La question ouverte 1 est tranchée par la décision du DSI du 2026-11-25 : une racine OpenTofu séparée, `golden/saas-b2b/gcp/budget/`, appliquée à la main avant la racine principale et détruite en dernier. Elle est écrite par T110. Le détail, les conditions et ce qui reste à constater au premier apply autorisé sont dans `golden/saas-b2b/gcp/budget/README.md` et dans RS-26. Le texte d'origine ci-dessus n'est pas modifié.
+
 ## Conformité à la constitution
 
 Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en version 1.0.0.

@@ -1456,7 +1456,8 @@ Sources : la documentation du provider `hashicorp/google` au tag `v8.12.0` (comm
 - Que l'alerte part bien aux destinataires par défaut sans `all_updates_rule` (la page de Google le décrit, rien ne l'a essayé).
 - Que `projects/<numéro>` et la devise du compte sont acceptés par l'API.
 - Que l'activation de l'API et l'appel du budget passent dans le même apply avec les identifiants de l'utilisateur.
-- Le seuil de prévision sur un projet jeune : la page ne donne pas d'historique minimal.
+- Le seuil de prévision sur un projet jeune : historique de prévision inconnu, la page ne donne pas d'historique minimal, à constater au premier apply autorisé, porteur [FINOPS]. D'ici là, seuls les trois seuils sur le réel sont fiables.
+- Que `project_number` est celui du projet de `gcp/tofu/` : rien ne le recoupe hors ligne, et un numéro d'un autre projet ferait suivre au budget une autre dépense. À vérifier par la personne qui applique, avant le premier apply.
 - Renovate : son gestionnaire `terraform` lit `**/*.tf` et le verrou (RS-16), donc suit `gcp/budget/` sans règle de plus ; la montée d'un provider présent dans les deux verrous devrait tenir en une seule PR. Aucun Renovate n'a tourné sur cette racine.
 
 | Source | Lue le | Ce qu'on y prend |

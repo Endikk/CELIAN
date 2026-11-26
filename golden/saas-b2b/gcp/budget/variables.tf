@@ -43,7 +43,7 @@ variable "billing_account_id" {
 }
 
 variable "budget_amount" {
-  description = "Monthly amount of the budget, in whole units of budget_currency, chosen with [FINOPS] (R-05). The alert caps nothing: it only warns."
+  description = "Monthly amount of the budget, in whole units of budget_currency, chosen with [FINOPS] (R-05). It is compared with the gross cost, before credits (credit_types_treatment = EXCLUDE_ALL_CREDITS): a free trial or a promotion does not lower the figure the thresholds see. The alert caps nothing: it only warns."
   type        = number
 
   validation {

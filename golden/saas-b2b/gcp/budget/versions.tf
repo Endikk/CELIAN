@@ -21,10 +21,13 @@ terraform {
   # Partial configuration: the bucket comes at `tofu init`, by
   # -backend-config, from whoever applies this root by hand with the agreement
   # of Lucas. The prefix is written here, and differs from the one of
-  # gcp/tofu/ (S15, T110): the state of the budget is its own object, which
-  # the identity of the main root has no reason to read. Never pass `prefix`
-  # to -backend-config: a command-line value overrides this one, and S15
-  # cannot see it.
+  # gcp/tofu/ (S15, T110): the state of the budget is its own object. The
+  # prefix separates two paths, not two sets of rights: the IAM of a GCS
+  # bucket applies to the whole bucket (unless an IAM condition on the object
+  # name narrows it), so an identity that reaches the bucket and the same KMS
+  # key reads and writes this state too. Distinct path, not isolation of
+  # rights. Never pass `prefix` to -backend-config: a command-line value
+  # overrides this one, and S15 cannot see it.
   backend "gcs" {
     prefix = "budget"
   }
