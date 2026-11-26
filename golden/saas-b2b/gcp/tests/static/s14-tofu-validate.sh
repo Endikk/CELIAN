@@ -41,6 +41,42 @@ sandboxed() {
 
 problems=0
 
+# Value of the "# <key>: <value>" line of file $2, in its first lines.
+header_value() {
+  awk -v key="# $1: " \
+    'NR > 10 { exit } index($0, key) == 1 { print substr($0, length(key) + 1); exit }' "$2"
+}
+
+# One line for each provider block of the lock file $1 that is not on the
+# registry of OpenTofu. Stub: refuses nothing yet.
+lock_findings() {
+  return 0
+}
+
+# Each failing lock of gcp/tests/static/s14-cases/ is refused, by a message
+# that holds its "# expect:" text.
+check_lock_cases() {
+  local case_file expect out found=0
+  for case_file in gcp/tests/static/s14-cases/*.hcl; do
+    [ -f "$case_file" ] || continue
+    found=$((found + 1))
+    expect="$(header_value expect "$case_file")"
+    out="$(lock_findings "$case_file")"
+    if [ -z "$out" ]; then
+      echo "$case_file: accepted, yet it is a failing lock: $expect" >&2
+      problems=$((problems + 1))
+    elif ! printf '%s\n' "$out" | grep -F -q -e "$expect"; then
+      echo "$case_file: refused, but no message holds: $expect" >&2
+      printf '%s\n' "$out" >&2
+      problems=$((problems + 1))
+    fi
+  done
+  if [ "$found" -eq 0 ]; then
+    echo "gcp/tests/static/s14-cases holds no failing lock." >&2
+    problems=$((problems + 1))
+  fi
+}
+
 check_root() {
   local dir="$1" lock="$1/.terraform.lock.hcl" data first
   data="$work/data-${dir//\//-}"
@@ -72,6 +108,8 @@ check_root() {
 
   sandboxed "$data" tofu -chdir="$dir" validate -no-color
 }
+
+check_lock_cases
 
 for dir in $roots; do
   check_root "$dir" || problems=$((problems + 1))
