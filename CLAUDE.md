@@ -203,7 +203,8 @@ section 8 du brief), puis par un ADR (`docs/adr/ADR-XXX-sujet.md`).
   ghcr.io, quay.io et mcr.microsoft.com : leurs mises à jour attendent que
   Lucas les coche sur le tableau de bord, jamais un agent (ADR-016).
 - Réglages GitHub en code : `scripts/github/apply-settings.sh` (fusion en
-  squash seule, permissions des workflows) et `.github/rulesets/main.json`. Le
+  squash seule, permissions des workflows, approbation des workflows de tout
+  contributeur externe, `all_external_contributors`) et `.github/rulesets/main.json`. Le
   dépôt est public depuis le 15/11/2026, par décision de Lucas. Le script
   demande les droits admin : Lucas le lance lui-même, hors session d'agent.
 - Licence du générateur : Apache-2.0.
