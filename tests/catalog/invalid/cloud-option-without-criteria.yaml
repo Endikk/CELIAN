@@ -1,0 +1,65 @@
+# Must fail: a cloud option in the list without choose_when, the criteria that
+# tell the interview when to pick it (principle III).
+# Based on tests/catalog/valid/gcp-options.yaml, with choose_when removed from
+# the second option of targets.gcp.
+# Expected error, and only this one:
+#   path: targets/gcp/1   validator: required
+#   message: 'choose_when' is a required property
+schema_version: 1
+id: minimal
+summary: Brique fictive avec une option managée et une option auto-hébergée sur gcp.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-01"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+  gcp:
+    - type: managed
+      service: Example Managed
+      provider: google
+      governance:
+        model: single-vendor
+        body: Example Provider
+      status: active
+      verified_on: "2026-11-19"
+      standards: []
+      decisions:
+        adr: [ADR-009]
+      sources:
+        - url: https://example.invalid/managed
+          read_on: "2026-11-19"
+      choose_when: Choisir le service managé quand l'équipe ne veut pas exploiter la brique.
+      validation: covered
+      offered: true
+    - type: oss
+      service: Example OSS
+      version: "1.0.0"
+      license: Apache-2.0
+      governance:
+        model: foundation
+        body: Example Foundation
+      status: active
+      last_release_on: "2026-11-01"
+      verified_on: "2026-11-19"
+      standards: []
+      decisions:
+        adr: [ADR-009]
+      sources:
+        - url: https://example.invalid/oss
+          read_on: "2026-11-19"
+      validation: not-covered
+      offered: false

@@ -1,13 +1,11 @@
-# Must fail: an open source component on gcp without managed_gap, the reason
-# no managed service covers the need (principle III).
-# Based on tests/catalog/valid/minimal.yaml, with targets.gcp replaced by a
-# copy of targets.local.
-# Expected error, and only this one:
-#   path: targets/gcp   validator: required
-#   message: 'managed_gap' is a required property
+# Valid: a single open source option on gcp, with no managed_gap (constitution
+# 2.0.0, principle III; ADR-009, complement of 2026-11-26). A self-hosted
+# option carries its criteria and its validation status.
+# Fictitious data for the catalog check tests: nothing here describes a real
+# product.
 schema_version: 1
-id: minimal
-summary: Brique fictive pour les tests du contrôle du catalogue.
+id: oss-on-gcp
+summary: Brique fictive avec un composant libre seul sur gcp.
 declared_by: spec
 targets:
   local:
@@ -44,3 +42,6 @@ targets:
     sources:
       - url: https://example.invalid/oss
         read_on: "2026-11-19"
+    choose_when: Choisir le composant libre quand la portabilité compte plus que l'exploitation.
+    validation: covered
+    offered: true

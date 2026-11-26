@@ -184,11 +184,16 @@ change.
    l'écrit dans la spec et dans un ADR du projet généré.
 4. Sur `local`, rien ne change : `oss` seul, la meilleure option libre.
 
-Le format des entrées (plusieurs options par cible, fin de `managed_gap`),
-`schema/catalog-entry.schema.json`, `catalog/README.md` et le contrôle de
-`scripts/catalog/` ne changent pas dans ce complément. Ils s'ajustent par un ADR
-de la phase 3, avec le schéma de spec v1 (le champ de mode d'hébergement, voir
-US-013 du PRD). Les entrées existantes restent valides en attendant. Le tableau
+Le format des entrées (plusieurs options par cible, fin de `managed_gap`) est
+entré le 2026-11-26, sur décision du DSI, sans attendre la phase 3 : la cible
+`gcp` prend une option seule ou une liste de deux options, managée puis libre,
+chacune avec `choose_when`, `validation` et `offered` ; une option non couverte
+n'est jamais proposée (`schema/catalog-entry.schema.json`, `catalog/README.md`,
+contrôle de `scripts/catalog/`). Le lien avec le champ de mode d'hébergement de
+la spec v1 (US-013 du PRD) reste à la phase 3. Les ADR et benchmarks qui citent
+`managed_gap` comme repli ou voie écartée décrivent l'état d'avant ; [ARCHI] les
+relit et ne les complète que si une décision en dépend. Les entrées existantes
+restent valides. Le tableau
 de conformité ci-dessous date du 2026-11-19 et se lit contre la version 1.0.0.
 
 ## Conformité à la constitution
