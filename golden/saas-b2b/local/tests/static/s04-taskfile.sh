@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # control: S04
-# carries: FR-004, FR-007; ADR-007, condition 1; ADR-011, condition 11; research RS-09
+# carries: FR-004, FR-007; ADR-007, condition 1; ADR-011, condition 11; research RS-09, RS-10
 #
 # Inventory part of S04 (T043). The head of Taskfile.yml lists every
 # command of the tasks and of the scripts that creates, changes or removes
@@ -27,6 +27,21 @@
 #   dynamic variable (sh:) that reads one;
 # - every task that runs local/scripts/secrets.sh is silent: Task prints a
 #   command before it runs it; and one task at least runs it.
+#
+# Key part of S04 (T072; research RS-10), on the same files: the key and the
+# certificate of gateway-tls come from one openssl req that writes both to
+# its standard output, and no file ever holds them. So:
+# - openssl req without -keyout /dev/stdout (without it, req writes the key
+#   to the default_keyfile of the configuration, privkey.pem in some); any
+#   -keyout or -out to another path, on req, genpkey, genrsa, ecparam,
+#   x509 -signkey and the other commands that make or convert a key;
+# - a redirection, tee or mktemp on the output of those commands, and a
+#   redirection to a file anywhere in local/scripts/secrets.sh;
+# - the PEM in a variable or in an argument: a command substitution, read,
+#   export, env or base64 on those commands; base64 in local/scripts/secrets.sh;
+#   tls.key read into a variable (its length goes through wc -c);
+# - kubectl create secret tls, which asks for --cert and --key as paths of
+#   files, and --from-file, like create secret generic and --from-literal.
 #
 # The detection is first checked against samples.
 # The samples and the flags are shell text, read and never expanded here.
@@ -104,8 +119,8 @@ secret_findings() {
     if [[ $text =~ (kubectl|kube)\ .*appl[y]\ .*-f\ -( |$) ]] || [[ $text =~ appl[y].*[Ss]ecre[t] ]]; then
       printf '%s:%s: kubectl apply of a Secret or from the standard input, which copies the value into an annotation: %s\n' "$file" "$number" "$text"
     fi
-    if [[ $text =~ create\ secre[t]|--from-litera[l]|--from-env-fil[e]|--save-confi[g] ]]; then
-      printf '%s:%s: a value in an argument or in an annotation: %s\n' "$file" "$number" "$text"
+    if [[ $text =~ create\ secre[t]|--from-litera[l]|--from-fil[e]|--from-env-fil[e]|--save-confi[g] ]]; then
+      printf '%s:%s: a value in an argument, in a file or in an annotation (create secret tls asks for files): %s\n' "$file" "$number" "$text"
     fi
     if [[ $text =~ (kubectl|kube)\ .*creat[e]\ .*-f\ -( |$) ]] && [ "${file##*/}" != "${secrets_script##*/}" ]; then
       printf '%s:%s: kubectl create from the standard input outside %s: %s\n' "$file" "$number" "$secrets_script" "$text"
@@ -122,6 +137,74 @@ secret_findings() {
         fi
         ;;
     esac
+  done < <(logical_lines "$file")
+}
+
+# The commands of openssl that make or convert a key or a certificate (x509
+# and ca too, for -signkey and -out), and, among them, those that handle the
+# private key itself.
+openssl_call='(^|[^A-Za-z0-9_./-])openssl (req|genpkey|genrsa|gendsa|dsaparam|ecparam|pkcs12|pkey|rsa|ec|x509|ca)( |$)'
+openssl_key='(^|[^A-Za-z0-9_./-])openssl (req|genpkey|genrsa|gendsa|dsaparam|ecparam|pkcs12|pkey|rsa|ec)( |$)'
+openssl_req='(^|[^A-Za-z0-9_./-])openssl req( |$)'
+openssl_out='-(key)?out +([^ ]+)'
+req_keyout='-keyout /dev/stdout( |$)'
+to_null='>/dev/null'
+# What would keep a PEM in a variable or an argument, and a command that
+# writes a copy of its input.
+pem_capture='\$\(|`|(^|[ ;|])(read|mapfile|readarray|export|env|base64)( |$)'
+read_capture='\$\(|`|(^|[ ;|])read '
+tee_or_temp='(^|[^A-Za-z0-9_-])(te[e]|mktem[p])( |$)'
+base64_word='(^|[^A-Za-z0-9_])base64( |$)'
+tls_key_field='tls\\?\.key'
+wc_length='wc -c'
+
+# tls_findings FILE: one line per rule that a command of FILE breaks, in the
+# key part of S04 (research RS-10).
+tls_findings() {
+  local file="$1" number text rest stripped path
+  local in_secrets=no
+  [ "${file##*/}" = "${secrets_script##*/}" ] && in_secrets=yes
+  while IFS=$'\t' read -r number text; do
+    if [[ $text =~ $openssl_call ]]; then
+      rest="$text"
+      while [[ $rest =~ $openssl_out ]]; do
+        path="${BASH_REMATCH[2]%%[)\";|&]*}"
+        if [ "$path" != /dev/stdout ]; then
+          printf '%s:%s: openssl writes to the path %s, not to /dev/stdout: %s\n' "$file" "$number" "$path" "$text"
+          break
+        fi
+        rest="${rest#*"${BASH_REMATCH[0]}"}"
+      done
+      if [[ $text =~ $openssl_req ]] && ! [[ $text =~ $req_keyout ]]; then
+        printf '%s:%s: openssl req without -keyout /dev/stdout writes the key to the file of its configuration: %s\n' "$file" "$number" "$text"
+      fi
+      stripped="${text//$to_null/}"
+      case "$stripped" in
+        *'>'*) printf '%s:%s: a redirection on the output of openssl: %s\n' "$file" "$number" "$text" ;;
+      esac
+      if [[ $text =~ $tee_or_temp ]]; then
+        printf '%s:%s: tee or mktemp on the output of openssl: %s\n' "$file" "$number" "$text"
+      fi
+    fi
+    if [[ $text =~ $openssl_key ]] && [[ $text =~ $pem_capture ]]; then
+      printf '%s:%s: the PEM of openssl in a variable or an argument: %s\n' "$file" "$number" "$text"
+    fi
+    if [[ $text =~ $tls_key_field ]] && [[ $text =~ $read_capture ]] && ! [[ $text =~ $wc_length ]]; then
+      printf '%s:%s: tls.key read into a variable; only its length may be read, through wc -c: %s\n' "$file" "$number" "$text"
+    fi
+    if [ "$in_secrets" = yes ]; then
+      if [[ $text =~ $base64_word ]]; then
+        printf '%s:%s: base64 in %s, which writes the PEM as it is in stringData: %s\n' "$file" "$number" "$secrets_script" "$text"
+      fi
+      if [[ $text =~ $tee_or_temp ]] && ! [[ $text =~ $openssl_call ]]; then
+        printf '%s:%s: tee or mktemp in %s: %s\n' "$file" "$number" "$secrets_script" "$text"
+      fi
+      stripped="${text//$to_null/}"
+      stripped="${stripped//>&[0-9]/}"
+      case "$stripped" in
+        *'>'*) printf '%s:%s: a redirection to a file in %s: %s\n' "$file" "$number" "$secrets_script" "$text" ;;
+      esac
+    fi
   done < <(logical_lines "$file")
 }
 
@@ -245,6 +328,55 @@ if [ -n "$good_found" ]; then
   printf '%s\n' "$good_found" >&2
   exit 1
 fi
+# The key part (research RS-10): every refused form of the list of T072, one
+# finding each unless the count says two; then the commands of RS-10 itself.
+printf '%s\n' \
+  'openssl req -x509 -newkey ec -nodes -keyout key.pem -out cert.pem' \
+  'openssl req -x509 -newkey ec -nodes -out /dev/stdout' \
+  'openssl req -x509 -nodes -keyout /dev/stdout -out /dev/stdout > cert.pem' \
+  'openssl req -x509 -nodes -keyout /dev/stdout -out /dev/stdout | tee cert.pem' \
+  'key="$(openssl req -x509 -nodes -keyout /dev/stdout -out /dev/stdout)"' \
+  'openssl genpkey -algorithm EC -out key.pem' \
+  'openssl genrsa -out key.pem 2048' \
+  'openssl ecparam -genkey -name prime256v1 -out key.pem' \
+  'openssl x509 -req -signkey key.pem -out cert.pem' \
+  'kubectl create secret tls gateway-tls --cert=c --key=k' \
+  'kubectl create secret generic gateway-tls --from-file=tls.key=key.pem' \
+  'kube create configmap pem --from-file=a=b' \
+  'crt="$(kube get secret gateway-tls --output jsonpath={.data.tls\.key})"' \
+  'openssl req -x509 -nodes -keyout /dev/stdout -out /dev/stdout | base64' >"$samples/bad-tls.sh"
+mkdir "$samples/bad-tls"
+printf '%s\n' \
+  'base64 -d' \
+  'cat | tee out.pem' \
+  'head -c 8 /dev/urandom > seed' >"$samples/bad-tls/secrets.sh"
+printf '%s\n' \
+  '# openssl req -keyout key.pem in a comment' \
+  '{' \
+  '  printf '"'"'apiVersion: v1\nkind: Secret\nstringData:\n'"'"' "$APP_NAMESPACE"' \
+  '  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \' \
+  '    -keyout /dev/stdout -out /dev/stdout -days 365 -subj /CN=localhost \' \
+  '    -addext subjectAltName=DNS:localhost,IP:127.0.0.1 2>/dev/null |' \
+  '    awk '"'"'/^-----BEGIN [A-Z ]*PRIVATE KEY-----$/ { print "  tls.key: |" }'"'"'' \
+  '} | kube create -f - >/dev/null ||' \
+  '  die "the Secret was not created."' \
+  'length="$(kube get secret gateway-tls --output '"'"'jsonpath={.data.tls\.key}'"'"' | wc -c | tr -d '"'"' '"'"')"' \
+  'kube get secret gateway-tls --output '"'"'jsonpath={.data.tls\.crt}'"'"' | openssl x509 -noout -checkend 2592000 >/dev/null' \
+  'command -v openssl >/dev/null 2>&1 || die "openssl is missing"' \
+  'printf '"'"'secrets: %s\n'"'"' "$1" >&2' >>"$samples/good/secrets.sh"
+tls_bad_other="$({ tls_findings "$samples/bad-tls.sh"; secret_findings "$samples/bad-tls.sh"; } | wc -l | tr -d ' ')"
+tls_bad_secrets="$({ tls_findings "$samples/bad-tls/secrets.sh"; secret_findings "$samples/bad-tls/secrets.sh"; } | wc -l | tr -d ' ')"
+if [ "$tls_bad_other" != 15 ] || [ "$tls_bad_secrets" != 3 ]; then
+  echo "the key part caught $tls_bad_other of the 15 findings of its bad samples, and $tls_bad_secrets of the 3 of its bad secrets.sh:" >&2
+  { tls_findings "$samples/bad-tls.sh"; secret_findings "$samples/bad-tls.sh"; tls_findings "$samples/bad-tls/secrets.sh"; secret_findings "$samples/bad-tls/secrets.sh"; } >&2
+  exit 1
+fi
+tls_good_found="$(tls_findings "$samples/good/secrets.sh"; secret_findings "$samples/good/secrets.sh")"
+if [ -n "$tls_good_found" ]; then
+  echo "the key part refused the good samples, the commands of research RS-10:" >&2
+  printf '%s\n' "$tls_good_found" >&2
+  exit 1
+fi
 expected="$(printf '%s\n' "$samples/bad.yml:loud 0" "$samples/bad.yml:quiet 1")"
 got="$(secret_tasks "$samples/bad.yml")"
 if [ "$got" != "$expected" ]; then
@@ -275,7 +407,7 @@ if [ -z "$found" ]; then
 fi
 
 # The secret part, on the real files.
-secret_problems="$(command_files | while IFS= read -r file; do secret_findings "$file"; done)"
+secret_problems="$(command_files | while IFS= read -r file; do secret_findings "$file"; tls_findings "$file"; done)"
 if [ -n "$secret_problems" ]; then
   echo "Commands that could expose a secret (ADR-007, condition 1):" >&2
   printf '  %s\n' "$secret_problems" >&2

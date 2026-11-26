@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# Simulated openssl of the preflight tests P01 to P05. The preflight checks
+# only look for the command (command -v): they never run it, since the key of
+# the Secret gateway-tls is made later, by local/scripts/secrets.sh. Any call
+# is logged as UNEXPECTED and fails, which proves that a refusal, or a pass,
+# came without a key being made.
+#
+# FAKE_LOG  file that receives one line per call
+set -euo pipefail
+
+if [ -n "${FAKE_LOG:-}" ]; then
+  printf '%s\n' "openssl $*" >>"$FAKE_LOG"
+  printf '%s\n' "UNEXPECTED openssl $*" >>"$FAKE_LOG"
+fi
+printf 'fake openssl: unexpected call: openssl %s\n' "$*" >&2
+exit 99

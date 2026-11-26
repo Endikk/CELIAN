@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+# Simulated awk of the preflight tests P01 to P05. The preflight checks only
+# look for the command (command -v): they never run it, since awk labels the
+# PEM blocks of the Secret gateway-tls later, in local/scripts/secrets.sh.
+# Any call is logged as UNEXPECTED and fails.
+#
+# FAKE_LOG  file that receives one line per call
+set -euo pipefail
+
+if [ -n "${FAKE_LOG:-}" ]; then
+  printf '%s\n' "awk $*" >>"$FAKE_LOG"
+  printf '%s\n' "UNEXPECTED awk $*" >>"$FAKE_LOG"
+fi
+printf 'fake awk: unexpected call: awk %s\n' "$*" >&2
+exit 99

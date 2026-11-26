@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # control: E03
-# carries: FR-002, FR-003; ADR-004, condition 1; ADR-006, condition 3; ADR-011, conditions 1 and 2; R-34
+# carries: FR-002, FR-003, FR-004; ADR-004, condition 1; ADR-006, condition 3; ADR-011, conditions 1 and 2; R-34; research RS-10
 #
 # E03, as steps 6 to 8 can check it (tasks.md, gaps 2, 20, 21 and 34):
 # - every port that a node of the cluster publishes listens on 127.0.0.1,
@@ -17,6 +17,10 @@
 #   must get an HTTP answer other than 404, the answer of Envoy when no
 #   route matches: the HTTPRoutes match. Their Services arrive with step 9,
 #   and Gateway API wants a 500 meanwhile (research RS-02);
+# - the HTTPS listener serves the certificate of the Secret gateway-tls:
+#   the SHA-256 fingerprint of the certificate that openssl s_client reads
+#   on 127.0.0.1 equals that of tls.crt, and x509 -checkend 0 finds it
+#   unexpired (research RS-10; tasks.md, gap 80). No -k, no file;
 # - the namespace envoy-gateway-system enforces Pod Security (restricted or
 #   baseline) and Pod Security refused none of its pods;
 # - what a pod of the cluster reaches of the mirror (ADR-011, condition 2;
@@ -207,6 +211,56 @@ for path in / /api/healthz; do
     *) printf 'note: 127.0.0.1:%s%s answers %s through the gateway.\n' "$E2E_GATEWAY_HTTP_PORT" "$path" "$code" ;;
   esac
 done
+
+# The HTTPS listener (T074; research RS-10; tasks.md, gap 80). The certificate
+# that 127.0.0.1:HTTPS_PORT serves is the one of the Secret gateway-tls, and it
+# has not expired. openssl s_client reads the certificate that the listener
+# presents, with the name localhost as SNI; no -k, no trust store, no file:
+# the certificate goes by pipes, and only public values are compared, the
+# SHA-256 fingerprint of the served certificate and that of tls.crt in the
+# Secret. The SAN is not checked apart: it is the certificate of the Secret
+# that is served, and E04 checks that it is the one task up made.
+# served_certificate PORT: the PEM certificate that the listener presents,
+# empty when it presents none. s_client is stopped after READ_SECONDS by a
+# watchdog whose output goes nowhere, so that the pipe closes with s_client.
+served_certificate() {
+  {
+    openssl s_client -connect "127.0.0.1:$1" -servername localhost </dev/null 2>/dev/null &
+    local client=$!
+    ( sleep "$READ_SECONDS" && kill "$client" ) >/dev/null 2>&1 &
+    local watchdog=$!
+    wait "$client" 2>/dev/null
+    kill "$watchdog" 2>/dev/null
+  } | openssl x509 2>/dev/null
+}
+
+served=""
+waited=0
+while :; do
+  served="$(served_certificate "$E2E_GATEWAY_HTTPS_PORT")"
+  [ -n "$served" ] && break
+  [ "$waited" -lt "$ANSWER_SECONDS" ] || break
+  sleep "$ANSWER_PAUSE_SECONDS"
+  waited=$((waited + ANSWER_PAUSE_SECONDS))
+done
+if [ -z "$served" ]; then
+  fail "127.0.0.1:$E2E_GATEWAY_HTTPS_PORT presents no certificate within $ANSWER_SECONDS s: the Gateway has no HTTPS listener"
+else
+  served_sum="$(printf '%s\n' "$served" | cert_fingerprint)"
+  secret_sum="$(secret_value "$E2E_TLS_SECRET" tls.crt 2>/dev/null | cert_fingerprint)"
+  if [ -z "$secret_sum" ]; then
+    fail "the Secret $E2E_TLS_SECRET has no readable certificate tls.crt"
+  elif [ "$served_sum" != "$secret_sum" ]; then
+    fail "the certificate served on 127.0.0.1:$E2E_GATEWAY_HTTPS_PORT (SHA-256 ${served_sum:-unreadable}) is not the one of the Secret $E2E_TLS_SECRET ($secret_sum)"
+  else
+    printf 'note: 127.0.0.1:%s serves the certificate of %s, SHA-256 %s.\n' "$E2E_GATEWAY_HTTPS_PORT" "$E2E_TLS_SECRET" "$served_sum"
+  fi
+  if printf '%s\n' "$served" | openssl x509 -noout -checkend 0 >/dev/null 2>&1; then
+    printf 'note: the certificate served on 127.0.0.1:%s has not expired.\n' "$E2E_GATEWAY_HTTPS_PORT"
+  else
+    fail "the certificate served on 127.0.0.1:$E2E_GATEWAY_HTTPS_PORT has expired: delete the Secret $E2E_TLS_SECRET and run task up"
+  fi
+fi
 
 # What a pod reaches of the mirror, from a namespace of its own. The script
 # runs in the pod, $1 being the name of the mirror container; connect sends

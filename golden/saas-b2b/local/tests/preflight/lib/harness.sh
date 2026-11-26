@@ -18,7 +18,7 @@ PREFLIGHT_ROOT="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../../../..
 PREFLIGHT="$PREFLIGHT_ROOT/local/scripts/preflight.sh"
 PREFLIGHT_LIB="$PREFLIGHT_ROOT/local/scripts/lib/preflight-checks.sh"
 FAKES_DIR="$PREFLIGHT_ROOT/local/tests/preflight/fakes"
-ALL_FAKES="docker kind kubectl uname"
+ALL_FAKES="docker kind kubectl uname openssl awk"
 
 # Memory sizes handed to the fake docker by the tests, in bytes.
 # shellcheck disable=SC2034 # used by the tests that source this file
