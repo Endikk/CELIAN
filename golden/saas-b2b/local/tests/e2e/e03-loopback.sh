@@ -20,7 +20,7 @@
 # - the namespace envoy-gateway-system enforces Pod Security (restricted or
 #   baseline) and Pod Security refused none of its pods;
 # - what a pod of the cluster reaches of the mirror (ADR-011, condition 2;
-#   R-34; tasks.md, gaps 21, 29, 34, 78 and 86): from a pod of another
+#   R-34; tasks.md, gaps 21, 29, 34, 98 and 106): from a pod of another
 #   namespace, on the Postgres image, which carries bash, E03 prints whether
 #   the name of the mirror resolves and the status line of each request, and
 #   judges them. GET /v2/_catalog answers 200. The start of a push, POST
@@ -250,10 +250,10 @@ else
 fi
 
 # The mirror is read-only for a pod (ADR-011, complement of 2026-11-26;
-# tasks.md, gaps 29, 78 and 86): the anonymous policy of zot grants read and
+# tasks.md, gaps 29, 98 and 106): the anonymous policy of zot grants read and
 # nothing else, so the catalog answers 200 and each write, the start of a
 # push, the PUT of a manifest and the DELETE of one, is refused with 401, the
-# status measured on kind (tasks.md, gap 93). A write that got through could
+# status measured on kind (tasks.md, gap 113). A write that got through could
 # fill the volume of the mirror and delete what it holds.
 # probe_code REQUEST: the status code that the pod got for REQUEST, empty
 # when it got no answer.

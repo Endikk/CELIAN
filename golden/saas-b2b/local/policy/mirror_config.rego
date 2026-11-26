@@ -179,7 +179,7 @@ read_only_access := {"repositories": {"**": {"anonymousPolicy": ["read"]}}}
 deny contains msg if {
 	is_object(zot)
 	object.get(object.get(zot, "http", {}), "accessControl", null) != read_only_access
-	msg := sprintf("%s: http.accessControl must be %v, the anonymous policy that grants read on every repository and nothing else, so that no pod of the cluster writes to the mirror (ADR-011, complement of 2026-11-26; tasks.md, gaps 29 and 78)", [label, read_only_access])
+	msg := sprintf("%s: http.accessControl must be %v, the anonymous policy that grants read on every repository and nothing else, so that no pod of the cluster writes to the mirror (ADR-011, complement of 2026-11-26; tasks.md, gaps 29 and 98)", [label, read_only_access])
 }
 
 credential_keys := {"credentialsfile", "password", "username", "htpasswd", "token", "secret", "auth", "accesscontrol", "bearer", "ldap", "openid"}

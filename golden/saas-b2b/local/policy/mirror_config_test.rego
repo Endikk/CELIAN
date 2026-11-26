@@ -84,7 +84,7 @@ test_s13_rejects_http_authentication if {
 }
 
 # The mirror is read-only for anonymous clients (ADR-011, complement of
-# 2026-11-26; tasks.md, gaps 29 and 78): http.accessControl is required, and
+# 2026-11-26; tasks.md, gaps 29 and 98): http.accessControl is required, and
 # it is exactly the policy that grants read on every repository.
 with_access(access) := object.union(zot_config, {"http": {"accessControl": access}})
 
