@@ -24,7 +24,7 @@ Le dépôt demande un moteur de conteneurs local et quatre autres outils. `task 
 
 Docker Engine passe en premier parce que c'est le moteur libre. Les versions viennent des fichiers du dépôt : `local/scripts/lib/preflight-checks.sh` pour kind et Docker Engine, `platform.yaml` pour la mineure de kubectl (celle du cluster, 1.36, à une mineure près), `tests/tools/install.sh` pour Task. La CI de CELIAN installe kubectl v1.36.6. Le poste de mesure fait tourner Docker 29.8.2 et kubectl v1.37.1 (relevé du 2026-11-24).
 
-Sous macOS, le moteur tourne dans une machine virtuelle, et aucun moteur libre n'y est validé : le risque R-26 reste ouvert. Le poste de mesure utilise OrbStack, qui n'est pas libre. Docker Desktop est payant pour une entreprise de plus de 250 salariés ou de plus de 10 millions de dollars de chiffre d'affaires annuel (page de Docker lue le 2026-11-26). Podman est documenté par kind, mais personne ne l'a évalué ici, et sous Linux la règle des 28.0.0 le refuserait : il répond derrière `docker` avec sa propre version.
+Sous macOS, le moteur tourne dans une machine virtuelle, et aucun moteur libre n'est validé sous macOS pour l'instant : le risque R-26 reste ouvert, et un benchmark de Colima et de Podman est prévu avant la phase 6. Le poste de mesure utilise OrbStack, qui n'est pas libre. Docker Desktop est payant pour une entreprise de plus de 250 salariés ou de plus de 10 millions de dollars de chiffre d'affaires annuel (page de Docker lue le 2026-11-26). Podman est documenté par kind, mais personne ne l'a évalué ici, et sous Linux la règle des 28.0.0 le refuserait : il répond derrière `docker` avec sa propre version.
 
 Les licences viennent des pages citées et des dépôts officiels, lus à la date du tableau. L'API de GitHub ne tranche pas la licence de Git (réponse NOASSERTION) : la page de Git fait foi.
 
@@ -197,7 +197,7 @@ Rien dans ce dépôt ne déploie la cible GCP. Aucune tâche et aucun workflow n
 
 Trois protections empêchent un `tofu destroy` direct : `deletion_protection` du cluster GKE, `deletion_protection` et `deletion_protection_enabled` de l'instance Cloud SQL, `deletion_protection_enabled` de l'instance Memorystore. Sans démontage, le cluster et les instances restent et facturent (R-15).
 
-Une personne lance chaque temps, jamais la CI ni un agent, et aucune tâche du dépôt ne les contient. Premier temps : elle lève les protections, en passant ces réglages à `false` dans le code, puis un `tofu apply` de la racine principale. Second temps : elle lance `tofu destroy` sur la racine principale, puis sur `gcp/budget/`.
+Une personne lance chaque temps, jamais la CI ni un agent, et aucune tâche du dépôt ne les contient. Premier temps : elle lève les protections, en passant ces réglages à `false` dans le code, puis un `tofu apply` de la racine principale. À venir (étape 17) : une variable de protection, vraie par défaut, remplacera cette édition du code. Second temps : elle lance `tofu destroy` sur la racine principale, puis sur `gcp/budget/`.
 
 Le lendemain, elle relit le rapport de facturation filtré sur le projet, parce que les coûts arrivent en retard : c'est ce contrôle qui montre ce qui a survécu. Certaines ressources n'ont pas d'étiquette, donc le filtre par projet les voit et le filtre par étiquette les manque : les activations d'API (`google_project_service`), le réseau, le sous-réseau, et le point de terminaison Private Service Connect que le service crée lui-même, dont l'héritage des étiquettes n'est pas vérifié.
 
