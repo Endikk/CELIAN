@@ -184,7 +184,7 @@ apply() {
   work="$(CDPATH='' cd -- "$work" && pwd -P)"
   printf 'apiVersion: kustomize.config.k8s.io/v1beta1\nkind: Kustomization\nresources:\n  - %s%s\nimages:\n' \
     "$(climb "$work")" "${root#/}/$COMPOSITION" >"$work/kustomization.yaml"
-  printf '  - name: %s/%s\n    newTag: %s\n' "$BUILT_HOST" "$API_IMAGE" "$api_tag" \
+  printf '  - name: %s/%s\n    newTag: "%s"\n' "$BUILT_HOST" "$API_IMAGE" "$api_tag" \
     "$BUILT_HOST" "$FRONT_IMAGE" "$front_tag" >>"$work/kustomization.yaml"
   kube apply --server-side -k "$work" >/dev/null ||
     die "$COMPOSITION was not applied; the messages of kubectl are above."
