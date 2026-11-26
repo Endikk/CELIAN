@@ -16,7 +16,8 @@
 #   all ordinary files (no symbolic link, no Git mode but 100644 and 100755),
 #   none above MAX_VENDOR_FILE_BYTES of platform.sh; platform.sh refuses the
 #   others too, sums right or not;
-# - no kustomization.yaml under k8s/ and local/ takes a resource, a component,
+# - no kustomization.yaml under k8s/ and local/ takes a key outside the closed list,
+#   nor a resource, a component,
 #   a base or a patch file from a URL (policy/kustomize_sources.rego);
 # - no command of the tasks and of the scripts applies, creates or replaces
 #   from a URL.
@@ -179,7 +180,7 @@ if [ "${#kustomizations[@]}" -eq 0 ]; then
 else
   conftest verify --no-color --policy policy --namespace kustomize_sources || fail "the tests of policy/kustomize_sources.rego fail."
   conftest test --no-color --combine --policy policy --namespace kustomize_sources \
-    "${kustomizations[@]}" || fail "a kustomization.yaml takes a resource, a component, a base or a patch file from a URL."
+    "${kustomizations[@]}" || fail "a kustomization.yaml takes a source from a URL, or a key outside the closed list (policy/kustomize_sources.rego)."
 fi
 # A failing case: one remote resource, in a copy of the layout.
 mkdir -p "$samples/remote/k8s/overlays/bad"
@@ -195,6 +196,24 @@ else
   case "$remote_out" in
     *"resources[0]"*) ;;
     *) fail "the refusal of a remote resource does not name resources[0]: $remote_out" ;;
+  esac
+fi
+# A failing case: a key outside the closed list (a chart pulled from a URL),
+# in a kustomization.yml, which must be named with its key.
+mkdir -p "$samples/key/k8s/overlays/bad"
+printf '%s\n' \
+  'apiVersion: kustomize.config.k8s.io/v1beta1' \
+  'kind: Kustomization' \
+  'helmCharts:' \
+  '  - name: chart' \
+  '    repo: https://example.invalid/charts' >"$samples/key/k8s/overlays/bad/kustomization.yml"
+if key_out="$(conftest test --no-color --combine --policy policy --namespace kustomize_sources \
+  "$samples/key/k8s/overlays/bad/kustomization.yml" 2>&1)"; then
+  fail "a kustomization.yml with a helmCharts key passed policy/kustomize_sources.rego."
+else
+  case "$key_out" in
+    *'key "helmCharts"'*kustomization.yml* | *kustomization.yml*'key "helmCharts"'*) ;;
+    *) fail "the refusal of a key outside the list does not name the file and \"helmCharts\": $key_out" ;;
   esac
 fi
 
