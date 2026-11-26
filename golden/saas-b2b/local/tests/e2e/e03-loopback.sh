@@ -19,13 +19,19 @@
 #   and Gateway API wants a 500 meanwhile (research RS-02);
 # - the namespace envoy-gateway-system enforces Pod Security (restricted or
 #   baseline) and Pod Security refused none of its pods;
-# - what a pod of the cluster reaches of the mirror, recorded and not judged
-#   (ADR-011, condition 2; R-34; tasks.md, gaps 21, 34 and 78): from a pod
-#   of another namespace, on the Postgres image, which carries bash, E03
-#   prints whether the name of the mirror resolves, and the status line of
-#   GET /v2/_catalog and of the start of a push, POST
-#   /v2/<name>/blobs/uploads/. It fails only when the pod cannot run. The
-#   read-only policy of zot is tried at step 10 (tasks.md, gap 29);
+# - what a pod of the cluster reaches of the mirror (ADR-011, condition 2;
+#   R-34; tasks.md, gaps 21, 29, 34, 78 and 86): from a pod of another
+#   namespace, on the Postgres image, which carries bash, E03 prints whether
+#   the name of the mirror resolves and the status line of each request, and
+#   judges them. GET /v2/_catalog answers 200. The start of a push, POST
+#   /v2/<name>/blobs/uploads/, the PUT of a manifest and the DELETE of one are
+#   refused with 401 or 403: the anonymous policy of zot grants read alone
+#   (ADR-011, complement of 2026-11-26). A write that got through fails the
+#   test, as does a pod that cannot run;
+# - the proxy runs the image that local/platform/envoy-proxy.yaml pins by
+#   digest: the EnvoyProxy of the cluster carries the field
+#   envoyDeployment.container.image, and the pod of the proxy runs that
+#   reference (ADR-005, complement of 2026-11-26);
 # - the node pulled the images of the proxy and of Postgres through the
 #   mirror (tasks.md, gap 20; ADR-011, condition 1): the catalog of zot,
 #   read by the same pod, lists envoyproxy/envoy and library/postgres. The
@@ -208,10 +214,13 @@ done
 # without its carriage returns: the status line first, the body last.
 readonly PROBE_NAMESPACE="e2e-e03-probe"
 # shellcheck disable=SC2016 # expanded by bash in the pod
-probe_script='connect="exec 3<>/dev/tcp/\$0/5000 && printf \"%s HTTP/1.0\\r\\nHost: %s\\r\\nContent-Length: 0\\r\\n\\r\\n\" \"\$1\" \"\$0\" >&3 && tr -d \"\\r\" <&3"
+probe_script='connect="exec 3<>/dev/tcp/\$0/5000 && printf \"%s HTTP/1.0\\r\\nHost: %s\\r\\nContent-Type: application/vnd.oci.image.manifest.v1+json\\r\\nContent-Length: %s\\r\\n\\r\\n%s\" \"\$1\" \"\$0\" \"\${#2}\" \"\$2\" >&3 && tr -d \"\\r\" <&3"
+manifest="{\"schemaVersion\":2,\"mediaType\":\"application/vnd.oci.image.manifest.v1+json\",\"config\":{\"mediaType\":\"application/vnd.oci.empty.v1+json\",\"digest\":\"sha256:44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a\",\"size\":2},\"layers\":[]}"
 if getent hosts "$1" >/dev/null; then echo "name $1: resolved"; else echo "name $1: not resolved"; fi
-for request in "GET /v2/_catalog" "POST /v2/e2e-probe/blobs/uploads/"; do
-  answer="$(timeout 5 bash -c "$connect" "$1" "$request" 2>/dev/null)" || answer=""
+for request in "GET /v2/_catalog" "POST /v2/e2e-probe/blobs/uploads/" "PUT /v2/e2e-probe/manifests/e2e-probe" "DELETE /v2/e2e-probe/manifests/e2e-probe"; do
+  body=""
+  case "$request" in PUT*) body="$manifest" ;; esac
+  answer="$(timeout 5 bash -c "$connect" "$1" "$request" "$body" 2>/dev/null)" || answer=""
   status="$(printf "%s\n" "$answer" | head -n 1)"
   echo "$request: ${status:-no answer}"
   case "$request" in
@@ -231,6 +240,53 @@ if client_namespace "$PROBE_NAMESPACE"; then
   fi
 else
   fail "could not create the namespace $PROBE_NAMESPACE of the probe of the mirror"
+fi
+
+# The mirror is read-only for a pod (ADR-011, complement of 2026-11-26;
+# tasks.md, gaps 29, 78 and 86): the anonymous policy of zot grants read and
+# nothing else, so the catalog answers 200 and each write, the start of a
+# push, the PUT of a manifest and the DELETE of one, is refused with 401 or
+# 403. A write that got through could poison an image of the cache that the
+# next cluster pulls by tag.
+# probe_code REQUEST: the status code that the pod got for REQUEST, empty
+# when it got no answer.
+probe_code() {
+  local line
+  line="$(printf '%s\n' "$probe" | grep -F -- "$1: " | head -n 1)"
+  [[ $line =~ :\ HTTP/1\.[01]\ ([0-9][0-9][0-9]) ]] || return 0
+  printf '%s' "${BASH_REMATCH[1]}"
+}
+code="$(probe_code "GET /v2/_catalog")"
+[ "$code" = 200 ] || fail "a pod of the cluster gets \"${code:-no answer}\" for GET /v2/_catalog; 200 expected, the mirror stays readable"
+for request in "POST /v2/e2e-probe/blobs/uploads/" "PUT /v2/e2e-probe/manifests/e2e-probe" "DELETE /v2/e2e-probe/manifests/e2e-probe"; do
+  code="$(probe_code "$request")"
+  case "$code" in
+    401 | 403) printf 'note: the mirror refuses %s from a pod with %s.\n' "$request" "$code" ;;
+    *) fail "a pod of the cluster gets \"${code:-no answer}\" for $request; 401 or 403 expected: the mirror is writable without authentication (R-34)" ;;
+  esac
+done
+
+# The proxy runs the image that the EnvoyProxy pins, by digest (ADR-005,
+# complement of 2026-11-26): the EnvoyProxy of the cluster carries the field,
+# and the pod of the proxy runs exactly that reference.
+readonly PROXY_IMAGE_FIELD='{.spec.provider.kubernetes.envoyDeployment.container.image}'
+readonly ENVOY_PROXY_NAME="saas-b2b"
+readonly PROXY_POD_SELECTOR="gateway.envoyproxy.io/owning-gateway-name=$E2E_GATEWAY"
+expected_proxy="$(proxy_image)"
+if ! [[ $expected_proxy =~ ^docker\.io/envoyproxy/envoy:[A-Za-z0-9._-]+@sha256:[a-f0-9]{64}$ ]]; then
+  fail "local/platform/envoy-proxy.yaml pins no proxy image by digest under docker.io/envoyproxy/envoy (found \"$expected_proxy\")"
+else
+  applied="$(kube_e2e -n "$CONTROLLER_NAMESPACE" get envoyproxy "$ENVOY_PROXY_NAME" --output "jsonpath=$PROXY_IMAGE_FIELD" 2>/dev/null)"
+  [ "$applied" = "$expected_proxy" ] || fail "the EnvoyProxy of the cluster carries the image \"$applied\", \"$expected_proxy\" expected"
+  running="$(kube_e2e -n "$CONTROLLER_NAMESPACE" get pods --selector "$PROXY_POD_SELECTOR" \
+    --output 'jsonpath={range .items[*].spec.containers[*]}{.name}={.image}{"\n"}{end}' 2>/dev/null | sed -n 's/^envoy=//p')"
+  if [ -z "$running" ]; then
+    fail "no pod of the proxy found with the selector $PROXY_POD_SELECTOR in $CONTROLLER_NAMESPACE"
+  elif [ "$running" != "$expected_proxy" ]; then
+    fail "the pod of the proxy runs \"$running\", \"$expected_proxy\" expected"
+  else
+    printf 'note: the proxy runs %s, the image that local/platform/envoy-proxy.yaml pins.\n' "$running"
+  fi
 fi
 
 # The node pulled the proxy and Postgres through the mirror (tasks.md, gap
