@@ -8,6 +8,9 @@ phase 2 : profil standard et mesure des 15 minutes, benchmark de Postgres local
 avant la couche locale, aucun déploiement réel sur GCP pendant la phase.
 Complété le 2026-11-25 par [ARCHI] avec la décision de Lucas du 2026-11-23 :
 Trivy seul pour le SBOM et le scan des images (US-009).
+Complété le 2026-11-26 par [ARCHI] avec la décision de Lucas du même jour : sur
+un cloud, l'entretien choisit le mode d'hébergement de chaque brique (US-013,
+US-014).
 
 Sources : brief v1.0 (sections 2 à 4, 6, 8, 9 et 12), constitution 1.0.0
 (branche `chore/speckit`) et `CLAUDE.md`, lus le 15/11/2026. La vision tient en
@@ -125,7 +128,8 @@ jour d'un projet généré passe par la CLI de CELIAN, qui appelle Copier
    Liste candidate, fixée en phase 5 : nom et description du projet, cible (PC
    seul, ou PC et GCP), projet et région GCP, compte GitHub, propriétaires du
    code, profil de ressources local, licence du projet, plafond de l'alerte
-   budget GCP.
+   budget GCP. Sur GCP, l'entretien pose aussi les critères du mode
+   d'hébergement de chaque brique (US-013).
 4. Spec. CELIAN écrit la spec, la valide contre le schéma de `schema/` et la
    montre. L'utilisateur peut la corriger.
 5. Génération. La CLI génère le dépôt depuis le blueprint SaaS B2B et le
@@ -199,7 +203,8 @@ bons services pour chaque cible, afin de partir d'un socle testé.
   la CI, les conventions Git, la documentation, et le code OpenTofu si la cible
   GCP est choisie.
 - Pour chaque brique abstraite, le service généré est celui que le catalogue
-  associe à la cible. Exemple du brief pour Postgres, à confirmer en phase 1 :
+  associe à la cible et, sur GCP, au mode d'hébergement retenu (US-013).
+  Exemple du brief pour Postgres, à confirmer en phase 1 :
   CloudNativePG en local, Cloud SQL sur GCP.
 - Une entrée de catalogue sans licence, gouvernance, statut, date de
   vérification ou source fait échouer la CI du générateur (principe IV).
@@ -241,8 +246,8 @@ En tant que tech lead, je veux un plan vérifié et rien de payant sans mon
 accord, afin de ne jamais découvrir une facture après coup.
 
 - Étant donné la cible GCP, quand la validation tourne, alors `tofu validate`
-  et les politiques conftest passent, avec les services managés du fournisseur
-  (principe III).
+  et les politiques conftest passent, avec le mode d'hébergement retenu à
+  l'entretien pour chaque brique (principe III).
 - Étant donné un projet GCP et les identifiants de l'utilisateur dans son
   environnement, quand il demande le plan, alors le plan s'exécute sans erreur.
   CELIAN le résume et signale les ressources payantes d'après la liste tenue
@@ -347,6 +352,50 @@ et de le partager sans risque.
 - Étant donné un développeur qui tente de committer une clé, quand le hook
   pre-commit tourne, alors il refuse le commit.
 
+### US-013 Choisir le mode d'hébergement de chaque brique
+
+En tant que tech lead, je veux que l'entretien pèse mes contraintes et choisisse
+pour chaque brique entre service managé et composant auto-hébergé, afin de payer
+l'exploitation seulement là où elle vaut son prix (principe III, version 2.0.0,
+décision de Lucas du 2026-11-26).
+
+- Sur une cible cloud, l'entretien pose les critères suivants : coût, charge
+  d'exploitation, niveau de service attendu, conformité et souveraineté,
+  résidence des données, portabilité et dépendance au fournisseur, compétences
+  de l'équipe, volumétrie. Chaque question propose une valeur par défaut et dit
+  ce que la réponse change (US-002).
+- Les critères se posent une fois pour le projet, et l'analyse en tire le choix
+  de chaque brique. Le parcours par défaut reste dans la dizaine de questions
+  d'US-002 : le décompte se confirme en phase 5 et se mesure en phase 6.
+- L'entretien rend, par brique, le mode retenu (`managed` ou `self-hosted`) et
+  sa raison en une phrase. Le choix « full managé » est valide s'il porte sa
+  raison. Un résultat hybride (une brique managée, une autre auto-hébergée) est
+  un cas normal.
+- Une brique qui n'a qu'une option couverte par la matrice de validation ne
+  pose pas de question : sa raison le dit. Une option non couverte n'est jamais
+  proposée (principe I), et un test compare les options proposées à la matrice.
+- La spec abstraite porte, par brique, le mode d'hébergement et la raison. Le
+  champ se définit avec le JSON Schema de la spec v1, en phase 3. Il ne contient
+  aucun nom de service (principe II, test d'US-003).
+- Sur le PC, aucune question d'hébergement : open source, la meilleure option
+  libre. Le montage cloud et on-prem reste hors MVP.
+
+### US-014 Trouver un ADR pour chaque choix d'hébergement
+
+En tant que tech lead d'ESN, je veux un ADR par choix d'hébergement, afin de
+défendre devant mon client pourquoi cette brique est managée et celle-là non.
+
+- Pour chaque brique dont l'entretien a eu plusieurs options, le projet généré
+  contient un ADR (US-010) : les critères et les réponses qui ont pesé, le mode
+  retenu, les options écartées, les conséquences, et pour chaque techno du
+  catalogue sa licence ou son fournisseur, sa gouvernance, sa date de
+  vérification et sa source.
+- L'agent écrit l'ADR depuis la spec et le catalogue. Il reprend la raison de
+  l'entretien sans en inventer une autre. Un test vérifie que chaque brique
+  dotée d'un mode d'hébergement renvoie vers un ADR, et inversement.
+- Changer le mode d'une brique sur un projet déjà déployé n'est pas couvert par
+  le MVP : il demande une migration de données, hors périmètre (section 6).
+
 ## 5. Exigences non fonctionnelles
 
 ### ENF-01 Délai
@@ -380,7 +429,8 @@ pour le profil de mesure.
 ### ENF-02 Parité locale et empreinte
 
 Chaque brique de la spec existe sur les deux cibles : open source sur le PC
-(principe III), managée sur GCP. Seule la couche de cible change d'une cible à
+(principe III), et sur GCP dans le mode d'hébergement retenu à l'entretien,
+managé ou auto-hébergé (US-013). Seule la couche de cible change d'une cible à
 l'autre (principe II), et le README généré liste les écarts restants.
 L'empreinte de chaque profil est à mesurer en phase 1, le PC de référence de
 la phase 6 à définir.
@@ -434,6 +484,7 @@ pas. L'ordre de reprise vient du brief, section 9.
 | Agent comparateur intégré | Pendant l'entretien, les choix viennent des ADR de phase 1, sans comparaison ni mesure | Cinquième étape |
 | Interface web, application autonome, version hébergée | CELIAN n'existe que comme plugin Claude Code et CLI | Non planifié |
 | Autres CI | GitLab CI et Forgejo Actions : le projet généré vit sur GitHub | Plus tard (brief, section 6) |
+| Changer le mode d'hébergement d'une brique déployée | Migration de données entre un service managé et un composant auto-hébergé, et inversement | À instruire avec la migration de cible |
 | Idées de la section 12 du brief | Auditeur de projets existants, alertes catalogue, migration de cible, estimation des coûts avant génération, pack conformité, badge OpenSSF Scorecard, site de documentation | Gardées dans `ROADMAP.md` |
 | Exploitation du projet | Ni supervision ni astreinte après la livraison | Non prévu |
 | Code métier écrit par l'agent | L'agent écrit les ADR et les textes propres au projet. Le code applicatif se limite à l'exemple du blueprint, et l'utilisateur écrit son métier (Q7) | À rouvrir après le MVP |

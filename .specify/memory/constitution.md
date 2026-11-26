@@ -1,3 +1,19 @@
+<!--
+Rapport d'impact de synchronisation
+Version : 1.2.0 vers 2.0.0 (majeure : principe III redéfini, décision de Lucas du 2026-11-26)
+Principe modifié : III, « Managé sur le cloud, open source ailleurs » devient
+  « L'entretien choisit le mode d'hébergement, open source ailleurs »
+Principes inchangés : I, II, IV, V, VI, VII, VIII, IX, X
+Sections ajoutées : aucune. Sections retirées : aucune.
+Textes à suivre : CLAUDE.md (résumé du principe III), ADR-009 (complément du
+  2026-11-26), PRD (US-013, US-014, ENF-02, US-004, US-006), vision, ROADMAP,
+  risques (R-43). Lus au passage, non modifiés ici : catalog/README.md et
+  schema/catalog-entry.schema.json, qui exigent encore managed_gap pour un
+  composant libre sur gcp.
+Modèles Spec Kit : aucun ne cite le principe III.
+TODO : aucun champ laissé ouvert.
+-->
+
 # Constitution de CELIAN
 
 Elle s'impose à toute spécification, tout plan, toute tâche et toute PR du
@@ -25,15 +41,24 @@ propre à une cible ailleurs que dans sa couche de cible.
 
 Pourquoi : changer de cible doit revenir à changer une ligne de la spec.
 
-### III. Managé sur le cloud, open source ailleurs
+### III. L'entretien choisit le mode d'hébergement, open source ailleurs
 
-Sur une cible cloud, le générateur DOIT utiliser les services managés du
-fournisseur. Sur une cible on-prem ou PC, il DOIT utiliser des technos gratuites
-et open source, en retenant la meilleure option du marché selon la grille de
-benchmark.
+Sur une cible cloud, le service managé du fournisseur est une option parmi
+d'autres : un composant libre auto-hébergé dans le cluster, ou un montage
+hybride (une partie managée et une partie auto-hébergée, ou cloud et on-prem).
+L'analyse de l'entretien choisit, brique par brique, et écrit la raison du
+choix. Elle pèse au moins le coût, la charge d'exploitation, le niveau de
+service attendu, la conformité et la souveraineté, la résidence des données, la
+portabilité et la dépendance au fournisseur, les compétences de l'équipe et la
+volumétrie. Le choix « full managé » reste permis, avec sa raison. Une option
+qu'aucune validation ne couvre (principe I) ne DOIT pas être proposée. Sur une
+cible on-prem ou PC, le générateur DOIT utiliser des technos gratuites et open
+source, en retenant la meilleure option du marché selon la grille de benchmark.
 
-Pourquoi : sur un cloud, l'équipe paie pour ne pas opérer. Chez elle, elle ne
-doit dépendre d'aucune licence.
+Pourquoi : un service managé retire l'exploitation, mais il coûte de l'argent,
+lie au fournisseur et ne convient pas à toutes les contraintes de conformité.
+Le bon équilibre dépend du projet, donc il se décide avec lui et s'écrit. Chez
+soi, on ne doit dépendre d'aucune licence.
 
 ### IV. Catalogue traçable
 
@@ -158,6 +183,6 @@ sur les règles.
 Chaque revue de PR vérifie la conformité aux principes. Une dérogation se
 justifie dans un ADR, avec sa durée et la condition qui la lèvera.
 
-**Version** : 1.2.0 | **Ratifiée** : 2026-11-15, par Lucas à la GATE 0 |
-**Dernier amendement** : 2026-11-20, exception de sécurité au délai de 7 jours
-du principe VI, décidée par Lucas à la GATE 1
+**Version** : 2.0.0 | **Ratifiée** : 2026-11-15, par Lucas à la GATE 0 |
+**Dernier amendement** : 2026-11-26, principe III réécrit : sur un cloud,
+l'entretien choisit le mode d'hébergement de chaque brique, décidé par Lucas

@@ -50,6 +50,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-40 | Scanner de secrets du projet généré en maintenance | Forte | Moyen | SECU, DSI | Ouvert |
 | R-41 | Jeton de Memorystore sans ressource publiée dans le provider | Moyenne | Moyen | OPS, SECU | Ouvert |
 | R-42 | Droit sur les budgets accordé hors du dépôt | Faible | Moyen | SECU | Ouvert |
+| R-43 | Chaque option d'hébergement multiplie la matrice de validation | Forte | Moyen | QA, ARCHI | Ouvert |
 
 ## Détail
 
@@ -1156,3 +1157,24 @@ Mitigation : aucune dans le code, par nature. Les rôles d'administration IAM et
 les rôles personnalisés se contrôlent dans une suite de S15 (écart 74 de
 `specs/001-golden-repo-saas-b2b/tasks.md`) ; pour le reste, [SECU] relit
 la liste des droits du compte de facturation avant la GATE 2.
+
+### R-43. Chaque option d'hébergement multiplie la matrice de validation
+
+Ouvert le 2026-11-26 avec l'amendement 2.0.0 du principe III (décision de Lucas
+du même jour). Sur un cloud, une brique peut se déployer en service managé ou en
+composant auto-hébergé, et l'entretien choisit. Le principe I interdit de
+proposer une combinaison que la matrice ne couvre pas : chaque option ajoutée à
+une brique double ses cas de test, et les choix de plusieurs briques se
+combinent. Une matrice qui grossit plus vite que sa capacité à tourner, ou un
+entretien qui promet une option non testée, casse la confiance dans le socle.
+
+Probabilité forte : la décision l'ouvre par construction. Impact moyen : durée et
+coût de la CI de la matrice, et risque de contournement du principe I, sans fuite
+de données.
+
+Mitigation : deux options au plus par brique dans le MVP ; la matrice se
+dimensionne en phase 4, options comprises ; une option non testée n'est jamais
+proposée par l'entretien (US-013, un test compare les options proposées à la
+matrice). Le golden repo ne construit que la variante managée sur `gcp` ; la
+variante auto-hébergée n'entre qu'en phase 3 ou 4 si la matrice le permet.
+Porteurs : [QA] pour la matrice, [ARCHI] pour le nombre d'options par brique.
