@@ -36,7 +36,7 @@ CDPATH='' cd -- "$root"
 policy_file="security/scan-policy.yaml"
 exception_files="security/scan-exceptions.yaml local/security/scan-exceptions.yaml"
 # The platform of the CI runners and of the cluster of e2e-lite. The arm64
-# variant of each index is not scanned (tasks.md, gap 57).
+# variant of each index is not scanned (tasks.md, gap 58).
 platform="linux/amd64"
 # Trivy stops at 5m0s by default (research RS-22); the node image is the
 # heaviest of the inventory.
