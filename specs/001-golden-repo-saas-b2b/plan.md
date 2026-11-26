@@ -299,6 +299,7 @@ Préfixes : S statique, sans cluster, en pre-commit ou en CI ; P contrôle préa
 | S30 | Deployments et Services de l'API et du front dans la couche commune : profil `restricted` avec `readOnlyRootFilesystem`, `emptyDir` borné, `requests` et limite de mémoire, sondes sur `/api/readyz`, `/api/healthz` et `/`, Secrets montés en fichiers et jamais lus par `secretKeyRef` ni `envFrom`, étiquette `app.kubernetes.io/name: api` que les NetworkPolicy admettent, routes qui atteignent leurs Services (écart 171) |
 | S31 | Couche `gcp` : valeurs écrites après le premier apply et producteur de `db-auth`. `app-config` aux clés du contrat, `DATABASE_SSL_MODE` et `CACHE_TLS_MODE` en `VerifyCA` ou `VerifyFull` (jamais `Disable`, `Allow`, `Prefer` ni `Require`), hôtes d'attente sous `.invalid`, privés ou nommés, jamais de bouclage ; `app-ca` aux deux paquets, vides ou X.509 de CA, sans clé privée ; `SecretProviderClass` et `SecretSync` de `db-auth` aux deux clés du contrat, version en nombre |
 | S32 | CI du projet généré : jobs `check`, `unit`, `e2e-lite` (`PROFILE=lite task test:e2e`, 45 minutes) et `scan-images`, kind et kubectl installés par `tests/tools/install.sh` avec somme vérifiée, aucun appel à `scripts/ci/` ni à `catalog/`, `persist-credentials: false`, aucune permission propre au job ; une seule source par version (kind dans `preflight-checks.sh`, kubectl dans `install.sh` sur la mineure de `platform.yaml`) et leurs sommes dans `SHA256SUMS`, aucun `continue-on-error` ni `if:` de job, somme de kind du catalogue égale à celle de `SHA256SUMS` dans CELIAN, garde de plate-forme de `install.sh` avant `mkdir` (écarts 26, 40 et 171 à 175) |
+| S33 | Manifeste de Config Sync vendoré dans `gcp/vendor/` : SHA-256 de chaque fichier tiers, aucun lien, la liste des images nomme exactement celles du manifeste, chacune avec un condensat |
 | P01 | kind d'une autre version, kubectl hors de la plage, Docker Engine sous 28.0.0 sur Linux : refus avec la version attendue |
 | P02 | Moteur absent ou arrêté : message clair, rien de créé ; contexte Docker hors d'un socket unix local, et moteur muet au-delà de 10 s, refusés (écart 18 de tasks.md) |
 | P03 | Mémoire déclarée : profil choisi et annoncé ; sous le lite, refus avec la mémoire qui manque |
@@ -323,7 +324,7 @@ Préfixes : S statique, sans cluster, en pre-commit ou en CI ; P contrôle préa
 | E13 | Le cache refuse une commande sans authentification |
 | E14 | Profil lite : aucun contrôleur de Flux ; profil standard : Flux et les couches entrées |
 | E15 | Flux : le compte de service de la liaison d'un environnement n'a aucun droit d'écriture dans le namespace d'un autre, vérifié sans réactiver la liaison suspendue (research RS-14) |
-| E16 | Couche `gcp` sur kind, Config Sync libre en version figée, runner x64 : liaison, rendu, droits de `roleRefs` |
+| E16 | Couche `gcp` sur kind, Config Sync libre en version figée, runner x64 : liaison, rendu, droits de `roleRefs`, règle d'admission reprise et mise à jour par nom, pod sans `requests` refusé |
 | E17 | Durée de chaque étape et durée totale affichées ; taille du volume du miroir affichée |
 | E18 | Démarrage à chaud sous 90 s |
 | E19 | Kubeconfig hors du dépôt ou ignoré par Git |
