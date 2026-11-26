@@ -1353,6 +1353,8 @@ CVE-2026-97054 sort en MEDIUM dans le contrôleur d'Envoy Gateway (`SeveritySour
 
 Conclusion. 101 identifiants au seuil sur les images de `main`, 165 avec Postgres : bien au-delà de ce qui se justifie une par une. T118 le prévoit : le seuil ou la spec se rediscutent avec Lucas, par le DSI. Aucune exception n'est écrite, et le job `scan-images` échoue sur l'image du nœud et sur zot tant que la décision n'est pas prise (écart 54 de tasks.md).
 
+Suite, décision du DSI du 2026-11-25 (par délégation de Lucas, réversible, à confirmer par Lucas à la GATE 2). Le seuil `HIGH` reste. Le scan ne bloque que les images que le projet construit, toute image déployée sur `gcp` et toute image que l'inventaire ne classe pas ; les images tierces du cluster local (nœud, zot, Envoy Gateway et son proxy, Postgres local) sont signalées dans un tableau du résumé du job, sans bloquer. La classe de chaque image s'écrit dans `security/scan-policy.yaml`, sous `image_classes`, et la politique de décision la lit comme elle lit le seuil. Raison : seuls l'API et le front partent en production sur `gcp` (Cloud SQL et Memorystore sont managés), et bloquer sur l'outillage local figerait toutes les PR sans protéger ce qui est déployé. Amendement de FR-021 et FR-022 dans spec.md ; écarts 54 et 56 de tasks.md. Les exceptions de RS-23 ne servent donc qu'aux images bloquantes.
+
 | Source | Lue le | Ce qu'on y prend |
 | --- | --- | --- |
 | <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/report/writer.go> | 2026-11-25 | `SchemaVersion = 2` |
