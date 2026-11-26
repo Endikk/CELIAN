@@ -11,9 +11,11 @@ terraform {
   # Same floor as gcp/tofu/. The checks use the version of tests/tools/install.sh.
   required_version = ">= 1.11.0"
 
+  # The source names the registry of OpenTofu: Renovate looks the versions up
+  # there without reading the lock, and S15 refuses any other host (RS-16).
   required_providers {
     google = {
-      source  = "hashicorp/google"
+      source  = "registry.opentofu.org/hashicorp/google"
       version = "8.12.0"
     }
   }
