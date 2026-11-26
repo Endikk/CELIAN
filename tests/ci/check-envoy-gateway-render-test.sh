@@ -21,11 +21,14 @@ controller_ref="docker.io/envoyproxy/gateway:v1.10.0@$controller_sum"
 
 failures=0
 
-# new_golden DIR: a golden repo with the three references and the two
-# vendored renders the stand-in helm is expected to give.
+# new_golden DIR: a golden repo with the three references, the namespace of
+# the application, and the two vendored renders the stand-in helm is
+# expected to give: the controller chart with the watch of research RS-02
+# (ADR-005, complement of 2026-11-25).
 new_golden() {
   local dir="$1"
-  mkdir -p "$dir/local/tasks" "$dir/local/vendor/envoy-gateway"
+  mkdir -p "$dir/local/tasks" "$dir/local/vendor/envoy-gateway" "$dir/k8s/base"
+  printf 'apiVersion: v1\nkind: Namespace\nmetadata:\n  name: shop\n' >"$dir/k8s/base/namespace.yaml"
   {
     printf 'vars:\n'
     printf '  ENVOY_GATEWAY_IMAGE: %s\n' "$controller_ref"
@@ -34,7 +37,7 @@ new_golden() {
   } >"$dir/local/tasks/local.yml"
   printf 'render eg-crds\nchart:oci://docker.io/envoyproxy/gateway-crds-helm@%s\noptions:--set crds.envoyGateway.enabled=true --set crds.gatewayAPI.enabled=false\n' \
     "$crds_sum" >"$dir/local/vendor/envoy-gateway/gateway-crds-helm.yaml"
-  printf 'render eg\nchart:oci://docker.io/envoyproxy/gateway-helm@%s\noptions:-n envoy-gateway-system --set crds.enabled=false --set global.images.envoyGateway.image=%s\n' \
+  printf 'render eg\nchart:oci://docker.io/envoyproxy/gateway-helm@%s\noptions:-n envoy-gateway-system --set crds.enabled=false --set global.images.envoyGateway.image=%s --set config.envoyGateway.provider.kubernetes.watch.type=Namespaces --set config.envoyGateway.provider.kubernetes.watch.namespaces={envoy-gateway-system,shop}\n' \
     "$chart_sum" "$controller_ref" >"$dir/local/vendor/envoy-gateway/gateway-helm.yaml"
 }
 
@@ -98,6 +101,18 @@ new_golden "$workdir/no-digest"
 sed 's#@sha256:[0-9a-f]*$##' "$workdir/no-digest/local/tasks/local.yml" >"$workdir/local.yml.new"
 mv "$workdir/local.yml.new" "$workdir/no-digest/local/tasks/local.yml"
 expect_fail "a reference without a digest is refused" "$workdir/no-digest" "ENVOY_GATEWAY"
+
+new_golden "$workdir/no-namespace"
+rm "$workdir/no-namespace/k8s/base/namespace.yaml"
+expect_fail "a golden repo without the namespace of the application is refused" "$workdir/no-namespace" "namespace.yaml is missing"
+
+new_golden "$workdir/bad-namespace"
+printf 'metadata:\n  name: "Shop;x"\n' >"$workdir/bad-namespace/k8s/base/namespace.yaml"
+expect_fail "a namespace that is not a name is refused" "$workdir/bad-namespace" "a namespace name is expected"
+
+new_golden "$workdir/other-namespace"
+printf 'apiVersion: v1\nkind: Namespace\nmetadata:\n  name: other\n' >"$workdir/other-namespace/k8s/base/namespace.yaml"
+expect_fail "a render that watches another namespace is refused" "$workdir/other-namespace" "gateway-helm.yaml"
 
 old_version="${HELM_VERSION:-}"
 HELM_VERSION="v4.0.0"
