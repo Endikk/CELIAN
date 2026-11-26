@@ -44,6 +44,9 @@ make_root() {
     cp "$golden/$file" "$root/$file"
   done
   cp "$golden"/.github/workflows/*.yml "$root/.github/workflows/"
+  # The links of the README lead to files of the golden repo.
+  mkdir -p "$root/gcp/budget"
+  cp "$golden/gcp/budget/README.md" "$root/gcp/budget/README.md"
   cp "$2" "$root/README.md"
 }
 
@@ -110,8 +113,11 @@ expect_fail mark-without-step "$case_file" "À venir"
 } >"$case_file"
 expect_fail apply-offered "$case_file" "OpenTofu apply or destroy"
 # shellcheck disable=SC2016 # backticks of Markdown code, not a command
-replace '`openssl` et `awk`' '`outil` et `autre`' >"$case_file"
-expect_fail tools-missing "$case_file" "openssl"
+replace '`openssl`' '`outil`' >"$case_file"
+expect_fail openssl-missing "$case_file" "look for openssl"
+# shellcheck disable=SC2016 # backticks of Markdown code, not a command
+replace '`awk`' '`autre`' >"$case_file"
+expect_fail awk-missing "$case_file" "look for awk"
 replace 'auto-signé' 'signé' >"$case_file"
 expect_fail https-certificate "$case_file" "auto-signé"
 
