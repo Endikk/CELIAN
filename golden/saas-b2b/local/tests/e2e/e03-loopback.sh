@@ -25,7 +25,7 @@
 #   the name of the mirror resolves and the status line of each request, and
 #   judges them. GET /v2/_catalog answers 200. The start of a push, POST
 #   /v2/<name>/blobs/uploads/, the PUT of a manifest and the DELETE of one are
-#   refused with 401 or 403: the anonymous policy of zot grants read alone
+#   refused with 401, the status measured: the anonymous policy of zot grants read alone
 #   (ADR-011, complement of 2026-11-26). A write that got through fails the
 #   test, as does a pod that cannot run;
 # - the proxy runs the image that local/platform/envoy-proxy.yaml pins by
@@ -252,9 +252,9 @@ fi
 # The mirror is read-only for a pod (ADR-011, complement of 2026-11-26;
 # tasks.md, gaps 29, 78 and 86): the anonymous policy of zot grants read and
 # nothing else, so the catalog answers 200 and each write, the start of a
-# push, the PUT of a manifest and the DELETE of one, is refused with 401 or
-# 403. A write that got through could poison an image of the cache that the
-# next cluster pulls by tag.
+# push, the PUT of a manifest and the DELETE of one, is refused with 401, the
+# status measured on kind (tasks.md, gap 93). A write that got through could
+# fill the volume of the mirror and delete what it holds.
 # probe_code REQUEST: the status code that the pod got for REQUEST, empty
 # when it got no answer.
 probe_code() {
@@ -268,8 +268,8 @@ code="$(probe_code "GET /v2/_catalog")"
 for request in "POST /v2/e2e-probe/blobs/uploads/" "PUT /v2/e2e-probe/manifests/e2e-probe" "DELETE /v2/e2e-probe/manifests/e2e-probe"; do
   code="$(probe_code "$request")"
   case "$code" in
-    401 | 403) printf 'note: the mirror refuses %s from a pod with %s.\n' "$request" "$code" ;;
-    *) fail "a pod of the cluster gets \"${code:-no answer}\" for $request; 401 or 403 expected: the mirror is writable without authentication (R-34)" ;;
+    401) printf 'note: the mirror refuses %s from a pod with %s.\n' "$request" "$code" ;;
+    *) fail "a pod of the cluster gets \"${code:-no answer}\" for $request; 401 expected: the mirror is writable without authentication (R-34)" ;;
   esac
 done
 
