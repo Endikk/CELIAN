@@ -178,6 +178,9 @@ for tool in "Docker Engine" "kind" "kubectl" "Task" "Git"; do
     licence="$(trim "$licence")"
     read_on="$(trim "$read_on")"
     origin="$(trim "$origin")"
+    # An address in a table is written <https://...>, which markdownlint accepts.
+    origin="${origin#<}"
+    origin="${origin%>}"
     [ -n "$version" ] || report "$tool has no version in the table of tools."
     [ -n "$licence" ] || report "$tool has no licence in the table of tools."
     case "$read_on" in
