@@ -221,6 +221,61 @@ Alternatives : servir le front depuis l'API .NET, écarté parce que la couche c
 
 Sources : spec, hypothèses ; BENCH-005, S38 et section 4.2 ; ADR-012, condition 9.
 
+### Relevé du 2026-11-24 (T027)
+
+Fait par [DEV]. Sources : la documentation de Vite, d'Oxc, de TypeScript, de Vitest, de Testing Library, de React, de npm, de nginx et de son image officielle, et le dépôt de l'image lu par `gh api`. Les versions, les dates et les condensats sont au point RS-18.
+
+Construction. Vite 8 transpile le TypeScript par Oxc sans vérifier les types ; la page conseille `tsc --noEmit` en plus pour une construction de production, et demande `isolatedModules`. Les fichiers `.tsx` sont pris en charge sans extension : Oxc applique par défaut le runtime JSX `automatic`, avec `react` pour source des imports, et Vite reprend le champ `jsx` de `tsconfig.json`. Retenu : aucun `@vitejs/plugin-react`, dont l'apport, Fast Refresh, ne sert qu'au serveur de développement ; le golden repo n'en lance pas, `task reload` reconstruit l'image. `vite/client` dans `types` donne les types des imports de CSS. La page d'entrée est `index.html` à la racine du projet, la sortie va dans `dist/`, défaut de `build.outDir`. Le polyfill de préchargement des modules entre dans le module d'entrée de chaque page ; l'étape de contrôle de l'image vérifie que la page construite ne garde ni script ni style en ligne, que la politique de contenu de nginx bloquerait.
+
+TypeScript 7.0 est le portage natif en Go, publié sous le paquet `typescript`, avec la commande `tsc`. Ses défauts changent : `strict` à `true`, `types` à `[]`, `module` à `esnext`. Il refuse `moduleResolution` `node`, `node10` et `classic`, `baseUrl` et `target: es5`. Il n'a pas d'API JavaScript, et aucun outil retenu n'en demande : Vite transpile par Oxc. Le paquet tire le binaire de la plate-forme par une dépendance optionnelle (`@typescript/typescript-linux-x64`, `@typescript/typescript-linux-arm64`), qui tourne sous l'Alpine de l'image de construction (essai du 2026-11-24 en arm64 ; amd64 par le job `unit`).
+
+Tests : Vitest dans l'environnement `jsdom`, le défaut étant `node`, réglé sous la clé `test` de `vite.config.ts` avec la référence `vitest/config`. `globals` vaut `false` par défaut : les tests importent leurs fonctions, et appellent eux-mêmes `cleanup` de Testing Library dans `afterEach`, puisque la bibliothèque ne le fait seule que si le framework injecte un `afterEach` global. `vi.stubGlobal` remplace `fetch`, `vi.unstubAllGlobals` le rend. jsdom 31 déclare `@napi-rs/canvas` en pair optionnel, que npm n'installe pas.
+
+npm. `npm ci` exige un `package-lock.json`, échoue si `package.json` demande un autre arbre, et n'écrit jamais le verrou. `ignore-scripts` coupe les scripts d'installation des paquets ; `npm run build` et `npm test` lancent encore leur propre script, sans les scripts `pre` et `post`. `audit` envoie à chaque installation un rapport des dépendances au registre : coupé, puisque le scan des images et Renovate tranchent sur les failles. `update-notifier`, qui interroge le registre sur la dernière version de npm, est coupé aussi. `min-release-age`, présent depuis npm 11.10.0, n'installe que des versions publiées depuis plus du nombre de jours donné : `tests/unit/u02-front.sh --update-locks` résout le verrou avec `--min-release-age=7`. Le réglage n'entre pas dans `.npmrc`, où il bloquerait aussi la mise à jour du verrou par Renovate pour un correctif de sécurité de moins de 7 jours, que le principe VI laisse passer.
+
+Image de construction : variante Alpine de `node`. Elle est environ 25 % plus petite que `slim`. Le README de docker-node dit les builds musl « Experimental » ; le `BUILDING.md` de Node.js 26.13.1, qui fait foi, classe linux x64 musl en Tier 2, et arm64 musl n'y figure pas (relecture [SECU] du 2026-11-24). Les étiquettes Debian `slim` de 26.13.1 ont été repoussées le 2026-11-24, sous le délai de 7 jours. L'image ne sert qu'à construire et tester, et ne part sur aucune cible.
+
+Service des fichiers : nginx en variante `alpine-slim`, sans les modules dynamiques de la variante `alpine` (njs, xslt, geoip, image-filter, acme). La documentation de l'image officielle décrit l'exécution sous un UID non root : `pid` et les chemins temporaires (`client_body_temp_path`, `proxy_temp_path`, `fastcgi_temp_path`, `uwsgi_temp_path`, `scgi_temp_path`) passent dans `/tmp`. L'image crée l'utilisateur et le groupe `nginx` sous l'identifiant 101. Son point d'entrée lance les scripts de `/docker-entrypoint.d/` (gabarits, écoute IPv6, résolveurs) seulement s'il en trouve : l'image du front les retire avec le site par défaut, et son `nginx.conf` porte toute la configuration. `USER 101:101` donne un UID numérique, que le profil `restricted` peut vérifier par `runAsNonRoot`. Écoute sur 8080. `nginx -t` passe sous cet utilisateur dans l'étape de contrôle de l'image ; le démarrage réel dans un pod `restricted` reste à E12, à l'étape 9. Écartée : l'image `nginxinc/nginx-unprivileged`, que cite la même page, un éditeur de plus pour cinq lignes de configuration.
+
+En-têtes. `add_header` avec `always` les pose quel que soit le code de réponse ; une directive `add_header` d'un niveau masque celles du niveau parent, d'où leur seule place dans `server`. Politique de contenu restreinte à l'origine (`default-src 'self'`), page interdite dans un cadre (`frame-ancestors 'none'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`. `absolute_redirect off` : une redirection garde l'hôte et le port de la gateway. HSTS revient à la gateway, qui termine TLS. Aucune tâche ne le pose encore, ni la redirection de HTTP vers HTTPS, ni `nosniff` sur `/api` : l'écart 51 de tasks.md les confie à l'étape 7 (relecture [SECU] du 2026-11-24).
+
+Effets : `src/front/` (T028, T030, T031), `tests/static/s20-front-screens.sh` et `policy/front_screens.rego` (T029), `tests/unit/u02-front.sh` (T032).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://vite.dev/guide/features> | 2026-11-24 | Transpilation sans vérification de types, `tsc --noEmit`, `isolatedModules`, `vite/client`, champs de `tsconfig.json` lus par Vite, JSX par Oxc (page de Vite 8.3.7) |
+| <https://vite.dev/config/shared-options> | 2026-11-24 | Option `oxc`, `base` à `/`, `envPrefix` |
+| <https://vite.dev/config/build-options> | 2026-11-24 | `build.outDir` à `dist`, polyfill de préchargement dans le module d'entrée |
+| <https://vite.dev/guide/> | 2026-11-24 | `index.html` à la racine, `vite build`, Node.js 20.19 ou 22.12 au moins |
+| <https://oxc.rs/docs/guide/usage/transformer/jsx.html> | 2026-11-24 | Runtime `automatic` par défaut, source `react`, transformations de développement coupées par défaut |
+| <https://devblogs.microsoft.com/typescript/announcing-typescript-7-0/> | 2026-11-24 | Paquet `typescript`, `tsc`, défauts changés, options retirées, aucune API |
+| <https://vitest.dev/config/> | 2026-11-24 | Clé `test` de la configuration de Vite, référence `vitest/config` (page de Vitest 5.1.1) |
+| <https://vitest.dev/config/environment> | 2026-11-24 | Défaut `node`, environnement `jsdom` |
+| <https://vitest.dev/config/include> | 2026-11-24 | Motif par défaut des fichiers de test |
+| <https://vitest.dev/config/globals> | 2026-11-24 | `globals` à `false` par défaut |
+| <https://vitest.dev/api/vi> | 2026-11-24 | `vi.stubGlobal`, `vi.unstubAllGlobals`, `vi.fn` |
+| <https://vitest.dev/api/mock> | 2026-11-24 | `mock.calls` |
+| <https://testing-library.com/docs/react-testing-library/api/> | 2026-11-24 | `cleanup` automatique avec un `afterEach` global seulement |
+| <https://react.dev/reference/react-dom/client/createRoot> | 2026-11-24 | `createRoot` de `react-dom/client`, `root.render` |
+| <https://react.dev/learn/synchronizing-with-effects> | 2026-11-24 | Lecture dans un effet, résultat ignoré après le nettoyage, double effet en développement sous `StrictMode` |
+| <https://github.com/npm/cli/blob/v11.20.0/docs/lib/content/commands/npm-ci.md> | 2026-11-24 | `npm ci` : verrou exigé, échec sur écart, verrou jamais écrit |
+| <https://github.com/npm/cli/blob/v11.20.0/workspaces/config/lib/definitions/definitions.js> | 2026-11-24 | `ignore-scripts`, `audit`, `update-notifier`, `min-release-age` de npm 11.20.0 |
+| <https://github.com/npm/cli/blob/v11.20.0/CHANGELOG.md> | 2026-11-24 | `min-release-age` ajouté en 11.10.0 (#8965) |
+| <https://docs.npmjs.com/cli/v11/using-npm/config> | 2026-11-24 | `before`, `min-release-age`, `package-lock-only`, `omit` |
+| <https://github.com/nodejs/docker-node/blob/main/README.md> | 2026-11-24 | Variante Alpine, musl « Experimental » selon ce README |
+| <https://github.com/nodejs/node/blob/v26.13.1/BUILDING.md> | 2026-11-24 | linux x64 musl en Tier 2 ; arm64 musl absent de la liste des plates-formes |
+| <https://github.com/docker-library/docs/blob/master/nginx/content.md> | 2026-11-24 | Exécution sous un UID non root : `pid` et chemins temporaires dans `/tmp` ; image `nginx-unprivileged` |
+| <https://github.com/nginx/docker-nginx/tree/a2a986d19aac4a79a330e6e0b5171aae4e521926/stable/alpine-slim> | 2026-11-24 | `Dockerfile` (utilisateur 101, `ENTRYPOINT`, `CMD`, `EXPOSE 80`), `docker-entrypoint.sh`, `10-listen-on-ipv6-by-default.sh` ; commit de l'image 1.30.7 `alpine-slim` |
+| <https://github.com/nginx/docker-nginx/blob/master/stable/alpine/Dockerfile> | 2026-11-24 | Modules ajoutés par la variante `alpine` à `alpine-slim` |
+| <https://nginx.org/en/docs/ngx_core_module.html> | 2026-11-24 | `pid`, `error_log`, `events` |
+| <https://nginx.org/en/docs/http/ngx_http_core_module.html> | 2026-11-24 | `listen`, `root`, `try_files` et code final, `server_tokens`, `client_body_temp_path`, `default_type`, `sendfile`, `absolute_redirect` |
+| <https://nginx.org/en/docs/http/ngx_http_headers_module.html> | 2026-11-24 | `add_header`, `always`, héritage entre niveaux |
+| <https://nginx.org/en/docs/http/ngx_http_log_module.html> | 2026-11-24 | `access_log`, format `combined` par défaut |
+| <https://nginx.org/en/docs/http/ngx_http_proxy_module.html> | 2026-11-24 | `proxy_temp_path` |
+| <https://nginx.org/en/docs/http/ngx_http_uwsgi_module.html> | 2026-11-24 | `uwsgi_temp_path` |
+| <https://docs.docker.com/build/concepts/context/> | 2026-11-24 | `.dockerignore` à la racine du contexte, syntaxe des motifs |
+| <https://docs.docker.com/reference/dockerfile/> | 2026-11-24 | `USER <UID>[:<GID>]` ; `CMD` de l'image de base gardé tant qu'on ne pose pas d'`ENTRYPOINT` |
+
 ## RS-06. Construction des images
 
 Décision : construction multi-étapes dans le moteur, SDK .NET dans l'image de construction ; aucun SDK .NET ni Node.js dans les prérequis du poste.
@@ -981,6 +1036,60 @@ Faits relevés sur les images : `runtime-deps` 10.0 `noble` pose `APP_UID=1654` 
 | <https://docs.docker.com/reference/cli/docker/buildx/build/> | 2026-11-24 | Alias `docker build`, `--file`, `--target`, `--output`, `--progress` |
 | <https://docs.docker.com/build/exporters/> | 2026-11-24 | Exporteurs `local` et `cacheonly` |
 | <https://docs.docker.com/build/exporters/local-tar/> | 2026-11-24 | `type=local,dest=`, étape `FROM scratch` qui n'exporte que ce qu'elle copie |
+
+### Relevé du 2026-11-24 : paquets npm et images du front (T027)
+
+Fait par [DEV] le 2026-11-24. Sources : le calendrier et les releases de Node.js, le registre npm, la base d'avis de GitHub, l'API de Docker Hub, les pages de nginx.org et la documentation de Renovate. Les choix d'usage sont au point RS-05.
+
+Node.js. La ligne 26 (« Lithium ») est passée en LTS active le 2026-10-28, en maintenance le 2027-10-20, fin de vie le 2029-04-30 ; la 24 est en maintenance depuis le 2026-10-20. 26.13.1, sortie le 2026-11-11, est une release de sécurité (sept CVE notées « High », dans `http2` et `tls`) et embarque npm 11.20.0. Retenue : la LTS active, dans sa dernière version.
+
+Paquets retenus, en version exacte dans `package.json`. La date vient du champ `time` du registre npm, lu le 2026-11-24 par `npm view <paquet> time --json`, lancé dans l'image Node par `docker build` : Node.js n'est pas sur le poste (RS-06).
+
+| Paquet | Version | Publiée le (UTC) | Licence | Rôle |
+| --- | --- | --- | --- | --- |
+| `react` | 19.3.1 | 2026-10-14 16:47 | MIT | exécution |
+| `react-dom` | 19.3.1 | 2026-10-14 16:49 | MIT | exécution |
+| `vite` | 8.3.8 | 2026-11-11 02:49 | MIT | construction |
+| `typescript` | 7.0.2 | 2026-07-08 15:55 | Apache-2.0 | vérification des types |
+| `@types/react` | 19.3.0 | 2026-09-09 18:08 | MIT | types de React |
+| `@types/react-dom` | 19.3.0 | 2026-09-09 18:07 | MIT | types de React DOM |
+| `vitest` | 5.1.0 | 2026-11-02 16:12 | MIT | tests |
+| `jsdom` | 31.0.1 | 2026-11-13 06:36 | MIT | tests, DOM simulé |
+| `@testing-library/react` | 16.3.3 | 2026-08-27 17:41 | MIT | tests |
+| `@testing-library/dom` | 10.4.2 | 2026-09-13 18:08 | MIT | tests, pair de la précédente |
+
+Écartées sous le délai : `@types/react` 19.3.1, publiée le 2026-11-24 à 19:05, et `vitest` 5.1.1, publiée le 2026-11-18 à 07:35. La base d'avis de GitHub, interrogée par `affects=<paquet>@<version>` pour les dix versions retenues, ne renvoie aucun avis ; les avis de Vitest visent des versions antérieures à 4.1.11 et les préversions de 5.0.0. `@vitejs/plugin-react` n'entre pas (RS-05). Compatibilités lues sur les métadonnées : `vitest` 5.1.0 demande `vite` `^6.4.0 || ^7.0.0 || ^8.0.0` et Node.js `^22.12.0 || ^24.0.0 || >=26.0.0` ; `jsdom` 31.0.1 demande Node.js `^22.22.2 || ^24.15.0 || >=26.0.0` ; `@testing-library/react` 16.3.3 demande React 18 ou 19 et `@testing-library/dom` 10.
+
+Verrou. `package-lock.json` (format 3) compte 137 paquets, binaires de toutes les plates-formes compris ; `npm ci` en installe 86 sous Linux arm64 musl. Il a été résolu le 2026-11-24 vers 21:05 UTC avec `--min-release-age=7`. La date de chacun des 137 a été relue au registre : le plus récent, `csstype` 3.2.4, date du 2026-11-17 à 09:43 UTC.
+
+Images de base, toutes deux sur Docker Hub, qui date les étiquettes (`tag_last_pushed`) : Renovate y compte les 7 jours, hors du bloc de l'ADR-016.
+
+| Image | Condensat d'index | Poussée le (UTC) | 7 jours atteints le | Taille amd64 |
+| --- | --- | --- | --- | --- |
+| `node:26.13.1-alpine` | `sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5` | 2026-11-11 20:41 | 2026-11-18 | 63,0 Mo |
+| `nginx:1.30.7-alpine-slim` | `sha256:8c950211a641ec5b23f265450517001f6bcca533666120ebe36cb4cff3d00a55` | 2026-11-19 01:50 | 2026-11-26 à 01:50 | 5,7 Mo |
+
+Les deux condensats ont été relus par `docker buildx imagetools inspect`. L'image Node s'appuie sur `alpine:3.24` (même condensat sous `26.13.1-alpine3.24`). nginx 1.30.7, stable du 2026-11-18, corrige neuf avis, dont CVE-2026-125283 (`try_files` avec `alias`). La PR du front ne fusionne pas avant le 2026-11-26 à 01:50 UTC. nginx 1.30.8, du 2026-11-23, corrige CVE-2026-132779, qui vise `ssl_early_data` : le nginx du front ne termine pas TLS et n'emploie pas cette directive, donc l'exception de sécurité ne s'impose pas ; Renovate proposera `1.30.8-alpine-slim`, poussée le 2026-11-24 à 07:52, après ses 7 jours. La variante `alpine` de 1.30.7 pèse 26,1 Mo en amd64, et son condensat courant date du 2026-11-20.
+
+Volume pour [FINOPS] (R-04), mesuré le 2026-11-24 en arm64 : `npm ci` télécharge environ 28,5 Mio d'archives (taille du cache de npm après installation, `du -sk`) et écrit 103,0 Mio dans `node_modules`, dont 25,8 Mio pour le binaire de TypeScript et 18,1 Mio pour celui de Rolldown. S'y ajoutent l'image Node, 63,0 Mo en amd64 et 68,0 Mo en arm64 (`full_size` de Docker Hub), et l'image nginx, 5,7 Mo. L'essai de BENCH-005 ne tirait que nginx.
+
+Renovate de CELIAN : le gestionnaire `npm` lit par défaut `(^|/)package\.json$`, et confie l'entretien de `package-lock.json` à npm. Les paquets du front montent donc par des PR de CELIAN, avec le délai de 7 jours ; les deux images aussi, par le gestionnaire `dockerfile` (RS-17).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/nodejs/Release/blob/main/schedule.json> | 2026-11-24 | Dates de LTS, de maintenance et de fin des lignes 22 à 27 |
+| <https://api.github.com/repos/nodejs/node/releases> | 2026-11-24 | 26.13.1 du 2026-11-11, release de sécurité ; 26.13.0, passage en LTS |
+| <https://nodejs.org/dist/index.json> | 2026-11-24 | npm 11.20.0 dans 26.13.1, `security: true` |
+| <https://registry.npmjs.org/react> | 2026-11-24 | Champs `time`, `dist-tags` et `license` ; idem pour chaque paquet cité, à `https://registry.npmjs.org/<paquet>`, et pour les 137 paquets du verrou |
+| <https://api.github.com/advisories?ecosystem=npm&affects=vitest@5.1.0> | 2026-11-24 | Aucun avis ; idem pour chacune des dix versions retenues |
+| <https://hub.docker.com/v2/repositories/library/node/tags/26.13.1-alpine> | 2026-11-24 | Condensat, `tag_last_pushed`, taille par architecture |
+| <https://hub.docker.com/v2/repositories/library/node/tags?page_size=100&name=26.13.1> | 2026-11-24 | Étiquettes `slim` repoussées le 2026-11-24 |
+| <https://nginx.org/en/download.html> | 2026-11-24 | Stable 1.30.8, principale 1.31.10 |
+| <https://nginx.org/en/CHANGES-1.30> | 2026-11-24 | Avis corrigés par 1.30.7 et 1.30.8 |
+| <https://hub.docker.com/v2/repositories/library/nginx/tags/1.30.7-alpine-slim> | 2026-11-24 | Condensat, `tag_last_pushed`, taille par architecture |
+| <https://hub.docker.com/v2/repositories/library/nginx/tags/1.30.7-alpine> | 2026-11-24 | Condensat courant et taille de la variante `alpine` |
+| <https://hub.docker.com/v2/repositories/library/nginx/tags?page_size=100&name=1.30> | 2026-11-24 | Étiquettes 1.30.8 poussées les 2026-11-23 et 2026-11-24 |
+| <https://docs.renovatebot.com/modules/manager/npm/> | 2026-11-24 | Motifs par défaut, entretien de `package-lock.json` par npm |
 
 ## RS-19. Mesures de la gate
 

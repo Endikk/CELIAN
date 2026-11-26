@@ -69,9 +69,10 @@ jobs:
       - name: Run the static checks
         run: task check
 
-  # U01: unit tests of the API, in its build image (research RS-06). The
-  # runner's Docker builds the test stage of src/Api/Dockerfile; no .NET SDK
-  # is installed. A required check, like static.
+  # U01 and U02: unit tests of the API and of the front, each in its build
+  # image (research RS-06). The runner's Docker builds the test stages of
+  # src/Api/Dockerfile and src/front/Dockerfile; neither .NET SDK nor
+  # Node.js is installed. A required check, like static.
   unit:
     name: unit
     runs-on: ubuntu-latest

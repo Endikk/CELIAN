@@ -1,0 +1,138 @@
+/* Styles of the notes screen. The system font of the reader's machine: no
+   font file to download, and no request outside the origin, which the
+   Content-Security-Policy of nginx.conf forbids anyway. */
+:root {
+  --paper: #f5f3ee;
+  --ink: #1f2328;
+  --muted: #5b6168;
+  --line: #d7d3ca;
+  --accent: #0f5c63;
+  --accent-ink: #ffffff;
+  --danger: #a3261b;
+  color: var(--ink);
+  background: var(--paper);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Noto Sans", sans-serif;
+  line-height: 1.5;
+}
+
+body {
+  margin: 0;
+}
+
+.notes {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1rem 4rem;
+}
+
+h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.75rem;
+}
+
+h2 {
+  margin: 0 0 0.75rem;
+  font-size: 1.125rem;
+}
+
+.lead,
+.hint,
+.meta {
+  color: var(--muted);
+}
+
+.lead {
+  margin: 0 0 2rem;
+}
+
+.panel {
+  padding: 1.25rem 0;
+  border-top: 1px solid var(--line);
+}
+
+label {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-weight: 600;
+}
+
+textarea {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.5rem;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: #fffdf8;
+  color: inherit;
+  font: inherit;
+  resize: vertical;
+}
+
+textarea[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+textarea:focus-visible,
+button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+button {
+  margin-top: 0.75rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+button.secondary {
+  margin-top: 0.25rem;
+  background: transparent;
+  color: var(--accent);
+}
+
+button:disabled {
+  cursor: progress;
+  opacity: 0.7;
+}
+
+.field-error,
+.error {
+  margin: 0.5rem 0 0;
+  color: var(--danger);
+}
+
+.note-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.note-list li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.note-body {
+  margin: 0;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+}
+
+.meta {
+  margin: 0.25rem 0 0;
+  font-size: 0.875rem;
+}
+
+.served-from {
+  margin: 0.5rem 0 0;
+  font-weight: 600;
+}
+
+code {
+  font-size: 0.8125rem;
+}

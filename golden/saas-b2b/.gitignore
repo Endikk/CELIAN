@@ -21,12 +21,13 @@ kubeconfig*
 # Task: file fingerprints of up-to-date checks (research RS-09)
 .task/
 
-# .NET and the front, as in CELIAN; step 4 adds the build outputs of the
-# front once its tools are checked.
+# .NET and the front, as in CELIAN; dist/ is the build output of Vite
+# (research RS-05).
 bin/
 obj/
 *.user
 node_modules/
+dist/
 
 # OpenTofu (the .terraform.lock.hcl file stays versioned)
 .terraform/
