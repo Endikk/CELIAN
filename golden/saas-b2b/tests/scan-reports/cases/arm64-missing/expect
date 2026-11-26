@@ -1,0 +1,2 @@
+deny
+saas-b2b.invalid/front: scanned for linux/amd64, linux/arm64 expected

@@ -22,10 +22,29 @@
 #   cluster that reached production would block nothing. The scan, run
 #   against a fake trivy, passes and writes its summary when only reported
 #   images carry findings, and fails on an image that no class holds;
+# - the images that the project builds (second PR of step 18; FR-020): the
+#   scan builds each with the Dockerfile and the stage that local/scripts/
+#   app.sh names, for the platform of the run, reads it from the engine for the
+#   report and for the CycloneDX SBOM (no --scanners on the SBOM call, which
+#   needs no database), keeps the SBOM in the directory of --sbom-dir, removes
+#   the tag it made, and fails when the build, the report, the SBOM or the
+#   variant of the platform is missing, or when no built image is in the
+#   inventory;
+# - the lock file of the front (decision of the DSI, 2026-11-26): react and
+#   react-dom are compiled into dist/, so neither the SBOM nor the scan of the
+#   image sees them. The scan runs trivy fs on package-lock.json, with the
+#   options of the images, offline and without configuration, under the class
+#   blocking, and keeps its CycloneDX SBOM; a HIGH finding, a report without
+#   Results or an empty SBOM fails it;
+# - the platform of the run: linux/amd64 or linux/arm64, nothing else, and
+#   each of the two is scanned by a job of its own, the arm64 one on an arm64
+#   runner that builds natively;
 # - when the golden repo sits in CELIAN, the CI jobs of the scan are among
-#   the required checks of the ruleset of main.
-# The scan script runs against a fake trivy (tests/static/fakes/trivy), so
-# that what it passes to Trivy is read, not guessed, and nothing goes out.
+#   the required checks of the ruleset of main, each keeps its SBOM as an
+#   artifact of the run, and one of them is the arm64 job.
+# The scan script runs against a fake trivy and a fake docker
+# (tests/static/fakes/), so that what it passes to them is read, not guessed,
+# and nothing goes out or is built.
 set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -38,7 +57,7 @@ e27="tests/scan/e27-pulled-images.sh"
 inventory="local/scripts/image-inventory.sh"
 classes="tests/scan/image-classes.sh"
 trivy_floor="0.71.1"
-pass_line="no pulled blocking image carries a vulnerability at or above the threshold without a valid exception; the images built by task up (saas-b2b.invalid) are scanned from the second PR of step 18"
+pass_line="no blocking image carries a vulnerability at or above the threshold without a valid exception"
 problems=0
 
 report() {
@@ -158,43 +177,103 @@ for file in "${scanned[@]}"; do
   esac
 done
 
-# 5. What the scan passes to Trivy, read through the fake.
+# 5. What the scan passes to Trivy and to docker, read through the fakes.
 work="$(mktemp -d)"
 trap 'rm -rf "${work:?}"' EXIT
 mkdir -p "$work/bin"
 cp tests/static/fakes/trivy "$work/bin/trivy"
-chmod 0755 "$work/bin/trivy"
+cp tests/static/fakes/docker "$work/bin/docker"
+chmod 0755 "$work/bin/trivy" "$work/bin/docker"
 log="$work/bin/trivy.log"
+docker_log="$work/bin/docker.log"
+# The behaviour of fake trivy for the built images and of fake docker; the
+# case that changes them sets these, and run_scan puts them back.
+built_mode=clean
+fs_mode=clean
+docker_mode=ok
 
-# run_scan MODE ARGS...: runs the scan with the fake in MODE; sets status
-# and out.
+# run_scan MODE ARGS...: runs the scan with fake trivy in MODE for the pulled
+# images, in $built_mode for the built ones, and fake docker in $docker_mode;
+# sets status and out. The SBOM directory is $work/sbom.
 run_scan() {
   printf '%s\n' "$1" >"$work/bin/mode"
   shift
+  printf '%s\n' "$built_mode" >"$work/bin/built-mode"
+  printf '%s\n' "$docker_mode" >"$work/bin/docker-mode"
+  printf '%s\n' "$fs_mode" >"$work/bin/fs-mode"
+  printf 'amd64\n' >"$work/bin/built-platform"
   : >"$log"
+  : >"$docker_log"
+  rm -rf "${work:?}/sbom"
   status=0
-  out="$(GITHUB_STEP_SUMMARY="$work/summary.md" PATH="$work/bin:$PATH" bash "$scan" "$@" 2>&1)" || status=$?
+  out="$(GITHUB_STEP_SUMMARY="$work/summary.md" PATH="$work/bin:$PATH" bash "$scan" --sbom-dir "$work/sbom" "$@" 2>&1)" || status=$?
+  built_mode=clean
+  docker_mode=ok
+  fs_mode=clean
 }
 
 pulled="$(bash "$inventory" lite | grep -c -v '^saas-b2b\.invalid/' || true)"
+built="$(bash "$inventory" lite | grep -c '^saas-b2b\.invalid/' || true)"
+if [ "$built" -lt 1 ]; then
+  report "the inventory of lite holds no image under saas-b2b.invalid: the API and the front are built by task up, and the scan builds them (FR-020)."
+fi
 run_scan ok lite
 if [ "$status" -ne 0 ]; then
   report "$scan lite fails with a fake trivy that finds nothing (status $status):"
   printf '%s\n' "$out"
 fi
 calls="$(grep -c '^ARGS ' "$log" || true)"
-if [ "$calls" != "$pulled" ]; then
-  report "$scan called Trivy $calls times for $pulled pulled images of the lite inventory."
+remote_calls="$(grep -c -F -e '|--image-src|remote|' "$log" || true)"
+engine_calls="$(grep -c -F -e '|--image-src|docker|' "$log" || true)"
+sbom_calls="$(grep '^ARGS image|' "$log" | grep -c -F -e '|--format|cyclonedx|' || true)"
+lock_calls="$(grep -c '^ARGS fs|' "$log" || true)"
+lock_sbom_calls="$(grep '^ARGS fs|' "$log" | grep -c -F -e '|--format|cyclonedx|' || true)"
+if [ "$remote_calls" != "$pulled" ] || [ "$engine_calls" != "$((built * 2))" ] || [ "$sbom_calls" != "$built" ] ||
+  [ "$lock_calls" -lt 2 ] || [ "$lock_sbom_calls" != "$((lock_calls / 2))" ] || [ "$calls" != "$((pulled + built * 2 + lock_calls))" ]; then
+  report "$scan called Trivy $calls times ($remote_calls pulled, $engine_calls from the engine, $sbom_calls SBOM, $lock_calls on lock files, $lock_sbom_calls lock SBOM) for $pulled pulled and $built built images of the lite inventory: one report per image, one SBOM per built image, and a report and an SBOM for each lock file (the front: package-lock.json)."
 fi
 while IFS= read -r line; do
   args="|${line#ARGS }|"
-  for needed in '|image|' '|--config||' '|--ignorefile||' '|--disable-telemetry|' '|--skip-version-check|' \
-    '|--offline-scan|' '|--scanners|vuln|' '|--image-src|remote|' '|--exit-code|0|' '|--format|json|' '|--cache-dir|'; do
+  kind=pulled
+  case "$args" in
+    '|fs|'*)
+      kind=lock
+      case "$args" in *'|--format|cyclonedx|'*) kind=locksbom ;; esac
+      ;;
+    *'|--format|cyclonedx|'*) kind=sbom ;;
+    *'|--image-src|docker|'*) kind=built ;;
+  esac
+  case "$kind" in
+    lock | locksbom) first='|fs|' ;;
+    *) first='|image|' ;;
+  esac
+  for needed in "$first" '|--config||' '|--ignorefile||' '|--disable-telemetry|' '|--skip-version-check|' '|--cache-dir|' '|--output|'; do
     case "$args" in
       *"$needed"*) ;;
       *) report "$scan does not pass $needed to Trivy (arguments joined by |): ${line#ARGS }" ;;
     esac
   done
+  case "$kind" in
+    pulled) wanted_args='|--offline-scan| |--scanners|vuln| |--image-src|remote| |--exit-code|0| |--format|json| |--platform|linux/amd64|' ;;
+    built) wanted_args='|--offline-scan| |--scanners|vuln| |--image-src|docker| |--exit-code|0| |--format|json|' ;;
+    sbom) wanted_args='|--image-src|docker| |--format|cyclonedx|' ;;
+    lock) wanted_args='|--offline-scan| |--scanners|vuln| |--exit-code|0| |--format|json|' ;;
+    locksbom) wanted_args='|--format|cyclonedx|' ;;
+  esac
+  for needed in $wanted_args; do
+    case "$args" in
+      *"$needed"*) ;;
+      *) report "$scan does not pass $needed to Trivy for a $kind call (arguments joined by |): ${line#ARGS }" ;;
+    esac
+  done
+  if [ "$kind" = sbom ] || [ "$kind" = locksbom ]; then
+    # With --format cyclonedx, Trivy disables the security scan and needs no
+    # database; --scanners would add the vulnerabilities to the SBOM, which
+    # lists components and versions (FR-020).
+    case "$args" in
+      *'|--scanners|'*) report "$scan passes --scanners to the SBOM call: the SBOM lists components and versions, not vulnerabilities (arguments joined by |): ${line#ARGS }" ;;
+    esac
+  fi
   case "$args" in
     *'|--db-repository|'* | *'|--server|'* | *'|--severity|'*) report "$scan passes a refused option to Trivy: ${line#ARGS }" ;;
   esac
@@ -211,10 +290,190 @@ while IFS= read -r line; do
   name="${line#ENV }"
   name="${name%%=*}"
   case "$name" in
-    PATH | HOME | PWD | SHLVL | _) ;;
-    *) report "$scan runs Trivy with $name in its environment; it runs under env -i, with PATH and HOME only." ;;
+    PATH | HOME | DOCKER_HOST | PWD | SHLVL | _) ;;
+    *) report "$scan runs Trivy with $name in its environment; it runs under env -i, with PATH, HOME and DOCKER_HOST (the engine that holds the built images) only." ;;
   esac
 done < <(grep '^ENV ' "$log" | LC_ALL=C sort -u || true)
+
+# The engine of the built images: Trivy reads them there, and under env -i it
+# finds the socket only through DOCKER_HOST, taken from the docker context.
+if ! grep -q -x -F 'ENV DOCKER_HOST=unix:///fake/docker.sock' "$log"; then
+  report "$scan does not give Trivy the engine of the docker context (DOCKER_HOST=unix:///fake/docker.sock) to read the built images."
+fi
+run_with_host() {
+  printf 'ok\n' >"$work/bin/mode"
+  printf 'clean\n' >"$work/bin/built-mode"
+  printf 'ok\n' >"$work/bin/docker-mode"
+  printf 'clean\n' >"$work/bin/fs-mode"
+  printf 'amd64\n' >"$work/bin/built-platform"
+  : >"$log"
+  : >"$docker_log"
+  rm -rf "${work:?}/sbom"
+  status=0
+  out="$(DOCKER_HOST=unix:///caller/docker.sock GITHUB_STEP_SUMMARY="$work/summary.md" PATH="$work/bin:$PATH" bash "$scan" --sbom-dir "$work/sbom" lite 2>&1)" || status=$?
+}
+run_with_host
+if [ "$status" -ne 0 ] || ! grep -q -x -F 'ENV DOCKER_HOST=unix:///caller/docker.sock' "$log" ||
+  grep -q -F 'unix:///fake/docker.sock' "$log"; then
+  report "$scan does not give Trivy the DOCKER_HOST of its caller as it is:"
+  printf '%s\n' "$out"
+fi
+
+# What the scan asks of the engine: the build of each built image, for the
+# platform of the run, with the Dockerfile and the stage that app.sh names,
+# under a tag of its own; then the removal of that tag, and nothing else.
+if [ "$built" -ge 1 ]; then
+  run_scan ok lite
+  builds="$(grep -c '^ARGS build|' "$docker_log" || true)"
+  removals="$(grep -c '^ARGS rmi|' "$docker_log" || true)"
+  if [ "$builds" != "$built" ] || [ "$removals" != "$built" ]; then
+    report "$scan built $builds images and removed $removals tags for $built built images of the inventory."
+  fi
+  while IFS= read -r line; do
+    args="|${line#ARGS }|"
+    case "$args" in
+      '|context|inspect|'* | '|build|'* | '|rmi|'*) ;;
+      *) report "$scan runs a docker command that S26 does not expect: ${line#ARGS }" ;;
+    esac
+  done < <(grep '^ARGS ' "$docker_log" || true)
+  for pair in 'api|src/Api/Dockerfile' 'front|src/front/Dockerfile'; do
+    name="${pair%%|*}"
+    file="${pair#*|}"
+    if ! grep '^ARGS build|' "$docker_log" | grep -F -e "|--tag|saas-b2b.invalid/$name:scan|" | grep -F -e '|--target|runtime|' |
+      grep -F -e '|--platform|linux/amd64|' | grep -q -F -e "/$file|"; then
+      report "$scan does not build saas-b2b.invalid/$name:scan from $file, stage runtime, for linux/amd64 (the Dockerfile and the stage of local/scripts/app.sh)."
+    fi
+    if ! grep -q -x -F "ARGS rmi|saas-b2b.invalid/$name:scan" "$docker_log"; then
+      report "$scan does not remove the tag saas-b2b.invalid/$name:scan that it made."
+    fi
+    if [ ! -s "$work/sbom/$name-amd64.cdx.json" ]; then
+      report "$scan keeps no SBOM at $work/sbom/$name-amd64.cdx.json."
+    fi
+  done
+fi
+
+# The platform of the run: the pulled images, the build and the file name of
+# the SBOM follow it; a platform that is neither amd64 nor arm64 is refused
+# before anything runs.
+run_scan ok --platform linux/arm64 lite
+if [ "$status" -ne 0 ]; then
+  report "$scan --platform linux/arm64 lite fails with a fake trivy that finds nothing (status $status):"
+  printf '%s\n' "$out"
+fi
+if [ "$(grep -c -F -e '|--platform|linux/arm64|' "$log" || true)" != "$pulled" ] || grep -q -F -e '|--platform|linux/amd64|' "$log"; then
+  report "$scan --platform linux/arm64 does not scan the $pulled pulled images for linux/arm64 alone."
+fi
+if [ "$(grep '^ARGS build|' "$docker_log" | grep -c -F -e '|--platform|linux/arm64|' || true)" != "$built" ]; then
+  report "$scan --platform linux/arm64 does not build the $built built images for linux/arm64."
+fi
+for name in api front; do
+  if [ ! -s "$work/sbom/$name-arm64.cdx.json" ]; then
+    report "$scan --platform linux/arm64 keeps no SBOM at $work/sbom/$name-arm64.cdx.json."
+  fi
+done
+
+run_scan ok --platform linux/riscv64 lite
+if [ "$status" -eq 0 ] || [ -s "$log" ] || [ -s "$docker_log" ] || ! printf '%s\n' "$out" | grep -q -F 'linux/amd64 or linux/arm64'; then
+  report "$scan accepts linux/riscv64, or runs something before refusing it, or does not name the two platforms:"
+  printf '%s\n' "$out"
+fi
+
+# Without a directory for the SBOM, nothing runs: an SBOM that has nowhere to
+# go is a build image that FR-020 does not cover.
+: >"$log"
+: >"$docker_log"
+status=0
+out="$(PATH="$work/bin:$PATH" bash "$scan" lite 2>&1)" || status=$?
+if [ "$status" -eq 0 ] || [ -s "$log" ] || [ -s "$docker_log" ] || ! printf '%s\n' "$out" | grep -q -F -e '--sbom-dir'; then
+  report "$scan runs without --sbom-dir, or runs something before refusing it, or does not name the option:"
+  printf '%s\n' "$out"
+fi
+
+# The failures of the built images: each must stop the scan and say which
+# image and which rule.
+built_mode=high
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'saas-b2b.invalid/api: CVE-2099-1001 (HIGH)' ||
+  ! printf '%s\n' "$out" | grep -q -F 'class blocking'; then
+  report "$scan does not fail, naming the image and the vulnerability, when a built image carries a HIGH finding:"
+  printf '%s\n' "$out"
+fi
+
+built_mode=empty
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'saas-b2b.invalid/api' ||
+  ! printf '%s\n' "$out" | grep -q -F 'the report holds no Results and no Metadata.OS'; then
+  report "$scan does not fail, naming the image, on an empty report of a built image (tasks.md, gap 65):"
+  printf '%s\n' "$out"
+fi
+
+built_mode=wrong-arch
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'saas-b2b.invalid/api: scanned for linux/arm64, linux/amd64 expected'; then
+  report "$scan does not fail when the report of a built image is that of the other variant (an arm64 report for an amd64 run):"
+  printf '%s\n' "$out"
+fi
+
+built_mode=sbom-empty
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'the SBOM of saas-b2b.invalid/api'; then
+  report "$scan does not fail, naming the image, when its SBOM is empty (FR-020):"
+  printf '%s\n' "$out"
+fi
+
+# The lock file of the front (decision of the DSI, 2026-11-26): react and
+# react-dom are compiled into dist/, so only trivy fs on package-lock.json
+# sees them. A HIGH finding there blocks like one in an image, a report
+# without Results fails, and so does an empty SBOM.
+fs_mode=high
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'saas-b2b.invalid/front/package-lock.json: CVE-2099-1001 (HIGH)' ||
+  ! printf '%s\n' "$out" | grep -q -F 'class blocking'; then
+  report "$scan does not fail, naming the lock file and the vulnerability, when package-lock.json of the front carries a HIGH finding:"
+  printf '%s\n' "$out"
+fi
+
+fs_mode=empty
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'the report of the lock file holds no Results'; then
+  report "$scan does not fail on a report of the lock file that holds no Results:"
+  printf '%s\n' "$out"
+fi
+
+fs_mode=sbom-empty
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'the SBOM of saas-b2b.invalid/front/package-lock.json'; then
+  report "$scan does not fail, naming the lock file, when its SBOM is empty (FR-020):"
+  printf '%s\n' "$out"
+fi
+for arch in amd64 arm64; do
+  case "$arch" in amd64) run_scan ok lite ;; *) run_scan ok --platform linux/arm64 lite ;; esac
+  if [ ! -s "$work/sbom/front-lock-$arch.cdx.json" ]; then
+    report "$scan keeps no SBOM of the lock file of the front at $work/sbom/front-lock-$arch.cdx.json."
+  fi
+done
+
+docker_mode=build-fails
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'saas-b2b.invalid/api was not built' ||
+  grep -q -F -e '|--image-src|docker|' "$log"; then
+  report "$scan does not fail, naming the image, when its build fails, or goes on to scan it:"
+  printf '%s\n' "$out"
+fi
+
+# An image that has no variant for the platform of the run: Trivy fails, and
+# the scan says which image and which platform.
+run_scan novariant --platform linux/arm64 lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'has no variant for linux/arm64' ||
+  printf '%s\n' "$out" | grep -q -F "$pass_line"; then
+  report "$scan does not fail, saying that the image has no arm64 variant:"
+  printf '%s\n' "$out"
+fi
+run_scan novariant lite
+if [ "$status" -ne 0 ]; then
+  report "$scan lite fails on an image that has no arm64 variant, though the run is for amd64:"
+  printf '%s\n' "$out"
+fi
 
 run_scan ok --db-repository ghcr.io/aquasecurity/trivy-db:2 lite
 if [ "$status" -eq 0 ] || grep -q '^ARGS ' "$log" || ! printf '%s\n' "$out" | grep -q 'S26'; then
@@ -238,26 +497,61 @@ if [ "$status" -eq 0 ] || printf '%s\n' "$out" | grep -q -F "$pass_line" ||
   report "$scan does not fail, saying so, when the vulnerability database cannot be downloaded (E27; spec, edge case):"
   printf '%s\n' "$out"
 fi
+# The pulled images come first: without a database, the scan stops before it
+# builds anything.
+if grep -q '^ARGS build|' "$docker_log"; then
+  report "$scan builds an image before it knows that the vulnerability database is reachable."
+fi
 
 # 6. The jobs of the scan are required checks of main.
 if [ "$in_celian" -eq 1 ]; then
   ruleset="$celian_root/.github/rulesets/main.json"
-  names="$(awk '
+  # One line per job that runs the scan: its name, then 1 or 0 for: the SBOM
+  # directory is given, an upload-artifact step keeps it, that step fails
+  # when it finds no file, the job scans for arm64, its runner is an arm64 one.
+  jobs_of_scan="$(awk '
     /^jobs:/ { in_jobs = 1; next }
     in_jobs && /^  [A-Za-z0-9_-]+:[ \t]*$/ { job = $1; sub(/:$/, "", job); name[job] = job; next }
     in_jobs && job != "" && /^    name:[ \t]*/ { n = $0; sub(/^    name:[ \t]*/, "", n); gsub(/["'\'']/, "", n); name[job] = n; next }
-    in_jobs && job != "" && $0 !~ /^[ \t]*#/ && /tests\/scan\// { scan[job] = 1 }
-    END { for (j in scan) print name[j] }
-  ' "$celian_root/.github/workflows/golden-saas-b2b.yml")"
-  if [ -z "$names" ]; then
+    in_jobs && job != "" && $0 !~ /^[ \t]*#/ {
+      if (/tests\/scan\//) scan[job] = 1
+      if (/--sbom-dir/) sbom[job] = 1
+      if (/actions\/upload-artifact@/) upload[job] = 1
+      if (/if-no-files-found:[ \t]*error/) strict[job] = 1
+      if (/retention-days:[ \t]*90([ \t]|$)/) keep[job] = 1
+      if (/--platform linux\/arm64/) arm[job] = 1
+      if (/runs-on:.*-arm/) armrunner[job] = 1
+    }
+    END { for (j in scan) print name[j] "|" (sbom[j] + 0) "|" (upload[j] + 0) "|" (strict[j] + 0) "|" (arm[j] + 0) "|" (armrunner[j] + 0) "|" (keep[j] + 0) }
+  ' "$celian_root/.github/workflows/golden-saas-b2b.yml" | LC_ALL=C sort)"
+  if [ -z "$jobs_of_scan" ]; then
     report "$celian_root/.github/workflows/golden-saas-b2b.yml: no job runs the scan of tests/scan/ (T117)."
   fi
-  while IFS= read -r name; do
+  arm_jobs=0
+  amd_jobs=0
+  while IFS='|' read -r name sbom_dir upload strict arm armrunner keep; do
     [ -n "$name" ] || continue
     if ! grep -q -F "\"context\": \"$name\"" "$ruleset"; then
       report "$ruleset: the job $name of the scan is not a required check of main (FR-022)."
     fi
-  done < <(printf '%s\n' "$names")
+    if [ "$sbom_dir" != 1 ] || [ "$upload" != 1 ] || [ "$strict" != 1 ]; then
+      report "the job $name of the scan does not keep its SBOM as an artifact of the run: it passes --sbom-dir to the scan, then an actions/upload-artifact step with if-no-files-found: error keeps that directory (FR-020)."
+    fi
+    if [ "$keep" != 1 ]; then
+      report "the job $name of the scan does not write retention-days: 90 on its upload-artifact step: the SBOM is kept for the time that the repository settings say, and the 90 days of the decision of the DSI (2026-11-26) are the maximum of a public repository."
+    fi
+    if [ "$arm" = 1 ]; then
+      arm_jobs=$((arm_jobs + 1))
+      if [ "$armrunner" != 1 ]; then
+        report "the job $name scans for linux/arm64 on a runner that is not an arm64 one (ubuntu-24.04-arm): the image would be built under emulation, or not at all."
+      fi
+    else
+      amd_jobs=$((amd_jobs + 1))
+    fi
+  done < <(printf '%s\n' "$jobs_of_scan")
+  if [ -n "$jobs_of_scan" ] && { [ "$arm_jobs" -lt 1 ] || [ "$amd_jobs" -lt 1 ]; }; then
+    report "the jobs of the scan cover $amd_jobs amd64 and $arm_jobs arm64 variants: each image is scanned for both, by a job of its own (decision of the DSI, 2026-11-26)."
+  fi
 fi
 
 # 7. The classes of the images (decision of the DSI, 2026-11-25).
@@ -447,6 +741,10 @@ copy_scan_tree() {
   cp -R k8s policy security tests "$dir/"
   cp -R local "$dir/"
   rm -rf "${dir:?}/local/tests"
+  # The scan reads the lock file of the front (react and react-dom are compiled
+  # into dist/); the Dockerfiles it builds from stay out of the copy.
+  mkdir -p "$dir/src/front"
+  cp src/front/package-lock.json "$dir/src/front/"
 }
 
 write_classes() {
@@ -466,10 +764,16 @@ write_classes() {
 scan_in() {
   local dir="$1"
   printf '%s\n' high >"$work/bin/mode"
+  printf '%s\n' clean >"$work/bin/built-mode"
+  printf '%s\n' ok >"$work/bin/docker-mode"
+  printf '%s\n' clean >"$work/bin/fs-mode"
+  printf '%s\n' amd64 >"$work/bin/built-platform"
   : >"$log"
+  : >"$docker_log"
   : >"$work/summary.md"
+  rm -rf "${work:?}/sbom"
   status=0
-  out="$(CDPATH='' cd -- "$dir" && GITHUB_STEP_SUMMARY="$work/summary.md" PATH="$work/bin:$PATH" bash "$scan" lite 2>&1)" || status=$?
+  out="$(CDPATH='' cd -- "$dir" && GITHUB_STEP_SUMMARY="$work/summary.md" PATH="$work/bin:$PATH" bash "$scan" --sbom-dir "$work/sbom" lite 2>&1)" || status=$?
 }
 
 repositories=()
@@ -503,6 +807,29 @@ if [ "${#repositories[@]}" -gt 0 ]; then
   if ! grep -q -F '| Image | CRITICAL | HIGH | Distinct identifiers | With a fix |' "$work/summary.md"; then
     report "the summary of the scan has no table header \"| Image | CRITICAL | HIGH | Distinct identifiers | With a fix |\"."
   fi
+  # The images that block, built ones included: one row each, with the
+  # counts by level and how many are refused, for the platform of the run.
+  if ! grep -q -F '| Image | Platform | CRITICAL | HIGH | MEDIUM | LOW | UNKNOWN | Refused |' "$work/summary.md"; then
+    report "the summary of the scan has no table of the blocking images, header \"| Image | Platform | CRITICAL | HIGH | MEDIUM | LOW | UNKNOWN | Refused |\":"
+    cat "$work/summary.md"
+  fi
+  while IFS= read -r ref; do
+    case "$ref" in
+      saas-b2b.invalid/*)
+        repo="${ref%%:*}"
+        if ! grep -F -q -e "| $repo | linux/amd64 | 0 | 0 | 0 | 0 | 0 | 0 |" "$work/summary.md"; then
+          report "the summary of the scan has no row \"| $repo | linux/amd64 | 0 | 0 | 0 | 0 | 0 | 0 |\" for a built image:"
+          cat "$work/summary.md"
+          break
+        fi
+        ;;
+    esac
+  done < <(bash "$inventory" lite)
+  for name in api front; do
+    if [ ! -s "$work/sbom/$name-amd64.cdx.json" ]; then
+      report "the scan of a tree whose reported images carry findings keeps no SBOM of $name."
+    fi
+  done
 
   copy_scan_tree "$work/scan-unclassified"
   write_classes "$work/scan-unclassified/$policy_file" "${repositories[@]:1}"
@@ -521,6 +848,20 @@ if [ "${#repositories[@]}" -gt 0 ]; then
   scan_in "$work/scan-blocking"
   if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'class blocking'; then
     report "$scan does not fail on a blocking image that carries findings:"
+    printf '%s\n' "$out"
+  fi
+
+  # An inventory without any built image: the scan has no SBOM to make and no
+  # image of the project to read, which FR-020 does not allow to pass.
+  copy_scan_tree "$work/scan-no-built"
+  write_classes "$work/scan-no-built/$policy_file" "${repositories[@]}"
+  {
+    printf '%s\n' '#!/usr/bin/env bash'
+    printf 'printf "%%s\\n" %s\n' "${repositories[0]}@sha256:$(printf '%064d' 0 | tr 0 b)"
+  } >"$work/scan-no-built/$inventory"
+  scan_in "$work/scan-no-built"
+  if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'no built image'; then
+    report "$scan passes an inventory that holds no image under saas-b2b.invalid, or does not say so:"
     printf '%s\n' "$out"
   fi
 fi

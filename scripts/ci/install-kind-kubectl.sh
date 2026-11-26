@@ -1,18 +1,22 @@
 #!/usr/bin/env bash
 # Installs kind and kubectl for the jobs of CELIAN that create a kind
-# cluster (.github/workflows/golden-saas-b2b.yml, job e2e-lite), on Linux
-# amd64, the runner of the job. Each binary is checked against its SHA-256
-# before it is installed:
-# - kind: the version and the linux-amd64 sum of the catalog,
+# cluster (.github/workflows/golden-saas-b2b.yml, job e2e-lite) or that render
+# a Kustomization (the scan of the images), on Linux amd64, the runner of
+# most jobs, or on Linux arm64, the runner of the job that scans the arm64
+# variant of the images. Each binary is checked against its SHA-256 before it
+# is installed:
+# - kind: the version and the linux-amd64 or linux-arm64 sum of the catalog,
 #   catalog/kubernetes-cluster.yaml (ADR-004, condition 5): the sum
 #   published in the same release protects from corruption, not from a
 #   substitution;
-# - kubectl: KUBECTL_VERSION and KUBECTL_SHA256 from the environment, pinned
-#   in the workflow (spec 001, research RS-18).
+# - kubectl: KUBECTL_VERSION from the environment, and KUBECTL_SHA256 on
+#   amd64 or KUBECTL_SHA256_ARM64 on arm64, pinned in the workflow (spec 001,
+#   research RS-18). Each is the content of kubectl.sha256 beside the binary
+#   on dl.k8s.io.
 # The preflight checks of task up then compare kind with KIND_VERSION of the
 # golden repo, and kubectl with the minor of its platform.yaml.
 #
-# Usage: KUBECTL_VERSION=v1.36.6 KUBECTL_SHA256=<sum> \
+# Usage: KUBECTL_VERSION=v1.36.6 KUBECTL_SHA256=<sum> KUBECTL_SHA256_ARM64=<sum> \
 #          scripts/ci/install-kind-kubectl.sh <directory>
 # Then put <directory> on PATH, before the kind and kubectl of the runner.
 set -euo pipefail
@@ -27,20 +31,30 @@ die() {
 
 [ "$#" -eq 1 ] || die "usage: scripts/ci/install-kind-kubectl.sh <directory>"
 dest="$1"
-[ "$(uname -s)" = Linux ] && [ "$(uname -m)" = x86_64 ] ||
-  die "Linux amd64 only, the runner of the job; found $(uname -s) $(uname -m)."
-[ -n "${KUBECTL_VERSION:-}" ] && [ -n "${KUBECTL_SHA256:-}" ] ||
-  die "KUBECTL_VERSION and KUBECTL_SHA256 must be set; the workflow pins them."
+[ "$(uname -s)" = Linux ] || die "Linux only, the runner of the job; found $(uname -s) $(uname -m)."
+case "$(uname -m)" in
+  x86_64)
+    arch="amd64"
+    kubectl_sum="${KUBECTL_SHA256:-}"
+    ;;
+  aarch64 | arm64)
+    arch="arm64"
+    kubectl_sum="${KUBECTL_SHA256_ARM64:-}"
+    ;;
+  *) die "amd64 and arm64 only, the runners of the jobs; found $(uname -s) $(uname -m)." ;;
+esac
+[ -n "${KUBECTL_VERSION:-}" ] && [ -n "$kubectl_sum" ] ||
+  die "KUBECTL_VERSION and the SHA-256 of kubectl for linux-$arch (KUBECTL_SHA256 on amd64, KUBECTL_SHA256_ARM64 on arm64) must be set; the workflow pins them."
 [ -f "$catalog" ] || die "$catalog is missing: it holds the version and the sums of kind."
 
-# The version of the local target and the sum of its linux-amd64 artifact,
+# The version of the local target and the sum of its linux-$arch artifact,
 # read in the block "local:" of the catalog entry.
 read_catalog() {
-  awk '
+  awk -v platform="linux-$arch" '
     /^  local:/ { local_block = 1; next }
     /^  [a-z]+:/ { local_block = 0 }
     local_block && /^    version:/ { gsub(/"/, "", $2); print "version " $2 }
-    local_block && /- platform: linux-amd64$/ { wanted = 1; next }
+    local_block && $0 ~ ("- platform: " platform "$") { wanted = 1; next }
     wanted && /sha256:/ { gsub(/"/, "", $2); print "sha256 " $2; wanted = 0 }
   ' "$catalog"
 }
@@ -48,7 +62,7 @@ read_catalog() {
 kind_version="$(read_catalog | awk '$1 == "version" { print $2; exit }')"
 kind_sum="$(read_catalog | awk '$1 == "sha256" { print $2; exit }')"
 [[ $kind_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "no kind version in $catalog."
-[[ $kind_sum =~ ^[0-9a-f]{64}$ ]] || die "no linux-amd64 SHA-256 of kind in $catalog."
+[[ $kind_sum =~ ^[0-9a-f]{64}$ ]] || die "no linux-$arch SHA-256 of kind in $catalog."
 
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
@@ -66,9 +80,9 @@ fetch() {
   echo "Installed $name from $url, SHA-256 checked."
 }
 
-fetch "https://github.com/kubernetes-sigs/kind/releases/download/v$kind_version/kind-linux-amd64" \
+fetch "https://github.com/kubernetes-sigs/kind/releases/download/v$kind_version/kind-linux-$arch" \
   "$kind_sum" kind
-fetch "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/amd64/kubectl" "$KUBECTL_SHA256" kubectl
+fetch "https://dl.k8s.io/release/$KUBECTL_VERSION/bin/linux/$arch/kubectl" "$kubectl_sum" kubectl
 
 "$dest/kind" version
 "$dest/kubectl" version --client

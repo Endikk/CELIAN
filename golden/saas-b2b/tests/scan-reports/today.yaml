@@ -1,3 +1,6 @@
-# The fixed date of U03: the example exceptions are judged on this day, not
-# on the day the test runs (research RS-23).
+# The fixed date and the fixed platform of U03: the example exceptions are
+# judged on this day, not on the day the test runs (research RS-23), and the
+# example reports of the images that block are those of the arm64 variant,
+# the one a run of the scan for linux/arm64 reads.
 scan_today: "2026-12-01"
+scan_platform: linux/arm64

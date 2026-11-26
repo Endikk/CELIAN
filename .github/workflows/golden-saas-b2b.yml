@@ -24,6 +24,11 @@ env:
   # (research RS-18). No manager updates it: a PR of Renovate on
   # KUBECTL_VERSION fails here until the new sum is written by hand.
   KUBECTL_SHA256: 29818b6729dc9262b692307470d0558d027725e738be5dd47c760261868a2634
+  # The same for linux/arm64, the runner of the job that scans the arm64
+  # variant of the images: kubectl.sha256 of the release at
+  # https://dl.k8s.io/release/v1.36.6/bin/linux/arm64/kubectl.sha256 (read on
+  # 2026-11-26). Same rule: changed by hand with KUBECTL_VERSION.
+  KUBECTL_SHA256_ARM64: 35507ef408c3d38849e5d3203e18f8e861db822aa664101a9ced0869edd06046
   # The Helm of the envoy-render job: the version that rendered
   # local/vendor/envoy-gateway/ (research RS-02, relevé du 2026-11-25), and the
   # SHA-256 of helm-v4.3.2-linux-amd64.tar.gz from get.helm.sh, equal to the
@@ -94,20 +99,29 @@ jobs:
       - name: Run the unit tests
         run: task test
 
-  # E27 on the pulled images of the lite profile, without a cluster (spec
-  # 001, T117): the node, the mirror, Envoy Gateway and its proxy, then each
-  # image that the next steps add to the inventory (S25). First with a
-  # database repository under .invalid, where the scan must fail and say so,
-  # then for real, with the database downloaded in this run and no cache
-  # (research RS-22). Trivy comes from tests/tools/install.sh, checked
-  # against its SHA-256, never from an action of Aqua Security (S26). The
-  # second PR of step 18 moves the scan into e2e-lite (T123). No path
-  # filter: a finding published after a merge fails the next PR (plan,
-  # "SBOM et scan des images"). Required check of the ruleset of main.
+  # E27 on the images of the lite profile, without a cluster (spec 001, T117
+  # and the second PR of step 18): the pulled ones (the node, the mirror,
+  # Envoy Gateway and its proxy, Postgres, the cache, then each image that the
+  # next steps add to the inventory, S25), and the two that the project builds,
+  # the API and the front, which the scan builds with their Dockerfile and
+  # reads from the engine of the runner. First with a database repository
+  # under .invalid, where the scan must fail and say so, then for real, with
+  # the database downloaded in this run and no cache (research RS-22). Trivy
+  # comes from tests/tools/install.sh, checked against its SHA-256, never from
+  # an action of Aqua Security (S26). The lock file of the front is scanned too,
+  # with trivy fs, under the same policy: react and react-dom are compiled into
+  # dist/, which no image scan sees. The SBOM of each built image and of that
+  # lock file, CycloneDX JSON, is kept as an artifact of the run for 90 days
+  # (retention-days: the maximum of a public repository unless its settings say
+  # more, per the action.yml of upload-artifact v7.0.2, read on 2026-11-26;
+  # FR-020, research RS-22). This job scans the linux/amd64 variant; scan-images-arm64 scans the other (decision
+  # of the DSI, 2026-11-26). The move of the scan into e2e-lite (T123) is not
+  # done. No path filter: a finding published after a merge fails the next PR
+  # (plan, "SBOM et scan des images"). Required check of the ruleset of main.
   scan-images:
     name: scan-images
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: golden/saas-b2b
@@ -129,8 +143,57 @@ jobs:
           bash scripts/ci/install-kind-kubectl.sh "$RUNNER_TEMP/kind-tools"
           echo "$RUNNER_TEMP/kind-tools" >> "$GITHUB_PATH"
 
-      - name: Scan the pulled images (E27)
-        run: bash tests/scan/e27-pulled-images.sh
+      - name: Scan the images and write their SBOM (E27)
+        run: bash tests/scan/e27-pulled-images.sh --platform linux/amd64 --sbom-dir "$RUNNER_TEMP/sbom"
+
+      - name: Keep the SBOM of the built images
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-amd64
+          path: ${{ runner.temp }}/sbom
+          if-no-files-found: error
+          retention-days: 90
+
+  # The same scan for the linux/arm64 variant of every image, on an arm64
+  # runner so that the API and the front build natively: the variant of a Mac
+  # with Apple Silicon (D04). GitHub-hosted, free for a public repository
+  # (https://docs.github.com/en/actions/reference/runners/github-hosted-runners,
+  # read on 2026-11-26). It installs the arm64 binaries of Trivy, conftest and
+  # kubectl, each checked against its SHA-256. A required check of the ruleset
+  # of main, like scan-images.
+  scan-images-arm64:
+    name: scan-images-arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: golden/saas-b2b
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Trivy and conftest
+        run: |
+          bash tests/tools/install.sh "$RUNNER_TEMP/golden-tools" trivy conftest
+          echo "$RUNNER_TEMP/golden-tools" >> "$GITHUB_PATH"
+
+      - name: Install kind and kubectl
+        working-directory: .
+        run: |
+          bash scripts/ci/install-kind-kubectl.sh "$RUNNER_TEMP/kind-tools"
+          echo "$RUNNER_TEMP/kind-tools" >> "$GITHUB_PATH"
+
+      - name: Scan the images and write their SBOM (E27)
+        run: bash tests/scan/e27-pulled-images.sh --platform linux/arm64 --sbom-dir "$RUNNER_TEMP/sbom"
+
+      - name: Keep the SBOM of the built images
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-arm64
+          path: ${{ runner.temp }}/sbom
+          if-no-files-found: error
+          retention-days: 90
 
   # X01: the golden repo as a project of its own, copied into a new Git
   # repository where its hooks, commitlint, actionlint and gitleaks run
