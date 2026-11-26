@@ -28,6 +28,21 @@ gh api --method PUT "repos/$repo/actions/permissions/workflow" \
   -F can_approve_pull_request_reviews=true >/dev/null
 echo "Workflow permissions applied."
 
+# The CI runs on pull_request and e2e-lite can hold a runner for 45 minutes, so
+# a fork PR must not start a run unprompted. all_external_contributors is the
+# strictest of the three values: anyone who is not a member or owner needs a
+# maintainer approval, merged history or not.
+# Source: PUT /repos/{owner}/{repo}/actions/permissions/fork-pr-contributor-approval,
+# body approval_policy, 204 on success
+# https://docs.github.com/en/rest/actions/permissions (read on 2026-11-26).
+# Values: first_time_contributors_new_to_github, first_time_contributors,
+# all_external_contributors. Meaning of each:
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository
+# (read on 2026-11-26).
+gh api --method PUT "repos/$repo/actions/permissions/fork-pr-contributor-approval" \
+  -f approval_policy=all_external_contributors >/dev/null
+echo "Fork pull request approval applied."
+
 # Rulesets are enforced on public repositories, or on private ones with a
 # paid plan. On a private repository with GitHub Free the API answers 403.
 if ! rulesets="$(gh api "repos/$repo/rulesets" 2>/dev/null)"; then
