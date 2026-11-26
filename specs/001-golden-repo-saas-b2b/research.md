@@ -531,6 +531,39 @@ Une variable posée sous `vars:` en tête d'un Taskfile inclus garde sa valeur f
 | <https://taskfile.dev/docs/guide/includes> | 2026-11-25 | Appel `espace:tache` d'une tâche incluse |
 | Task v3.54.0 sur le poste, Taskfile d'essai | 2026-11-25 | Noms `mirror:purge` et `test:e2e` appelés et listés ; `vars:` d'un Taskfile inclus plus forte que l'environnement et que la ligne de commande |
 
+### Relevé du 2026-11-26 : prérequis du README (T090)
+
+Fait par [DEV], sans l'évaluation d'un moteur libre par [OPS], qui n'est pas rendue (R-26, ADR-004 condition 8). Sources officielles, lues le 2026-11-26 ; l'API de GitHub par `gh api`. Les versions du tableau sont celles des fichiers du dépôt, jamais celles d'une release lue ce jour ; S18 les compare à ces fichiers.
+
+| Outil | Version écrite au README | Licence | Ce qui l'établit |
+| --- | --- | --- | --- |
+| Docker Engine | 28.0.0 ou plus sous Linux (règle de l'ADR-011, condition 3) | Apache-2.0 | La page de l'Engine donne « Apache License, Version 2.0 » ; l'API de `moby/moby` répond `Apache-2.0` |
+| kind | 0.33.0 exactement (ADR-004, condition 2) | Apache-2.0 | L'API de `kubernetes-sigs/kind` répond `Apache-2.0` ; entrée du catalogue lue le 2026-11-19 ; la page de démarrage rapide donne v0.33.0 comme version courante |
+| kubectl | 1.35 à 1.37, autour de la mineure 1.36 de `platform.yaml` (ADR-006, condition 5) | Apache-2.0 | L'API de `kubernetes/kubernetes` répond `Apache-2.0` ; la page de kubectl pour macOS exige une mineure d'écart au plus avec le cluster |
+| Task | 3.54.0 | MIT | Relevé de T001 du 2026-11-23 ; l'API de `go-task/task` répond `MIT` le 2026-11-26 |
+| Git | aucune version exigée | GPL-2.0 | La page de Git écrit « Git is released under the GNU General Public License version 2.0 » ; l'API de `git/git` répond `NOASSERTION` |
+| conftest, OpenTofu, Trivy (`task check`) | 0.71.1, 1.13.9, 0.76.2 (`tests/tools/install.sh`) | Apache-2.0, MPL-2.0, Apache-2.0 | RS-18 et RS-22 pour conftest et Trivy ; l'API de `opentofu/opentofu` répond `MPL-2.0` |
+
+Moteur libre cité d'abord : Docker Engine, le seul des moteurs lus ici qui soit libre et que les contrôles préalables couvrent. Sous macOS, le moteur tourne dans une machine virtuelle et aucun moteur libre n'est validé. Docker Desktop demande un abonnement payant à une « larger enterprise », définie par plus de 250 salariés ou plus de 10 millions de dollars de chiffre d'affaires annuel (page de l'Engine). OrbStack, moteur du poste de mesure, n'est pas libre (R-26). Podman répond `Apache-2.0` à l'API de `containers/podman` ; kind le documente, mais son évaluation et la règle des 28.0.0 qu'il enfreindrait sous Linux restent ouvertes (relevé du 2026-11-24, ci-dessus). La question reste à [OPS] et au DSI : valider un moteur libre sur macOS, ou écrire au README que la matrice ne tourne sous macOS que sur un moteur sous abonnement.
+
+Dernières releases lues pour information, non retenues comme exigence : Docker Engine docker-v29.10.1 du 2026-11-24 ; kubectl v1.37.3, v1.36.7 et v1.35.11 du 2026-11-25 (v1.36.7 a moins de 7 jours, la CI garde v1.36.6, principe VI) ; Git v2.56.1.
+
+Installation. Pour kind, la page de démarrage rapide donne `curl -Lo ./kind https://kind.sigs.k8s.io/dl/v0.33.0/kind-<système>-<architecture>`, `chmod +x ./kind`, puis le déplacement dans un dossier du `PATH`. Le README y ajoute la comparaison avec les quatre sommes du catalogue de CELIAN (ADR-004, condition 5), que S18 compare au fichier `catalog/kubernetes-cluster.yaml` quand le golden repo est dans CELIAN. Pour kubectl, la page officielle publie un fichier `.sha256` à côté du binaire, vérifié par `echo "$(cat kubectl.sha256)  kubectl" | shasum -a 256 --check` ; le README renvoie à cette page sans copier de somme, et la CI de CELIAN épingle sa somme dans `golden-saas-b2b.yml`.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://docs.docker.com/engine/> | 2026-11-26 | Licence Apache-2.0 de l'Engine ; conditions de Docker Desktop pour une grande entreprise |
+| <https://api.github.com/repos/moby/moby> et `/releases` | 2026-11-26 | Licence `Apache-2.0` ; docker-v29.10.1 du 2026-11-24 |
+| <https://api.github.com/repos/kubernetes-sigs/kind> | 2026-11-26 | Licence `Apache-2.0`, dépôt non archivé |
+| <https://kind.sigs.k8s.io/docs/user/quick-start/> | 2026-11-26 | Commandes d'installation de v0.33.0 ; kind détecte docker, podman ou nerdctl |
+| <https://api.github.com/repos/kubernetes/kubernetes> et `/releases` | 2026-11-26 | Licence `Apache-2.0` ; v1.37.3, v1.36.7, v1.35.11 du 2026-11-25 |
+| <https://kubernetes.io/docs/tasks/tools/install-kubectl-macos/> | 2026-11-26 | Téléchargement du binaire et de `kubectl.sha256`, vérification par `shasum -a 256 --check`, écart d'une mineure |
+| <https://api.github.com/repos/go-task/task> | 2026-11-26 | Licence `MIT` |
+| <https://git-scm.com/about> | 2026-11-26 | « Git is released under the GNU General Public License version 2.0 » |
+| <https://api.github.com/repos/git/git> | 2026-11-26 | Licence `NOASSERTION` ; dernière étiquette v2.56.1 |
+| <https://api.github.com/repos/opentofu/opentofu> | 2026-11-26 | Licence `MPL-2.0` |
+| <https://api.github.com/repos/containers/podman> | 2026-11-26 | Licence `Apache-2.0` |
+
 ## RS-10. Secrets locaux
 
 Décision : `db-auth`, `cache-auth`, `db-superuser` et `gateway-tls` en profil lite, `cache-auth` à partir de l'étape 19 (RS-11) ; valeurs de 40 caractères alphanumériques tirées de `/dev/urandom`, comme l'essai de BENCH-011, passées par un tube à `kubectl create -f -`, seulement si le Secret manque. Contrat : [contracts/secrets.md](contracts/secrets.md).
@@ -1407,6 +1440,10 @@ Renovate de CELIAN : le gestionnaire `npm` lit par défaut `(^|/)package\.json$`
 | <https://hub.docker.com/v2/repositories/library/nginx/tags/1.30.7-alpine> | 2026-11-24 | Condensat courant et taille de la variante `alpine` |
 | <https://hub.docker.com/v2/repositories/library/nginx/tags?page_size=100&name=1.30> | 2026-11-24 | Étiquettes 1.30.8 poussées les 2026-11-23 et 2026-11-24 |
 | <https://docs.renovatebot.com/modules/manager/npm/> | 2026-11-24 | Motifs par défaut, entretien de `package-lock.json` par npm |
+
+### Relevé du 2026-11-26 : outils de `task check` au README (T090)
+
+Le README du golden repo donne, pour conftest, OpenTofu et Trivy, la version de `tests/tools/install.sh`, la licence et la date : conftest 0.71.1, Apache-2.0, d'après son fichier `LICENSE` lu le 2026-11-23 (ci-dessus) ; Trivy 0.76.2, Apache-2.0 (RS-22, lu le 2026-11-23) ; OpenTofu 1.13.9, MPL-2.0 (API de `opentofu/opentofu`, lue le 2026-11-26). Le détail de ce relevé, avec Docker Engine, kind, kubectl, Task et Git, est au point RS-09. S18 (`tests/static/s18-readme.sh`) compare le tableau du README aux fichiers qui portent ces versions.
 
 ## RS-19. Mesures de la gate
 
