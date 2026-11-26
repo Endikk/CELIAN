@@ -11,7 +11,8 @@
 #    the cache restarted, without restarting the API. The API holds the old
 #    password until it reads its mounted file again: /api/readyz must come
 #    back to 200 by itself, within the time the kubelet takes to refresh the
-#    mounted Secret, and the note is served from the cache again;
+#    mounted Secret, and the note is served from the cache again, within that
+#    time too (readyz can say 200 on the connection to the old pod);
 # 3. task up after the deletion of cache-auth draws a new password, restarts
 #    the cache and the API (local/scripts/secrets.sh), and ends with the API
 #    ready and the cache serving.
@@ -43,6 +44,28 @@ serve_note() {
     fail "GET /api/notes/$1 says servedFrom \"$(json_field servedFrom)\", $2 expected: $HTTP_BODY"
     return 1
   fi
+}
+
+# wait_cache ID SECONDS: GET /api/notes/ID until it answers 200 with servedFrom
+# cache, SECONDS at most. After the cache restarts, /api/readyz may answer 200
+# on the connection to the old pod, which closes a moment later; the reads then
+# come from the database, as the contract wants of a cache that is away
+# (contracts/http-api.md), until the API has connected anew (tasks.md, gap 176).
+# Each read that finds the database fills the cache again once the client
+# connects, so the loop ends on the next one.
+wait_cache() {
+  local waited=0
+  while :; do
+    if http_request GET "/api/notes/$1" && [ "$HTTP_STATUS" = 200 ] &&
+      [ "$(json_field servedFrom)" = cache ]; then
+      return 0
+    fi
+    [ "$waited" -lt "$2" ] || break
+    sleep 2
+    waited=$((waited + 2))
+  done
+  fail "GET /api/notes/$1 is not served from the cache within $2 s after /api/readyz said 200 (last answer $HTTP_STATUS): $HTTP_BODY"
+  return 1
 }
 
 # --- 1. Database, then cache ---------------------------------------------------
@@ -86,10 +109,9 @@ if kube_e2e --namespace "$E2E_APP_NAMESPACE" delete secret "$E2E_CACHE_SECRET" -
       *'"cache":"ok"'*) ;;
       *) fail "/api/readyz answers 200 but does not report the cache as ok: $HTTP_BODY" ;;
     esac
-    # The note may have left with the old cache: one read fills it again,
-    # the next one must come from the cache.
-    http_request GET "/api/notes/$id" || :
-    serve_note "$id" cache
+    # The note may have left with the old cache: a read fills it again, and
+    # the cache must serve it before the end of the recovery time.
+    wait_cache "$id" "$RECOVERY_SECONDS"
   else
     fail "/api/readyz does not come back to 200 within $RECOVERY_SECONDS s after the password of the cache changed: the API keeps the old one (tasks.md, gap 127)"
   fi
@@ -102,8 +124,7 @@ fi
 if kube_e2e --namespace "$E2E_APP_NAMESPACE" delete secret "$E2E_CACHE_SECRET" --wait=true >/dev/null; then
   must_succeed up || e2e_finish
   if wait_http GET /api/readyz 200 "$READY_SECONDS"; then
-    http_request GET "/api/notes/$id" || :
-    serve_note "$id" cache
+    wait_cache "$id" "$READY_SECONDS"
   else
     fail "/api/readyz does not answer 200 within $READY_SECONDS s after task up drew a new password for the cache"
   fi
