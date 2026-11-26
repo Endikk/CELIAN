@@ -14,6 +14,9 @@
 #   local/scripts/mirror.sh: docker container rm
 #   local/scripts/mirror.sh: docker run
 #   local/scripts/mirror.sh: docker volume rm
+#   local/scripts/app.sh: docker build
+#   local/scripts/app.sh: docker tag
+#   local/scripts/app.sh: kind load docker-image
 # Outside the inventory: `task test` builds the test stages of the API and
 # front images with `docker build`, keeping the build cache and no image
 # (tests/unit/u01-api.sh, tests/unit/u02-front.sh).
@@ -40,6 +43,11 @@ tasks:
     desc: Remove the local cluster and the mirror container; keep the mirror volume.
     cmds:
       - task: local:down
+
+  app:down:
+    desc: Keep the cluster, remove the mirror container and the namespace of the application with its database.
+    cmds:
+      - task: local:app-down
 
   mirror:purge:
     desc: Remove the mirror volume; the next task up needs the network.

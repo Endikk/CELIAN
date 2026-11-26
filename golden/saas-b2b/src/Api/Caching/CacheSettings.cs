@@ -119,6 +119,13 @@ public sealed class CacheSettings
         return options;
     }
 
+    /// <summary>
+    /// Opens the connection with these settings. The options, which carry the
+    /// password, are built and used in this file alone (S11).
+    /// </summary>
+    public async Task<IConnectionMultiplexer> ConnectAsync() =>
+        await ConnectionMultiplexer.ConnectAsync(ToConfigurationOptions());
+
     public override string ToString() =>
         $"Host={Host}; Port={Port}; TlsMode={TlsMode}; CaFile={CaFile ?? "none"}";
 

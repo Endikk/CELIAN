@@ -119,6 +119,7 @@ job := {
 	"metadata": {"name": "cache-probe", "namespace": "saas-b2b"},
 	"spec": {
 		"backoffLimit": 0,
+		"ttlSecondsAfterFinished": 120,
 		"template": {
 			"metadata": {"labels": {"app.kubernetes.io/name": "cache-probe"}},
 			"spec": {
@@ -386,4 +387,16 @@ test_s11_rejects_a_probe_without_its_label if {
 test_s11_rejects_a_probe_password_by_value if {
 	ops := [{"op": "replace", "path": "/spec/template/spec/containers/0/env", "value": [{"name": "VALKEYCLI_AUTH", "value": "x"}]}]
 	denied_with(with_patch(job, ops), "must read the password by secretKeyRef")
+}
+
+# A Job left by an interrupted task up must not keep its reference to cache-auth
+# for long (tasks.md, gap 130).
+test_s11_rejects_a_probe_without_ttl_after_finished if {
+	ops := [{"op": "remove", "path": "/spec/ttlSecondsAfterFinished"}]
+	denied_with(with_patch(job, ops), "must set ttlSecondsAfterFinished")
+}
+
+test_s11_rejects_a_probe_that_lives_long_after_finished if {
+	ops := [{"op": "replace", "path": "/spec/ttlSecondsAfterFinished", "value": 86400}]
+	denied_with(with_patch(job, ops), "must set ttlSecondsAfterFinished")
 }

@@ -508,3 +508,33 @@ deny contains msg if {
 	object.get(container, "envFrom", null) != null
 	msg := sprintf("%s: container %v of the Job cache-probe sets envFrom", [label_c5, container.name])
 }
+
+# A Job left by an interrupted task up goes by itself, and with it its
+# reference to cache-auth (tasks.md, gap 130): a TTL after the end, from one
+# minute to ten.
+probe_ttl_min := 60
+
+probe_ttl_max := 600
+
+deny contains msg if {
+	some job in jobs
+	ttl := object.get(job.spec, "ttlSecondsAfterFinished", null)
+	not is_number(ttl)
+	msg := sprintf("%s: the Job cache-probe must set ttlSecondsAfterFinished, from %d to %d seconds, so that a Job left by an interrupted task up goes by itself", [label_c5, probe_ttl_min, probe_ttl_max])
+}
+
+deny contains msg if {
+	some job in jobs
+	ttl := object.get(job.spec, "ttlSecondsAfterFinished", null)
+	is_number(ttl)
+	not probe_ttl_min <= ttl
+	msg := sprintf("%s: the Job cache-probe must set ttlSecondsAfterFinished, from %d to %d seconds, found %v", [label_c5, probe_ttl_min, probe_ttl_max, ttl])
+}
+
+deny contains msg if {
+	some job in jobs
+	ttl := object.get(job.spec, "ttlSecondsAfterFinished", null)
+	is_number(ttl)
+	ttl > probe_ttl_max
+	msg := sprintf("%s: the Job cache-probe must set ttlSecondsAfterFinished, from %d to %d seconds, found %v", [label_c5, probe_ttl_min, probe_ttl_max, ttl])
+}

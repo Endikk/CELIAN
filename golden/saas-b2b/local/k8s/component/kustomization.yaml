@@ -1,12 +1,28 @@
 # The component of the local target (contracts/layers.md, "Composition
 # Kustomize"; research RS-01): what the local layer adds to an overlay of
-# the common layer. Postgres (ADR-012) and the cache (ADR-015); the local
-# app-config joins with step 9 (T087). The GatewayClass that the common
-# Gateway asks for is applied with the platform, outside
-# this composition (tasks.md, gap 35). The Secrets are never here: task up
-# creates them through a pipe (ADR-007, condition 1; S03).
+# the common layer. Postgres (ADR-012), the cache (ADR-015), app-config, and
+# the host of the routes. The GatewayClass that the common Gateway asks for is
+# applied with the platform, outside this composition (tasks.md, gap 35). The
+# Secrets are never here: task up creates them through a pipe (ADR-007,
+# condition 1; S03).
+#
+# The HTTPRoutes of the common layer name no host. The local layer gives them
+# localhost, the host that task up prints: the gateway then answers no other
+# Host, so that a page of another site that points its name at 127.0.0.1 gets
+# no route (tasks.md, gaps 45 and 141). Gateway API refuses an IP in
+# hostnames, hence not 127.0.0.1. S07 allows this field, and
+# spec.gatewayClassName, to differ from the common layer.
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 resources:
+  - app-config.yaml
   - ../../data
   - ../../data/cache
+patches:
+  - target:
+      kind: HTTPRoute
+    patch: |-
+      - op: add
+        path: /spec/hostnames
+        value:
+          - localhost

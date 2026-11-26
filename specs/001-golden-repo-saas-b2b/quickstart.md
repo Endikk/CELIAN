@@ -19,7 +19,7 @@ Le golden repo vit dans `golden/saas-b2b/` du dépôt de CELIAN. Les commandes s
 ## Scénario 1 : démarrer, utiliser, arrêter (récit 1)
 
 1. Poste sans cluster du projet. Lancer `task up`.
-   Attendu : profil annoncé, adresses du front et de l'API en 127.0.0.1, durée de chaque étape et durée totale, taille du volume du miroir. Rien d'autre à faire.
+   Attendu : profil annoncé, adresses du front et de l'API en `localhost`, durée de chaque étape et durée totale, taille du volume du miroir. Rien d'autre à faire.
 2. Ouvrir l'adresse du front, ajouter une note.
    Attendu : la note apparaît dans la liste ; relue deux fois, elle vient de la base puis du cache.
 3. Modifier le texte de la réponse de santé de l'API, lancer `task reload`.

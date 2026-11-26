@@ -1,0 +1,24 @@
+# app-config of the local target (contracts/layers.md, "app-config"): the
+# settings that the API reads as environment variables, the same names and
+# keys on every target, none of them a secret. Postgres and the cache are
+# reached through their Services, in the namespace of the application, with
+# no TLS: the traffic stays inside the node of kind (research RS-12 and
+# RS-11). CACHE_TLS_CA_FILE is empty, since the mode does not verify a server.
+#
+# A plain ConfigMap, without the hash suffix of a generator: the common layer
+# names it app-config, and S07 compares that name on both targets. A change
+# of a value reaches the pods at their next start (task down, then task up).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: saas-b2b
+data:
+  DATABASE_HOST: postgres
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: app
+  DATABASE_SSL_MODE: Disable
+  CACHE_HOST: cache
+  CACHE_PORT: "6379"
+  CACHE_TLS_MODE: Disable
+  CACHE_TLS_CA_FILE: ""

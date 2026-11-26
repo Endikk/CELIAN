@@ -172,3 +172,74 @@ test_s01_names_its_requirements_in_each_message if {
 		startswith(msg, "S01 (FR-008;")
 	}
 }
+
+# --- Rendered manifests (T086): the images of the containers of a render ---------
+
+postgres_image := "docker.io/library/postgres:18.7-trixie@sha256:eb63372c1e05c755f55fa30cbd07aecc443676fc6c0fa90b9002d01537841e1a"
+
+workload(kind, name, containers, init_containers) := {
+	"apiVersion": "apps/v1",
+	"kind": kind,
+	"metadata": {"name": name},
+	"spec": {"template": {"spec": {
+		"containers": [{"name": "main", "image": image} | some image in containers],
+		"initContainers": [{"name": "init", "image": image} | some image in init_containers],
+	}}},
+}
+
+render(docs) := array.concat(
+	dockerfile("src/Api/Dockerfile", multi_stage),
+	[{"path": "render/lite.yaml", "contents": doc} | some doc in docs],
+)
+
+test_s01_accepts_rendered_images_with_a_digest_and_built_images if {
+	accepted(render([
+		workload("StatefulSet", "postgres", [postgres_image], []),
+		workload("Deployment", "api", ["saas-b2b.invalid/api:build-1"], []),
+	]))
+}
+
+test_s01_rejects_a_rendered_image_by_tag if {
+	denied_with(
+		render([workload("Deployment", "cache", ["docker.io/valkey/valkey:9.1.4-alpine"], [])]),
+		"render/lite.yaml: Deployment cache runs docker.io/valkey/valkey:9.1.4-alpine, which names no digest",
+	)
+}
+
+test_s01_rejects_a_rendered_init_container_by_tag if {
+	denied_with(
+		render([workload("Deployment", "cache", [postgres_image], ["busybox:1.37"])]),
+		"Deployment cache runs busybox:1.37, which names no digest",
+	)
+}
+
+test_s01_rejects_a_rendered_image_without_tag_nor_digest if {
+	denied_with(render([workload("Deployment", "front", ["nginx"], [])]), "Deployment front runs nginx, which names no digest")
+}
+
+test_s01_rejects_a_rendered_image_under_a_host_that_only_looks_like_the_built_one if {
+	denied_with(
+		render([workload("Deployment", "api", ["saas-b2b.invalid.example.com/api:1"], [])]),
+		"which names no digest",
+	)
+}
+
+test_s01_reads_the_pod_of_a_job_too if {
+	job := {
+		"apiVersion": "batch/v1",
+		"kind": "Job",
+		"metadata": {"name": "probe"},
+		"spec": {"template": {"spec": {"containers": [{"name": "probe", "image": "alpine:3.22"}]}}},
+	}
+	denied_with(render([job]), "Job probe runs alpine:3.22")
+}
+
+test_s01_ignores_a_field_named_image_outside_the_containers if {
+	config_map := {
+		"apiVersion": "v1",
+		"kind": "ConfigMap",
+		"metadata": {"name": "app-config"},
+		"data": {"image": "not-an-image-reference"},
+	}
+	accepted(render([config_map]))
+}

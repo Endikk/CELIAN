@@ -173,13 +173,15 @@ E2E_CLIENT_PAUSE_SECONDS=2
 # seccomp RuntimeDefault, no service account token); waits until it ends,
 # then removes it. Sets OUTPUT to its log, and STATUS to 0 when it
 # succeeded, 1 otherwise. SCRIPT is an argument of the pod: it never holds a
-# secret.
+# secret. E2E_CLIENT_LABELS, when set, is the label list of the pod (a=b,c=d),
+# which a NetworkPolicy may select on.
 client_pod() {
-  local namespace="$1" name="$2" script="$3" image overrides phase="" waited=0
+  local namespace="$1" name="$2" script="$3" image overrides phase="" waited=0 labels=""
   image="$(postgres_image)"
+  [ -z "${E2E_CLIENT_LABELS:-}" ] || labels="--labels=$E2E_CLIENT_LABELS"
   overrides='{"apiVersion":"v1","spec":{"automountServiceAccountToken":false,"securityContext":{"runAsNonRoot":true,"runAsUser":999,"runAsGroup":999,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"'"$name"'","securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
   STATUS=1
-  if ! OUTPUT="$(kube_e2e --namespace "$namespace" run "$name" --image="$image" --restart=Never \
+  if ! OUTPUT="$(kube_e2e --namespace "$namespace" run "$name" --image="$image" --restart=Never ${labels:+"$labels"} \
     --override-type=strategic --overrides="$overrides" --command -- bash -c "$script" 2>&1)"; then
     return 0
   fi
@@ -245,6 +247,102 @@ tls_pair_matches() {
   from_cert="$(secret_value "$E2E_TLS_SECRET" tls.crt | openssl x509 -noout -pubkey 2>/dev/null)" || return 1
   from_key="$(secret_value "$E2E_TLS_SECRET" tls.key | openssl pkey -pubout 2>/dev/null)" || return 1
   [ -n "$from_cert" ] && [ "$from_cert" = "$from_key" ]
+}
+
+# The host name that the HTTPRoutes of the local layer accept, and that task
+# up prints in the addresses (tasks.md, gap 141). Gateway API refuses an IP
+# in hostnames, so the address of the user is localhost, not 127.0.0.1; the
+# port stays published on 127.0.0.1 alone.
+E2E_HOST="localhost"
+
+# The registries whose images the node pulls through the mirror, and the
+# host of the images that task up builds (research RS-07).
+E2E_BUILT_HOST="saas-b2b.invalid"
+E2E_API_DEPLOYMENT="api"
+E2E_FRONT_DEPLOYMENT="front"
+
+# How long a read on the gateway waits for a byte, and how long wait_http
+# keeps asking.
+E2E_HTTP_READ_SECONDS=10
+HTTP_STATUS=""
+HTTP_BODY=""
+
+# decode_chunked: the body of a chunked answer on the standard input, one
+# chunk of the data per line (the JSON of the API holds no line feed), and
+# its decoded text on the standard output.
+decode_chunked() {
+  local line decoded=""
+  while IFS= read -r line; do
+    line="${line%$'\r'}"
+    [[ $line =~ ^[0-9a-fA-F]+ ]] || break
+    [ "$((16#${BASH_REMATCH[0]}))" -gt 0 ] || break
+    IFS= read -r line || true
+    decoded="$decoded${line%$'\r'}"
+  done
+  printf '%s' "$decoded"
+}
+
+# http_request METHOD PATH [BODY]: one request to the gateway, on
+# 127.0.0.1 and the HTTP port, with the Host header of the HTTPRoutes, read
+# by bash itself through /dev/tcp (no curl). A BODY is sent as JSON; the Host
+# header is E2E_REQUEST_HOST when set. Sets
+# HTTP_STATUS and HTTP_BODY; fails without an HTTP answer. Written for
+# bash 3.2: the answer is read line by line, each read bounded.
+http_request() {
+  local method="$1" path="$2" body="${3:-}" response status_line headers lowered
+  HTTP_STATUS=""
+  HTTP_BODY=""
+  response="$(
+    exec 3<>"/dev/tcp/127.0.0.1/$E2E_GATEWAY_HTTP_PORT" || exit 1
+    if [ -n "$body" ]; then
+      printf '%s %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\nContent-Type: application/json\r\nContent-Length: %s\r\n\r\n%s' \
+        "$method" "$path" "${E2E_REQUEST_HOST:-$E2E_HOST}" "${#body}" "$body" >&3
+    else
+      printf '%s %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n' "$method" "$path" "${E2E_REQUEST_HOST:-$E2E_HOST}" >&3
+    fi
+    while :; do
+      rc=0
+      IFS= read -r -t "$E2E_HTTP_READ_SECONDS" line <&3 || rc=$?
+      if [ "$rc" -gt 128 ]; then
+        break
+      fi
+      if [ "$rc" -ne 0 ]; then
+        printf '%s' "$line"
+        break
+      fi
+      printf '%s\n' "$line"
+    done
+  )" 2>/dev/null || return 1
+  status_line="${response%%$'\n'*}"
+  [[ $status_line =~ ^HTTP/1\.[01]\ ([0-9][0-9][0-9]) ]] || return 1
+  HTTP_STATUS="${BASH_REMATCH[1]}"
+  headers="${response%%$'\r\n\r\n'*}"
+  [ "$headers" != "$response" ] || return 0
+  HTTP_BODY="${response#*$'\r\n\r\n'}"
+  lowered="$(printf '%s' "$headers" | LC_ALL=C tr '[:upper:]' '[:lower:]')"
+  case "$lowered" in
+    *'transfer-encoding: chunked'*) HTTP_BODY="$(printf '%s' "$HTTP_BODY" | decode_chunked)" ;;
+  esac
+}
+
+# wait_http METHOD PATH STATUS SECONDS [BODY]: asks every two seconds until
+# the gateway answers STATUS, for SECONDS at most; true when it did.
+wait_http() {
+  local waited=0
+  while :; do
+    if http_request "$1" "$2" "${5:-}" && [ "$HTTP_STATUS" = "$3" ]; then
+      return 0
+    fi
+    [ "$waited" -lt "$4" ] || return 1
+    sleep 2
+    waited=$((waited + 2))
+  done
+}
+
+# json_field NAME: the string value of NAME in the JSON of HTTP_BODY; empty
+# when the field is absent. The API writes compact JSON in camelCase.
+json_field() {
+  printf '%s' "$HTTP_BODY" | sed -n 's/.*"'"$1"'":"\([^"]*\)".*/\1/p'
 }
 
 e2e_finish() {

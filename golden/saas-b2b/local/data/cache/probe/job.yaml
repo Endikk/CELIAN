@@ -9,6 +9,8 @@
 # ADR-015, condition 5). The image is the one of the server, already on the
 # node, so that the probe pulls nothing; Renovate keeps both in step, and
 # S11 refuses two images. It prints PONG or NOAUTH, never the password.
+# ttlSecondsAfterFinished: a Job that an interrupted task up leaves behind
+# goes by itself, and with it its reference to cache-auth (tasks.md, gap 130).
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -19,6 +21,7 @@ metadata:
 spec:
   backoffLimit: 0
   activeDeadlineSeconds: 150
+  ttlSecondsAfterFinished: 120
   template:
     metadata:
       labels:

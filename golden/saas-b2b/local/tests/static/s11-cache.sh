@@ -43,4 +43,21 @@ fi
 conftest verify --no-color --policy local/policy --namespace cache_layer || exit 1
 conftest test --no-color --combine --policy local/policy --namespace cache_layer "$work/cache.yaml" "$probe" || exit 1
 
+# The options of the cache client, which carry the password, are built in one
+# file: CacheSettings.cs. No other file of the API names ConfigurationOptions
+# (a word of its own; ToConfigurationOptions is the method that hands them
+# out), so that no connection string, log line or second client takes the
+# password along (SECU review of step 19; tasks.md, gap 130).
+options_owner="src/Api/Caching/CacheSettings.cs"
+if ! grep -q -w ConfigurationOptions "$options_owner"; then
+  echo "$options_owner does not name ConfigurationOptions: the check below would prove nothing." >&2
+  exit 1
+fi
+strays="$(grep -r -n -w --include='*.cs' ConfigurationOptions src/Api | grep -v "^$options_owner:" | grep -v '/obj/' | grep -v '/bin/' || true)"
+if [ -n "$strays" ]; then
+  echo "ConfigurationOptions is named outside $options_owner, which alone builds the options of the cache client (gap 130):" >&2
+  printf '%s\n' "$strays" >&2
+  exit 1
+fi
+
 echo "The cache layer keeps its password out of the command lines and of the environment of the server, as ADR-015 wants it."

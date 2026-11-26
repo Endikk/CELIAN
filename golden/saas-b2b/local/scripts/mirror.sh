@@ -2,7 +2,7 @@
 # The zot mirror of the local cluster (ADR-011; spec 001, plan, "Ce que fait
 # task up", point 3; contracts/task-cli.md).
 #
-# Usage: bash local/scripts/mirror.sh check IMAGE | up IMAGE | down | report IMAGE | purge
+# Usage: bash local/scripts/mirror.sh check IMAGE | up IMAGE | down | report IMAGE | purge | size
 #   check   the checks of up that need no cluster (image, configuration,
 #           container, volume): task up runs them before it creates the
 #           cluster, and creates nothing
@@ -12,6 +12,7 @@
 #           volume of the project, and waits until it runs
 #   down    removes the mirror container of the project, and only it
 #   report  shows what stays on the machine after task down
+#   size    prints the size of the mirror volume, as task up ends with it
 #   purge   says that the next task up will need the network, then removes
 #           the mirror volume of the project, and only it
 #   IMAGE   the zot image, by tag and digest: MIRROR_IMAGE of
@@ -248,6 +249,10 @@ report() {
   printf '  The base images of the API and the front stay there too, from step 9 on. docker image rm removes an image of the cache.\n'
 }
 
+size() {
+  printf 'Mirror volume %s: %s.\n' "$MIRROR_VOLUME" "$(volume_size)"
+}
+
 purge() {
   local label
   printf 'Mirror: the next task up will need the network, to fill the mirror again.\n'
@@ -273,5 +278,6 @@ case "${1:-}" in
   down) down ;;
   report) report "${2:-}" ;;
   purge) purge ;;
-  *) die "usage: bash local/scripts/mirror.sh check IMAGE | up IMAGE | down | report IMAGE | purge" ;;
+  size) size ;;
+  *) die "usage: bash local/scripts/mirror.sh check IMAGE | up IMAGE | down | report IMAGE | purge | size" ;;
 esac
