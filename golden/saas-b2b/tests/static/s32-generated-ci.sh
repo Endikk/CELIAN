@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# control: S31
+# control: S32
 # carries: FR-011, FR-013; constitution, principles I, VII and VIII; tasks.md, gaps 26 and 40
 #
 # The CI of the generated project runs what the project promises, and needs

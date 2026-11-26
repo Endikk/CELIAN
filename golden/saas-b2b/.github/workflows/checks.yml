@@ -2,8 +2,11 @@ name: checks
 
 # Static checks and unit tests. Each job calls a task of Taskfile.yml, so
 # that the logic exists once, in the tasks, and runs the same on a machine.
+# The tests on kind and the scan of the images are in e2e.yml.
 # Principle X: no cloud credential, and no plan, apply or destroy; test S17
-# (tests/static/s17-workflows.sh) enforces both in every workflow.
+# (tests/static/s17-workflows.sh) enforces both in every workflow. Test S32
+# (tests/static/s32-generated-ci.sh) enforces the jobs of this CI and the
+# checked installation of its tools.
 on:
   pull_request:
     types: [opened, synchronize, reopened]
@@ -28,27 +31,31 @@ jobs:
           persist-credentials: false
 
       # Release archives checked against tests/tools/SHA256SUMS before use,
-      # without any third-party action.
+      # without any third-party action. kubectl comes from there too, not from
+      # the image of the runner: S06 and S30 render the common layer with its
+      # Kustomize (tasks.md, gap 40).
       - name: Install the tools of task check
         run: |
-          bash tests/tools/install.sh "$RUNNER_TEMP/tools"
+          bash tests/tools/install.sh "$RUNNER_TEMP/tools" task conftest tofu trivy kubectl
           echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
 
       - name: Run the static checks
         run: task check
 
-  test:
-    name: test
+  # Named unit, like the job of CELIAN that the ruleset of main requires.
+  unit:
+    name: unit
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Install the tools of task check
+      # U03, the decision of the image scan, needs conftest and Task alone.
+      - name: Install Task and conftest
         run: |
-          bash tests/tools/install.sh "$RUNNER_TEMP/tools"
+          bash tests/tools/install.sh "$RUNNER_TEMP/tools" task conftest
           echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
 
       # U01 and U02 in the build images of the API and of the front, with the

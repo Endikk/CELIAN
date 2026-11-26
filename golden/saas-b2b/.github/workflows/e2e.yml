@@ -1,0 +1,75 @@
+name: e2e
+
+# The tests on kind of the lite profile, and the scan of the images that the
+# lite profile pulls (spec 001, tasks.md, gaps 26 and 40): what the project
+# promises, played by the CI. Each job calls a task or a test script of this
+# project, so that the logic exists once.
+# kind, kubectl, Task, conftest and Trivy come from tests/tools/install.sh,
+# each checked against its SHA-256 in tests/tools/SHA256SUMS, with no
+# third-party action: the project needs nothing from CELIAN to run this.
+# Cost: e2e-lite creates a cluster from cold on every run, up to 45 minutes of
+# runner time. On a private repository that is billed minutes.
+# Principle X: no cloud credential, and no plan, apply or destroy; test S17
+# (tests/static/s17-workflows.sh) enforces both. Test S32
+# (tests/static/s32-generated-ci.sh) enforces these jobs.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # E19, E22, E24 and the parts of E03 and E08 that the steps deliver, then
+  # what the next steps add. The standard profile is refused until step 12,
+  # hence PROFILE=lite (tasks.md, gap 14). Same delay as the job of CELIAN.
+  e2e-lite:
+    name: e2e-lite
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # Before the kind and the kubectl of the runner on PATH: task up compares
+      # them with KIND_VERSION and with the minor of platform.yaml.
+      - name: Install Task, kind and kubectl
+        run: |
+          bash tests/tools/install.sh "$RUNNER_TEMP/tools" task kind kubectl
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+
+      - name: Run the tests on kind (lite profile)
+        env:
+          PROFILE: lite
+        run: task test:e2e
+
+  # E27 on the pulled images of the lite profile, without a cluster: first
+  # with a database repository under .invalid, where the scan must fail and say
+  # so, then for real, with the database downloaded in this run (research
+  # RS-22). Trivy comes from tests/tools/install.sh, never from an action of
+  # Aqua Security (S26). kubectl renders local/k8s/<profile> for the
+  # inventory; its Kustomize reads no kubeconfig (research RS-24). Anonymous
+  # pulls from Docker Hub and ghcr.io: no credential (tasks.md, gaps 64 and 70).
+  scan-images:
+    name: scan-images
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Trivy, conftest and kubectl
+        run: |
+          bash tests/tools/install.sh "$RUNNER_TEMP/tools" trivy conftest kubectl
+          echo "$RUNNER_TEMP/tools" >> "$GITHUB_PATH"
+
+      - name: Scan the pulled images (E27)
+        run: bash tests/scan/e27-pulled-images.sh
