@@ -25,18 +25,33 @@ public sealed class RespCache : ICache, IAsyncDisposable
 
     private readonly Func<CacheSettings, Task<IConnectionMultiplexer>> _connect;
 
+    private readonly TimeProvider _time;
+
     private readonly SemaphoreSlim _gate = new(1, 1);
+
+    private long _lastAttempt;
+
+    private bool _hasAttempted;
+
+    /// <summary>
+    /// Least time between two attempts to open a connection, once one was made:
+    /// while the kubelet refreshes the password file, a call that finds the
+    /// connection dropped must not build a new multiplexer each time.
+    /// </summary>
+    public static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(5);
 
     private IConnectionMultiplexer? _connection;
 
     public RespCache(
         Func<CacheSettings> loadSettings,
         ILogger<RespCache> logger,
-        Func<CacheSettings, Task<IConnectionMultiplexer>>? connect = null)
+        Func<CacheSettings, Task<IConnectionMultiplexer>>? connect = null,
+        TimeProvider? time = null)
     {
         _loadSettings = loadSettings;
         _logger = logger;
         _connect = connect ?? ConnectAsync;
+        _time = time ?? TimeProvider.System;
     }
 
     public Task<string?> GetAsync(string key, CancellationToken cancellationToken) =>
@@ -138,11 +153,18 @@ public sealed class RespCache : ICache, IAsyncDisposable
             connection = _connection;
             if (connection is null)
             {
+                if (_hasAttempted && _time.GetElapsedTime(_lastAttempt) < ReconnectInterval)
+                {
+                    throw new InvalidOperationException("The cache connection was dropped a moment ago; the next attempt waits for its interval.");
+                }
+
                 var settings = _loadSettings();
 
                 // Not cancelled: a connect left half-way would be lost without
                 // being disposed. ConnectTimeout bounds it, and the caller
                 // stops waiting at its own deadline.
+                _lastAttempt = _time.GetTimestamp();
+                _hasAttempted = true;
                 connection = await _connect(settings);
                 Volatile.Write(ref _connection, connection);
                 _logger.LogInformation("Cache client created: {Settings}.", settings);

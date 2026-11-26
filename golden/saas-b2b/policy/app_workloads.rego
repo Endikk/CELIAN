@@ -53,13 +53,17 @@ service(app) := doc if {
 
 pod_spec(app) := deployment(app).spec.template.spec
 
-containers(app) := [c | some c in object.get(pod_spec(app), "containers", [])]
+# The containers that serve (one each), and all of them, init containers
+# included: the rules of security apply to every one.
+main_containers(app) := [c | some c in object.get(pod_spec(app), "containers", [])]
+
+containers(app) := array.concat(main_containers(app), [c | some c in object.get(pod_spec(app), "initContainers", [])])
 
 deny contains msg if {
 	some app in apps
 	deployment(app)
-	count(containers(app)) != 1
-	msg := sprintf("%s: Deployment %s must run one container, found %d", [label, app, count(containers(app))])
+	count(main_containers(app)) != 1
+	msg := sprintf("%s: Deployment %s must run one container, found %d", [label, app, count(main_containers(app))])
 }
 
 deny contains msg if {
@@ -169,7 +173,7 @@ probe_paths := {
 
 deny contains msg if {
 	some app in apps
-	some c in containers(app)
+	some c in main_containers(app)
 	some probe, path in probe_paths[app]
 	object.get(object.get(object.get(c, probe, {}), "httpGet", {}), "path", null) != path
 	msg := sprintf("%s: container %s of %s must set %s as an httpGet on %s", [label, c.name, app, probe, path])
@@ -231,7 +235,7 @@ deny contains msg if {
 
 deny contains msg if {
 	deployment("api")
-	some c in containers("api")
+	some c in main_containers("api")
 	not {"configMapRef": {"name": "app-config"}} in object.get(c, "envFrom", [])
 	msg := sprintf("%s: container %s of the API must read app-config by envFrom", [label, c.name])
 }
@@ -253,4 +257,50 @@ deny contains msg if {
 	some ref in rule.backendRefs
 	not serves(ref)
 	msg := sprintf("%s: HTTPRoute %s sends to %s port %v, which no Service of the render serves", [label, doc.metadata.name, ref.name, ref.port])
+}
+
+# --- The host, the volumes that reach out, the pull policy (tasks.md, gap 134) ---------
+
+deny contains msg if {
+	some app in apps
+	deployment(app)
+	some field in ["hostNetwork", "hostPID", "hostIPC"]
+	object.get(pod_spec(app), field, false) != false
+	msg := sprintf("%s: the pod of %s must not set %s", [label, app, field])
+}
+
+deny contains msg if {
+	some app in apps
+	deployment(app)
+	some volume in object.get(pod_spec(app), "volumes", [])
+	volume.hostPath
+	msg := sprintf("%s: the volume %s of %s is a hostPath, which reaches the file system of the node", [label, volume.name, app])
+}
+
+# A projected volume can carry a Secret like a secret volume does, beside the
+# mounts that the rule above counts.
+deny contains msg if {
+	some app in apps
+	deployment(app)
+	some volume in object.get(pod_spec(app), "volumes", [])
+	some source in object.get(object.get(volume, "projected", {}), "sources", [])
+	source.secret
+	msg := sprintf("%s: the projected volume %s of %s takes a Secret as a source; Secrets are mounted as secret volumes, which this control counts", [label, volume.name, app])
+}
+
+deny contains msg if {
+	some app in apps
+	some c in containers(app)
+	object.get(object.get(c, "securityContext", {}), "privileged", false) != false
+	msg := sprintf("%s: container %s of %s must not be privileged", [label, c.name, app])
+}
+
+# The built images never come from a registry: .invalid resolves to none, and
+# the pull policy says so (research RS-07).
+deny contains msg if {
+	some app in apps
+	some c in containers(app)
+	startswith(c.image, "saas-b2b.invalid/")
+	not object.get(c, "imagePullPolicy", null) in {"IfNotPresent", "Never"}
+	msg := sprintf("%s: container %s of %s runs the built image %s: imagePullPolicy must be IfNotPresent or Never, found %v", [label, c.name, app, c.image, object.get(c, "imagePullPolicy", null)])
 }

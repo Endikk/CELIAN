@@ -27,6 +27,24 @@ readonly FRONT_ORIGINAL='<title>Notes</title>'
 readonly FRONT_CHANGED='<title>Notes e07</title>'
 readonly SERVE_SECONDS=60
 
+# The test changes two tracked files and puts them back by a trap, which a
+# kill -9 skips. It starts only on a clean tracked tree, so that a copy it
+# left behind is seen at the next start and never taken for the original
+# (tasks.md, gap 135); out of a Git repository, the two files must hold their
+# original text.
+if tracked_changes="$(git -C "$E2E_ROOT" status --porcelain --untracked-files=no 2>/dev/null)"; then
+  if [ -n "$tracked_changes" ]; then
+    printf 'E07: the tracked tree of %s is not clean; commit or restore it first, since this test changes two tracked files:\n%s\n' "$E2E_ROOT" "$tracked_changes"
+    exit 1
+  fi
+fi
+for original in "$API_SOURCE:$API_ORIGINAL" "$FRONT_SOURCE:$FRONT_ORIGINAL"; do
+  if ! grep -qF -- "${original#*:}" "${original%%:*}"; then
+    printf 'E07: %s does not hold %s: a previous run left it changed, or it was edited. Restore it first.\n' "${original%%:*}" "${original#*:}"
+    exit 1
+  fi
+done
+
 backup="$(mktemp -d)" || exit 2
 cp "$API_SOURCE" "$backup/api.cs" && cp "$FRONT_SOURCE" "$backup/front.html" || exit 2
 restore_sources() {

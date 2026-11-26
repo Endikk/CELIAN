@@ -82,4 +82,26 @@ for foreign in 127.0.0.1 attacker.example; do
 done
 unset E2E_REQUEST_HOST
 
+# A browser on http://localhost:<port>/ sends the port in Host. Envoy counts
+# the port when it picks the virtual host (tasks.md, gap 133): localhost:<port>
+# must get the application, a foreign name with the same port must not.
+port="$E2E_GATEWAY_HTTP_PORT"
+for path in / /api/healthz; do
+  E2E_REQUEST_HOST="$E2E_HOST:$port"
+  if http_request GET "$path"; then
+    [ "$HTTP_STATUS" = 200 ] || fail "GET $path with the Host $E2E_REQUEST_HOST, as a browser sends it, answers $HTTP_STATUS, 200 expected"
+  else
+    fail "GET $path with the Host $E2E_REQUEST_HOST gets no HTTP answer"
+  fi
+  for foreign in "attacker.example:$port" "127.0.0.1:$port"; do
+    E2E_REQUEST_HOST="$foreign"
+    if http_request GET "$path"; then
+      [ "$HTTP_STATUS" = 404 ] || fail "GET $path with the Host $foreign answers $HTTP_STATUS, 404 expected"
+    else
+      fail "GET $path with the Host $foreign gets no HTTP answer"
+    fi
+  done
+done
+unset E2E_REQUEST_HOST
+
 e2e_finish

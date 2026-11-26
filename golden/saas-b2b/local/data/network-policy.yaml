@@ -7,6 +7,14 @@
 # before this policy, the pg_hba of the server was the only barrier, and E12
 # only checked the authentication.
 #
+# The rule trusts a label: any pod of this namespace that carries
+# app.kubernetes.io/name: postgres, or api, is admitted, whoever created it.
+# A NetworkPolicy cannot tell the pod of the StatefulSet from another pod with
+# its label, and task up needs the pod itself admitted (its psql goes through
+# the Service, ADR-012, condition 6). Accepted on the local layer, where whoever
+# can create a pod already holds the cluster; to reopen with an RBAC that
+# forbids creating pods on GKE (tasks.md, gap 136).
+#
 # Ingress alone: the pod opens no connection, but nothing here depends on
 # that. The kubelet still reaches the pod for its probes (traffic from the
 # node of a pod is always admitted). kind applies NetworkPolicy, and E12

@@ -112,6 +112,18 @@ public sealed class RespCacheTests : IDisposable
         protected override object? Invoke(MethodInfo? targetMethod, object?[]? args) => Answer(targetMethod!);
     }
 
+    /// <summary>A clock that moves when the test says so.</summary>
+    private sealed class ManualTime : TimeProvider
+    {
+        private long _ticks;
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+
+        public override long GetTimestamp() => _ticks;
+
+        public void Advance(TimeSpan span) => _ticks += span.Ticks;
+    }
+
     private static T Proxy<T>(Func<MethodInfo, object?> answer)
         where T : class
     {
@@ -167,6 +179,7 @@ public sealed class RespCacheTests : IDisposable
     {
         var passwords = new List<string?>();
         var disposed = 0;
+        var clock = new ManualTime();
         await using var cache = new RespCache(
             () => Settings("cache.saas-b2b.svc", 6379),
             NullLogger<RespCache>.Instance,
@@ -174,10 +187,12 @@ public sealed class RespCacheTests : IDisposable
             {
                 passwords.Add(settings.ToConfigurationOptions().Password);
                 return Task.FromResult(Connection(connected: false, () => disposed++));
-            });
+            },
+            clock);
 
         await Assert.ThrowsAnyAsync<Exception>(() => cache.PingAsync(CancellationToken.None));
         File.WriteAllText(Path.Combine(_secrets, "password"), NewPassword);
+        clock.Advance(RespCache.ReconnectInterval);
         await Assert.ThrowsAnyAsync<Exception>(() => cache.PingAsync(CancellationToken.None));
 
         Assert.Equal([Password, NewPassword], passwords);
@@ -202,5 +217,33 @@ public sealed class RespCacheTests : IDisposable
         await Assert.ThrowsAnyAsync<Exception>(() => cache.PingAsync(CancellationToken.None));
 
         Assert.Equal(1, connects);
+    }
+
+    [Fact]
+    public async Task A_dropped_connection_is_not_rebuilt_before_the_reconnect_interval()
+    {
+        var connects = 0;
+        var clock = new ManualTime();
+        await using var cache = new RespCache(
+            () => Settings("cache.saas-b2b.svc", 6379),
+            NullLogger<RespCache>.Instance,
+            _ =>
+            {
+                connects++;
+                return Task.FromResult(Connection(connected: false, () => { }));
+            },
+            clock);
+
+        await Assert.ThrowsAnyAsync<Exception>(() => cache.PingAsync(CancellationToken.None));
+        clock.Advance(RespCache.ReconnectInterval - TimeSpan.FromMilliseconds(1));
+        await Assert.ThrowsAnyAsync<Exception>(() => cache.PingAsync(CancellationToken.None));
+        await Assert.ThrowsAnyAsync<Exception>(() => cache.GetAsync("note:x", CancellationToken.None));
+
+        Assert.Equal(1, connects);
+
+        clock.Advance(TimeSpan.FromMilliseconds(1));
+        await Assert.ThrowsAnyAsync<Exception>(() => cache.PingAsync(CancellationToken.None));
+
+        Assert.Equal(2, connects);
     }
 }

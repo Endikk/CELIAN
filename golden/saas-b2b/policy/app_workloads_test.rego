@@ -25,6 +25,7 @@ make_deployment(name, user, container_extra, pod_extra) := {
 				"containers": [object.union({
 					"name": name,
 					"image": sprintf("saas-b2b.invalid/%s:unbuilt", [name]),
+					"imagePullPolicy": "IfNotPresent",
 					"securityContext": container_security,
 					"resources": resources,
 				}, container_extra)],
@@ -203,4 +204,61 @@ test_s30_rejects_a_service_that_does_not_reach_the_container_port if {
 is_obj(doc, kind, name) if {
 	doc.kind == kind
 	doc.metadata.name == name
+}
+
+# --- The host, the volumes that reach out, the pull policy ---
+
+bare_init := {"name": "init", "image": "saas-b2b.invalid/api:unbuilt", "imagePullPolicy": "IfNotPresent", "resources": resources, "securityContext": container_security}
+
+test_s30_reads_the_init_containers_too if {
+	changed := with_pod(front, {"initContainers": [replaced(bare_init, {"securityContext": {"allowPrivilegeEscalation": false, "capabilities": {"drop": ["ALL"]}}})]})
+	denied_with(array.concat(others("front"), [changed]), "container init of front must set readOnlyRootFilesystem to true")
+}
+
+test_s30_accepts_a_well_made_init_container if {
+	accepted(array.concat(others("front"), [with_pod(front, {"initContainers": [bare_init]})]))
+}
+
+test_s30_rejects_a_privileged_init_container if {
+	changed := with_pod(front, {"initContainers": [object.union(bare_init, {"securityContext": object.union(container_security, {"privileged": true})})]})
+	denied_with(array.concat(others("front"), [changed]), "container init of front must not be privileged")
+}
+
+test_s30_rejects_a_privileged_container if {
+	changed := with_container(front, {"securityContext": object.union(container_security, {"privileged": true})})
+	denied_with(array.concat(others("front"), [changed]), "container front of front must not be privileged")
+}
+
+test_s30_rejects_host_networking if {
+	changed := with_pod(front, {"hostNetwork": true})
+	denied_with(array.concat(others("front"), [changed]), "must not set hostNetwork")
+}
+
+test_s30_rejects_a_host_path_volume if {
+	changed := with_pod(front, {"volumes": [{"name": "tmp", "emptyDir": {"sizeLimit": "16Mi"}}, {"name": "node", "hostPath": {"path": "/"}}]})
+	denied_with(array.concat(others("front"), [changed]), "is a hostPath")
+}
+
+test_s30_rejects_a_projected_secret if {
+	changed := with_pod(front, {"volumes": [{"name": "tmp", "emptyDir": {"sizeLimit": "16Mi"}}, {"name": "p", "projected": {"sources": [{"secret": {"name": "db-auth"}}]}}]})
+	denied_with(array.concat(others("front"), [changed]), "takes a Secret as a source")
+}
+
+test_s30_accepts_a_projected_config_map if {
+	changed := with_pod(front, {"volumes": [{"name": "tmp", "emptyDir": {"sizeLimit": "16Mi"}}, {"name": "p", "projected": {"sources": [{"configMap": {"name": "app-config"}}]}}]})
+	accepted(array.concat(others("front"), [changed]))
+}
+
+test_s30_rejects_a_built_image_that_is_always_pulled if {
+	changed := with_container(front, {"imagePullPolicy": "Always"})
+	denied_with(array.concat(others("front"), [changed]), "imagePullPolicy must be IfNotPresent or Never, found Always")
+}
+
+test_s30_accepts_the_never_pull_policy if {
+	accepted(array.concat(others("front"), [with_container(front, {"imagePullPolicy": "Never"})]))
+}
+
+test_s30_rejects_a_built_image_without_a_pull_policy if {
+	changed := object.union(front, {"spec": {"template": {"spec": {"containers": [object.remove(front.spec.template.spec.containers[0], ["imagePullPolicy"])]}}}})
+	denied_with(array.concat(others("front"), [changed]), "imagePullPolicy must be IfNotPresent or Never, found null")
 }
