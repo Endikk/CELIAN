@@ -339,7 +339,7 @@ $entry"
           printf '%s: %s is a reported image, which runs on the local cluster only, and the render of the gcp layer deploys it (%s): it would go to production without blocking the scan.\n' "$policy_file" "$entry" "$ref"
         fi
       done < <(printf '%s\n' "$reported_entries")
-    done < <(CDPATH="" cd -- "$dir" && bash "$inventory" gcp 2>&1)
+    done < <(CDPATH='' cd -- "$dir" && bash "$inventory" gcp 2>&1)
   fi
 }
 
@@ -458,7 +458,7 @@ scan_in() {
   : >"$log"
   : >"$work/summary.md"
   status=0
-  out="$(CDPATH="" cd -- "$dir" && GITHUB_STEP_SUMMARY="$work/summary.md" PATH="$work/bin:$PATH" bash "$scan" lite 2>&1)" || status=$?
+  out="$(CDPATH='' cd -- "$dir" && GITHUB_STEP_SUMMARY="$work/summary.md" PATH="$work/bin:$PATH" bash "$scan" lite 2>&1)" || status=$?
 }
 
 repositories=()
