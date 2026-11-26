@@ -4,8 +4,13 @@
 # the local layer declares a GatewayClass of this name, the gcp layer sets
 # the class of GKE instead (tasks.md, gap 35).
 #
-# One HTTP listener for now; the HTTPS listener and its certificate, the
-# Secret gateway-tls, join with the second PR of step 7 (tasks.md, gap 3).
+# Two listeners: HTTP on port 80, and HTTPS on port 443 with the certificate
+# of the Secret gateway-tls, which terminates TLS (T074; research RS-10;
+# tasks.md, gap 3). certificateRefs names a Secret of the namespace of the
+# Gateway, of type kubernetes.io/tls: task up makes it on the local target
+# (local/scripts/secrets.sh); on gcp it is still to settle with the class of
+# GKE (contracts/secrets.md, tasks.md, T129). Both listeners take the same
+# HTTPRoutes, which name no section.
 # Routes are admitted from the namespace of the Gateway only.
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
@@ -17,6 +22,16 @@ spec:
     - name: http
       protocol: HTTP
       port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+    - name: https
+      protocol: HTTPS
+      port: 443
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: gateway-tls
       allowedRoutes:
         namespaces:
           from: Same

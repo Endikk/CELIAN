@@ -6,8 +6,10 @@
 #      DOCKER_TIMEOUT_SECONDS;
 #   2. versions: kind exactly, kubectl within one minor of the cluster,
 #      Docker Engine 28.0.0 or later on Linux;
-#   3. the memory that the engine declares picks the profile;
-#   4. the host ports are free on 127.0.0.1, unless the kind cluster of the
+#   3. openssl and awk are on PATH: they make the key and the certificate of
+#      the Secret gateway-tls (research RS-10; tasks.md, gap 80);
+#   4. the memory that the engine declares picks the profile;
+#   5. the host ports are free on 127.0.0.1, unless the kind cluster of the
 #      project exists: its node then holds them, and must publish each on
 #      127.0.0.1 (research RS-20).
 # The inputs, PROFILE and the ports, are validated first, before any call.
@@ -15,8 +17,8 @@
 # It only reads: "docker context inspect" (the local store of contexts),
 # "docker info", "kind version", "kubectl version --client" (which reads no
 # kubeconfig), "uname -s", platform.yaml, "docker container ls" and "docker
-# container inspect" on the nodes of the project, and a TCP connect to each
-# port. It creates nothing and touches no kubeconfig. The source of each
+# container inspect" on the nodes of the project, a TCP connect to each
+# port, and "command -v" for openssl and awk, which it never runs. It creates nothing and touches no kubeconfig. The source of each
 # command and of each output format is in research RS-08 and RS-20 of spec
 # 001.
 #
@@ -341,6 +343,23 @@ check_kubectl() {
   fi
 }
 
+# check_tools: openssl and awk are on PATH. secrets.sh makes the key and the
+# certificate of gateway-tls with one openssl req, and awk labels its two PEM
+# blocks (research RS-10); the refusal comes here, before anything is created,
+# and names the tool that is missing (decision of the DSI of 2026-11-26,
+# tasks.md, gap 80). Only found, never run: macOS ships both, and the runners
+# of ubuntu-latest ship OpenSSL.
+check_tools() {
+  local missing=""
+  command -v openssl >/dev/null 2>&1 || missing="openssl"
+  command -v awk >/dev/null 2>&1 || missing="${missing:+$missing and }awk"
+  case "$missing" in
+    "") ;;
+    *" and "*) refuse "$missing are not on PATH: task up makes the key and the certificate of the Secret gateway-tls with them. Install both ($README_REF)." ;;
+    *) refuse "$missing is not on PATH: task up makes the key and the certificate of the Secret gateway-tls with it. Install it ($README_REF)." ;;
+  esac
+}
+
 # version_at_least FOUND MINIMUM: compares the leading X.Y.Z numbers, so that
 # a suffix such as +dfsg1 does not count.
 version_at_least() {
@@ -525,6 +544,7 @@ main() {
   read_engine
   check_kind
   check_kubectl
+  check_tools
   check_engine_version
   choose_profile
   check_ports "$@"

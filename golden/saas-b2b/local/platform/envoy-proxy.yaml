@@ -2,12 +2,14 @@
 # Envoy Gateway publishes the proxy through a NodePort Service with fixed
 # node ports, which the extraPortMappings of local/kind/cluster.yaml reach
 # on 127.0.0.1. The patch is a strategic merge on the ports of the Service,
-# keyed by port (research RS-02). It fixes port 80, the HTTP listener of the
-# Gateway; port 443 joins with the HTTPS listener, in the second PR of step
-# 7 (T074): a port that the Service lacks would enter it without a name.
+# keyed by port (research RS-02). It fixes port 80 and port 443, the two
+# listeners of the Gateway, HTTP and HTTPS (T074). Port 443 joined with the
+# HTTPS listener: a port that the Service lacks would have entered it
+# without a name (tasks.md, gap 37), and the Service has 443 once the
+# Gateway lists the listener.
 # S05 checks that each nodePort below is the containerPort of an
-# extraPortMappings. Only the local layer names gateway.envoyproxy.io
-# (ADR-005, condition 2; S06).
+# extraPortMappings, and the other way round. Only the local layer names
+# gateway.envoyproxy.io (ADR-005, condition 2; S06).
 #
 # The proxy image is pinned here, by tag and digest of the index, in the field
 # envoyDeployment.container.image (ADR-005, complement of 2026-11-26). It is
@@ -40,6 +42,8 @@ spec:
               ports:
                 - port: 80
                   nodePort: 30080
+                - port: 443
+                  nodePort: 30443
       envoyDeployment:
         container:
           # renovate: datasource=docker depName=docker.io/envoyproxy/envoy
