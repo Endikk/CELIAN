@@ -49,7 +49,7 @@ tasks:
   # creates, is checked after (mirror.sh up). The Secrets come before the
   # platform: the controller of Envoy Gateway watches the namespace of the
   # application, and its Role there needs the namespace (ADR-005, complement
-  # of 2026-11-25; tasks.md, gap 47).
+  # of 2026-11-25; tasks.md, gap 72).
   up:
     silent: true
     env:
