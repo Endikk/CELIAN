@@ -1,0 +1,18 @@
+# The images that config-sync-manifest.yaml (Config Sync v1.25.2, the open source
+# build, release asset of GoogleContainerTools/kpt-config-sync, published on
+# 2026-11-03) names by tag, each with the digest of its index, read at the
+# registry on 2026-11-26 with `docker buildx imagetools inspect` and equal to the
+# digests of tests/bench/bench-009-gitops.sh (research RS-16). The test E16
+# writes each digest into the manifest before it applies it, reconciler
+# templates included (ADR-010, condition 6), and S32 checks that this list names
+# exactly the images of the manifest. One line: the reference as the manifest
+# writes it, a space, the digest.
+gcr.io/config-management-release/gcenode-askpass-sidecar:v1.25.2 sha256:5a5f4ae00462acf27c34694029fe505a4cc8cbd8c0afce8c22bd2c61e7b9d56b
+gcr.io/config-management-release/git-sync:v4.5.0-gke.3__linux_amd64 sha256:17bcbc883663e471dfb9db836ed299ae9e14dcd5cfe811c1ec6b3f8ab166ab2c
+gcr.io/config-management-release/helm-sync:v1.25.2 sha256:cf923daee784cab355ecaa227dc456821a73f77c4db14081e2962f65f337372e
+gcr.io/config-management-release/hydration-controller:v1.25.2 sha256:efe987b9f32464944b50276bd69e21f5fa0386fb5c9560e15d68b557dad3f523
+gcr.io/config-management-release/oci-sync:v1.25.2 sha256:152d0e041b7313ac8276806cb840d9d3c82c43ddb574148fb6b9a3f5655b9b94
+gcr.io/config-management-release/otelcontribcol:v0.159.0-gke.4 sha256:3e4d301891726c9f11a55267a1fe7467752ce45251c8f41b4f344db869e2aeb5
+gcr.io/config-management-release/reconciler-manager:v1.25.2 sha256:c92031c1fff2cdec92e07b24f87d5de591a330121c057a32e19f1b43a5232143
+gcr.io/config-management-release/reconciler:v1.25.2 sha256:55e569201329b4fa3fd34d10b85618c20a8aab0ce53932eb82c2303b800da72b
+gcr.io/config-management-release/resource-group-controller:v1.25.2 sha256:dc5a7448d2e8c7ec92806793ba028575e8180353aa3297d69abec63854f4b637

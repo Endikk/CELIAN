@@ -2,7 +2,7 @@
 # control: S07
 # carries: FR-008, FR-010; ADR-005, condition 5; ADR-007, condition 5; ADR-010, condition 1
 #
-# Parity, local part (spec 001, T086; contracts/layers.md, "Règle de
+# Parity (spec 001, T086 and T130; contracts/layers.md, "Règle de
 # parité"). The common layer rendered alone, k8s/overlays/local, is found
 # again in the render of local/k8s/lite, which task up applies, except for
 # spec.gatewayClassName and the hostnames of the routes, which a target
@@ -10,8 +10,9 @@
 # layer; one Gateway per render; the references to app-config and to the
 # Secrets are those of the contracts; no render sets ASPNETCORE_ENVIRONMENT
 # nor DOTNET_ENVIRONMENT to Development; the HTTPRoutes name localhost
-# (policy/layer_parity.rego). The gcp render joins the comparison with step
-# 14, which makes the parity complete.
+# (policy/layer_parity.rego). The gcp part follows, when gcp/k8s/ is there (a
+# project rendered for the local target alone has none): step 14 joined it, the
+# two parts are one control (tasks.md, gap 163). It is described below.
 #
 # The renders come from the Kustomize of kubectl, as in S06 and S12
 # (research RS-01). The objects of the local layer on their own are the
@@ -64,3 +65,54 @@ render local/data/cache "$work/cache.yaml"
 conftest verify --no-color --policy policy --namespace layer_parity
 conftest test --no-color --combine --policy policy --namespace layer_parity \
   "$work/common.yaml" "$work/lite.yaml" "$work/sources.yaml"
+
+# --- gcp part (spec 001, T130; contracts/layers.md, "Règle de parité") ------------
+# The render of the gcp layer holds the common layer as it is, and what it adds
+# comes from the gcp layer (gcp/policy/gcp_parity.rego). Four renders:
+# - gcp-common.yaml: k8s/overlays/prod, the common layer alone;
+# - gcp.yaml: gcp/k8s/prod, the same overlay with the component of the gcp
+#   target;
+# - gcp-layer.yaml: the files of the gcp layer as written, gcp/k8s/component/
+#   and the renders of gcp/k8s/values/ and gcp/k8s/admission/, to tell what
+#   comes from the layer;
+# - gcp-bootstrap.yaml: gcp/k8s/bootstrap, whose namespace is the common one and
+#   which holds the admission objects that Config Sync only updates.
+# The policy fails on a difference other than spec.gatewayClassName, on an object
+# that comes from nowhere, on a second Gateway, and on a Secret or a ConfigMap that
+# a pod of the common layer reads and the gcp layer does not produce. A Secret
+# with a producer to come raises a warning, listed in the policy with its reason.
+# A project rendered for the local target alone has no gcp/k8s/ and skips it.
+if [ -d gcp/k8s ]; then
+  for dir in k8s/overlays/prod gcp/k8s/prod gcp/k8s/values gcp/k8s/admission gcp/k8s/bootstrap; do
+    if [ ! -f "$dir/kustomization.yaml" ]; then
+      echo "$dir/kustomization.yaml is missing: the prod overlay (T133) or the gcp layer (T134) is not written." >&2
+      exit 1
+    fi
+  done
+  render k8s/overlays/prod "$work/gcp-common.yaml"
+  render gcp/k8s/prod "$work/gcp.yaml"
+  render gcp/k8s/bootstrap "$work/gcp-bootstrap.yaml"
+  render gcp/k8s/values "$work/gcp-values.yaml"
+  render gcp/k8s/admission "$work/gcp-admission.yaml"
+  # Every file of the component but its kustomization.yaml, then the two renders.
+  : >"$work/gcp-layer.yaml"
+  for file in gcp/k8s/component/*.yaml; do
+    [ -f "$file" ] || continue
+    [ "$(basename "$file")" = kustomization.yaml ] && continue
+    {
+      printf -- '---\n'
+      cat "$file"
+      printf '\n'
+    } >>"$work/gcp-layer.yaml"
+  done
+  {
+    printf -- '---\n'
+    cat "$work/gcp-values.yaml"
+    printf -- '---\n'
+    cat "$work/gcp-admission.yaml"
+  } >>"$work/gcp-layer.yaml"
+
+  conftest verify --no-color --policy gcp/policy --namespace gcp_parity
+  conftest test --no-color --combine --policy gcp/policy --namespace gcp_parity \
+    "$work/gcp-common.yaml" "$work/gcp.yaml" "$work/gcp-layer.yaml" "$work/gcp-bootstrap.yaml"
+fi

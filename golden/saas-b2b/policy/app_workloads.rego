@@ -240,6 +240,31 @@ deny contains msg if {
 	msg := sprintf("%s: container %s of the API must read app-config by envFrom", [label, c.name])
 }
 
+# --- The CA bundles of the managed services (tasks.md, gap 166) ---------------------------
+
+ca_mounts(app) := {mount.mountPath |
+	some volume in object.get(pod_spec(app), "volumes", [])
+	volume.configMap.name == "app-ca"
+	volume.configMap.optional == true
+	some c in containers(app)
+	some mount in object.get(c, "volumeMounts", [])
+	mount.name == volume.name
+	mount.readOnly == true
+}
+
+deny contains msg if {
+	deployment("api")
+	ca_mounts("api") != {"/run/config/ca"}
+	msg := sprintf("%s: the API must mount the ConfigMap app-ca, optional, read-only, on /run/config/ca (found %v)", [label, ca_mounts("api")])
+}
+
+deny contains msg if {
+	deployment("api")
+	some c in main_containers("api")
+	not {"name": "PGSSLROOTCERT", "value": "/run/config/ca/database-ca.pem"} in object.get(c, "env", [])
+	msg := sprintf("%s: container %s of the API must set PGSSLROOTCERT to /run/config/ca/database-ca.pem, the root of the database that Npgsql reads", [label, c.name])
+}
+
 serves(ref) if {
 	some s in documents
 	s.kind == "Service"

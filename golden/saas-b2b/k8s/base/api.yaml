@@ -16,6 +16,13 @@
 #   password of the cache from the files of the mounted Secrets db-auth and
 #   cache-auth, read-only and readable by the group of the pod only
 #   (contracts/secrets.md, contracts/layers.md).
+# - The CA bundles of the managed services come from an optional ConfigMap,
+#   app-ca, that only a target with a managed database and cache provides
+#   (gcp): mounted read-only on /run/config/ca, absent and harmless on local.
+#   PGSSLROOTCERT is the variable that Npgsql reads for the root certificate of
+#   the database (research RS-12); it is set on every target, and read only
+#   under VerifyCA and VerifyFull. The bundle of the cache is named by
+#   CACHE_TLS_CA_FILE of app-config (tasks.md, gap 166).
 # - The label app.kubernetes.io/name: api is the one that the NetworkPolicies
 #   of the database and the cache admit (tasks.md, gaps 104 and 122).
 # - Readiness is /api/readyz, the database and the cache reachable; liveness
@@ -52,6 +59,9 @@ spec:
           ports:
             - name: http
               containerPort: 8080
+          env:
+            - name: PGSSLROOTCERT
+              value: /run/config/ca/database-ca.pem
           envFrom:
             - configMapRef:
                 name: app-config
@@ -89,6 +99,9 @@ spec:
             - name: cache-auth
               mountPath: /run/secrets/cache-auth
               readOnly: true
+            - name: app-ca
+              mountPath: /run/config/ca
+              readOnly: true
       volumes:
         - name: tmp
           emptyDir:
@@ -101,6 +114,10 @@ spec:
           secret:
             secretName: cache-auth
             defaultMode: 0440
+        - name: app-ca
+          configMap:
+            name: app-ca
+            optional: true
 ---
 apiVersion: v1
 kind: Service

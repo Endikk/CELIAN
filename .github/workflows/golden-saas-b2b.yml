@@ -204,6 +204,36 @@ jobs:
           PROFILE: lite
         run: task test:e2e
 
+  # E16 (spec 001, T135; research RS-16): the gcp layer on a kind cluster of its
+  # own, with Config Sync in its open source form at the version that GKE runs.
+  # The cluster reads the commit of the pull request from this repository,
+  # anonymously over HTTPS (the repository is public), so it never reaches a
+  # cloud: no credential, and test S17 refuses one. A runner of x64: the images
+  # of Config Sync are published for linux/amd64 only. Not a required check of
+  # the ruleset of main until the DSI decides (tasks.md, notes). The workflows of
+  # the generated project (golden/saas-b2b/.github/workflows/) have no job on
+  # kind yet, e2e-lite included, so none is added there (tasks.md, gap 190).
+  gcp-on-kind:
+    name: gcp-on-kind
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install kind and kubectl
+        run: |
+          bash scripts/ci/install-kind-kubectl.sh "$RUNNER_TEMP/kind-tools"
+          echo "$RUNNER_TEMP/kind-tools" >> "$GITHUB_PATH"
+
+      - name: Run E16, the gcp layer on kind
+        working-directory: golden/saas-b2b
+        env:
+          E16_REPO: https://github.com/${{ github.repository }}.git
+          E16_REVISION: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: bash gcp/tests/e16-configsync-kind.sh
+
   # Gap 44 of spec 001 (tasks.md): the render of Envoy Gateway in
   # local/vendor/envoy-gateway/ is redone with helm template from the OCI
   # artifacts that local/tasks/local.yml names by digest, with the commands of
