@@ -26,7 +26,9 @@ proxy(ports) := {"path": "local/platform/envoy-proxy.yaml", "contents": {
 
 both := [mapping(30080, 18080), mapping(30443, 18443)]
 
-valid := [cluster(both), proxy([{"port": 80, "nodePort": 30080}])]
+both_node_ports := [{"port": 80, "nodePort": 30080}, {"port": 443, "nodePort": 30443}]
+
+valid := [cluster(both), proxy(both_node_ports)]
 
 accepted(files, ports) if {
 	msgs := deny with input as files with data.task_host_ports as ports
@@ -44,7 +46,16 @@ test_s05_ports_accepts_the_valid_layer if {
 }
 
 test_s05_ports_accepts_both_node_ports if {
-	accepted([cluster(both), proxy([{"port": 80, "nodePort": 30080}, {"port": 443, "nodePort": 30443}])], [18443, 18080])
+	accepted([cluster(both), proxy(both_node_ports)], [18443, 18080])
+}
+
+# The HTTPS listener (T074): port 443 of the Service of the proxy gets its
+# node port, and no published port of the node leads nowhere. Without the
+# 443 entry, the Service would take a random node port and 18443 would reach
+# nothing.
+test_s05_ports_rejects_a_published_port_that_the_proxy_does_not_fix if {
+	files := [cluster(both), proxy([{"port": 80, "nodePort": 30080}])]
+	denied_with(files, [18080, 18443], "containerPort 30443")
 }
 
 test_s05_ports_rejects_tasks_without_ports if {
@@ -78,7 +89,7 @@ test_s05_ports_rejects_a_node_port_that_no_mapping_reaches if {
 
 # The EnvoyProxy stays what ADR-005 writes: a NodePort Service whose ports
 # are patched, and nothing else (SECU review of the PR of step 7).
-good_ports := [{"port": 80, "nodePort": 30080}]
+good_ports := both_node_ports
 
 good_service := {
 	"type": "NodePort",

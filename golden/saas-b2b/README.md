@@ -21,11 +21,14 @@ La spécification, le plan et les tâches sont dans [`specs/001-golden-repo-saas
 | Moteur de conteneurs | local, joint par la commande `docker` à travers un socket unix (un contexte `tcp://` ou `ssh://`, ou `DOCKER_HOST` vers une autre machine, est refusé) ; `docker info` répond en moins de 10 s |
 | kind | 0.33.0 exactement (ADR-004) |
 | kubectl | 1.35 à 1.37, une mineure autour de celle du cluster, 1.36 dans `platform.yaml` (ADR-006) |
+| `openssl` et `awk` | sur le `PATH`, seulement cherchés, jamais lancés par ces contrôles : `task up` fabrique avec eux la clé et le certificat du Secret `gateway-tls`, sans fichier (research RS-10). macOS fournit les deux ; sous Linux, `openssl` est le paquet de la distribution |
 | Docker Engine, sous Linux seulement | 28.0.0 ou plus (ADR-011) |
 | Mémoire déclarée par le moteur | 2048 Mio pour le profil lite, 2560 Mio pour le standard. Sous macOS, c'est la mémoire de la machine virtuelle du moteur, pas celle du poste (ADR-004) |
 | Ports de l'hôte | libres en 127.0.0.1 ; leurs valeurs arrivent à l'étape 7 |
 
 Le profil se choisit sur la mémoire. `PROFILE=lite task up`, ou `task up PROFILE=lite`, force un profil sous les mêmes contrôles de mémoire. Jusqu'à l'étape 12, le profil standard est reconnu puis refusé : sur un moteur qui déclare 2560 Mio ou plus, `task up` sans `PROFILE` s'arrête en le disant, et `PROFILE=lite` permet d'avancer.
+
+L'écouteur HTTPS local (port 18443 de l'hôte, en 127.0.0.1) sert un certificat auto-signé, valable 365 jours, jamais installé dans le magasin de confiance du poste : un navigateur le refuse et affiche un avertissement, ce qui est voulu. Ne l'installez jamais comme autorité de confiance dans le magasin du poste ou du navigateur : il est auto-signé pour chiffrer en local, rien de plus. `task up` ne recrée `gateway-tls` que s'il manque, et prévient, sans s'arrêter, quand le certificat expire dans moins de 30 jours. Pour en changer : `kubectl delete secret gateway-tls --namespace saas-b2b`, puis `task up`.
 
 ## Carte des couches
 

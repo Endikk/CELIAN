@@ -4,7 +4,9 @@
 # - the hostPort values of the extraPortMappings are exactly the ports that
 #   the tasks give to the preflight checks;
 # - each nodePort that the EnvoyProxy of the local layer fixes on the
-#   Service of the proxy is the containerPort of an extraPortMappings;
+#   Service of the proxy is the containerPort of an extraPortMappings, and
+#   each containerPort is the nodePort that the EnvoyProxy fixes: ports 80
+#   and 443, the HTTP and HTTPS listeners of the Gateway (T074);
 # - the EnvoyProxy keeps to what ADR-005 writes: envoyService.type NodePort,
 #   a StrategicMerge patch reduced to spec.ports[] with port and nodePort,
 #   and no other key under spec, provider.kubernetes or envoyService;
@@ -80,6 +82,17 @@ deny contains msg if {
 	some port in node_ports
 	not port in container_ports
 	msg := sprintf("%s: the EnvoyProxy fixes the nodePort %v, which no extraPortMappings of local/kind/cluster.yaml publishes (containerPort)", [label, port])
+}
+
+# The other way round (T074): a port that the node publishes must be fixed by
+# the EnvoyProxy. The HTTPS listener adds port 443 to the Service of the
+# proxy; without its entry in the patch, the Service would take a random node
+# port, and the host port 18443 would lead nowhere.
+deny contains msg if {
+	count(proxies) > 0
+	some port in container_ports
+	not port in node_ports
+	msg := sprintf("%s: local/kind/cluster.yaml publishes the containerPort %v, which the EnvoyProxy fixes as the nodePort of no port of the Service of the proxy: the host port would lead nowhere", [label, port])
 }
 
 # The EnvoyProxy is what ADR-005 writes and nothing more (SECU review of the

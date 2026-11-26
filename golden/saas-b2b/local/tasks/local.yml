@@ -15,8 +15,8 @@ vars:
   # renovate: datasource=docker depName=ghcr.io/project-zot/zot
   MIRROR_IMAGE: ghcr.io/project-zot/zot:v2.1.23@sha256:9d3de83ac2099e6f4843045b4c9b65b7e8baf40f92d28f54906dee9d4d390fd7
   # The host ports of the gateway, on 127.0.0.1 (research RS-20): HTTP, and
-  # HTTPS for the listener of the second PR of step 7. local/kind/cluster.yaml
-  # publishes them, the preflight checks test them; S05 keeps both in step.
+  # HTTPS for its listener (T074). local/kind/cluster.yaml publishes them, the
+  # preflight checks test them; S05 keeps both in step.
   GATEWAY_HTTP_PORT: "18080"
   GATEWAY_HTTPS_PORT: "18443"
   # Envoy Gateway, one release (ADR-005, "Versions et condensats"; research

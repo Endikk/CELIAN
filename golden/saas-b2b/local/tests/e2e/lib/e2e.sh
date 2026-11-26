@@ -43,6 +43,14 @@ E2E_CACHE_SECRET_KEYS="password"
 E2E_CACHE_SECRET_TYPE="Opaque"
 # Every Secret that holds a drawn password.
 E2E_PASSWORD_SECRETS="$E2E_SECRETS $E2E_CACHE_SECRET"
+# gateway-tls (research RS-10; contracts/secrets.md): kubernetes.io/tls, the
+# keys tls.crt and tls.key. It holds a key and a certificate, no password, so
+# E04 and E06 leave it out of the password rules; E05 keeps it with the rest.
+E2E_TLS_SECRET="gateway-tls"
+E2E_TLS_SECRET_KEYS="tls.crt tls.key"
+E2E_TLS_SECRET_TYPE="kubernetes.io/tls"
+# Every Secret that a second task up keeps as it is.
+E2E_KEPT_SECRETS="$E2E_PASSWORD_SECRETS $E2E_TLS_SECRET"
 # The volume of the database: the PVC of the StatefulSet postgres.
 E2E_DATA_VOLUME="data-postgres-0"
 # A password is 32 characters at least, and none of the known values of
@@ -56,9 +64,9 @@ E2E_FAILURES=0
 OUTPUT=""
 STATUS=0
 
-for tool in task docker kind kubectl; do
+for tool in task docker kind kubectl openssl; do
   if ! command -v "$tool" >/dev/null 2>&1; then
-    printf '%s is not on PATH: the tests on kind need task, docker, kind and kubectl.\n' "$tool"
+    printf '%s is not on PATH: the tests on kind need task, docker, kind, kubectl and openssl.\n' "$tool"
     exit 1
   fi
 done
@@ -218,6 +226,25 @@ db_query() {
 # print it.
 secret_value() {
   kube_e2e --namespace "$E2E_APP_NAMESPACE" get secret "$1" --output "go-template={{index .data \"$2\" | base64decode}}"
+}
+
+# cert_fingerprint: reads a PEM certificate on the standard input and prints
+# its SHA-256 fingerprint as 64 upper-case hexadecimal digits, empty when the
+# input holds no certificate. OpenSSL and LibreSSL write the line differently
+# ("sha256 Fingerprint=" or "SHA256 Fingerprint=", digits in pairs with
+# colons): only the digits are kept.
+cert_fingerprint() {
+  openssl x509 -noout -fingerprint -sha256 2>/dev/null | sed -n 's/^.*Fingerprint=//p' | tr -d ':' | tr 'a-f' 'A-F'
+}
+
+# tls_pair_matches: succeeds when the key of gateway-tls is the key of its
+# certificate: the public key that each holds is the same. Only public keys
+# reach this shell; the private key goes through a pipe to openssl.
+tls_pair_matches() {
+  local from_cert from_key
+  from_cert="$(secret_value "$E2E_TLS_SECRET" tls.crt | openssl x509 -noout -pubkey 2>/dev/null)" || return 1
+  from_key="$(secret_value "$E2E_TLS_SECRET" tls.key | openssl pkey -pubout 2>/dev/null)" || return 1
+  [ -n "$from_cert" ] && [ "$from_cert" = "$from_key" ]
 }
 
 e2e_finish() {
