@@ -183,6 +183,7 @@ docker_log="$work/bin/docker.log"
 # The behaviour of fake trivy for the built images and of fake docker; the
 # case that changes them sets these, and run_scan puts them back.
 built_mode=clean
+fs_mode=clean
 docker_mode=ok
 
 # run_scan MODE ARGS...: runs the scan with fake trivy in MODE for the pulled
@@ -193,6 +194,7 @@ run_scan() {
   shift
   printf '%s\n' "$built_mode" >"$work/bin/built-mode"
   printf '%s\n' "$docker_mode" >"$work/bin/docker-mode"
+  printf '%s\n' "$fs_mode" >"$work/bin/fs-mode"
   printf 'amd64\n' >"$work/bin/built-platform"
   : >"$log"
   : >"$docker_log"
@@ -201,6 +203,7 @@ run_scan() {
   out="$(GITHUB_STEP_SUMMARY="$work/summary.md" PATH="$work/bin:$PATH" bash "$scan" --sbom-dir "$work/sbom" "$@" 2>&1)" || status=$?
   built_mode=clean
   docker_mode=ok
+  fs_mode=clean
 }
 
 pulled="$(bash "$inventory" lite | grep -c -v '^saas-b2b\.invalid/' || true)"
@@ -216,18 +219,29 @@ fi
 calls="$(grep -c '^ARGS ' "$log" || true)"
 remote_calls="$(grep -c -F -e '|--image-src|remote|' "$log" || true)"
 engine_calls="$(grep -c -F -e '|--image-src|docker|' "$log" || true)"
-sbom_calls="$(grep -c -F -e '|--format|cyclonedx|' "$log" || true)"
-if [ "$remote_calls" != "$pulled" ] || [ "$engine_calls" != "$((built * 2))" ] || [ "$sbom_calls" != "$built" ] || [ "$calls" != "$((pulled + built * 2))" ]; then
-  report "$scan called Trivy $calls times ($remote_calls pulled, $engine_calls from the engine, $sbom_calls SBOM) for $pulled pulled and $built built images of the lite inventory: one report per image, and one SBOM per built image."
+sbom_calls="$(grep '^ARGS image|' "$log" | grep -c -F -e '|--format|cyclonedx|' || true)"
+lock_calls="$(grep -c '^ARGS fs|' "$log" || true)"
+lock_sbom_calls="$(grep '^ARGS fs|' "$log" | grep -c -F -e '|--format|cyclonedx|' || true)"
+if [ "$remote_calls" != "$pulled" ] || [ "$engine_calls" != "$((built * 2))" ] || [ "$sbom_calls" != "$built" ] ||
+  [ "$lock_calls" -lt 2 ] || [ "$lock_sbom_calls" != "$((lock_calls / 2))" ] || [ "$calls" != "$((pulled + built * 2 + lock_calls))" ]; then
+  report "$scan called Trivy $calls times ($remote_calls pulled, $engine_calls from the engine, $sbom_calls SBOM, $lock_calls on lock files, $lock_sbom_calls lock SBOM) for $pulled pulled and $built built images of the lite inventory: one report per image, one SBOM per built image, and a report and an SBOM for each lock file (the front: package-lock.json)."
 fi
 while IFS= read -r line; do
   args="|${line#ARGS }|"
   kind=pulled
   case "$args" in
+    '|fs|'*)
+      kind=lock
+      case "$args" in *'|--format|cyclonedx|'*) kind=locksbom ;; esac
+      ;;
     *'|--format|cyclonedx|'*) kind=sbom ;;
     *'|--image-src|docker|'*) kind=built ;;
   esac
-  for needed in '|image|' '|--config||' '|--ignorefile||' '|--disable-telemetry|' '|--skip-version-check|' '|--cache-dir|' '|--output|'; do
+  case "$kind" in
+    lock | locksbom) first='|fs|' ;;
+    *) first='|image|' ;;
+  esac
+  for needed in "$first" '|--config||' '|--ignorefile||' '|--disable-telemetry|' '|--skip-version-check|' '|--cache-dir|' '|--output|'; do
     case "$args" in
       *"$needed"*) ;;
       *) report "$scan does not pass $needed to Trivy (arguments joined by |): ${line#ARGS }" ;;
@@ -237,6 +251,8 @@ while IFS= read -r line; do
     pulled) wanted_args='|--offline-scan| |--scanners|vuln| |--image-src|remote| |--exit-code|0| |--format|json| |--platform|linux/amd64|' ;;
     built) wanted_args='|--offline-scan| |--scanners|vuln| |--image-src|docker| |--exit-code|0| |--format|json|' ;;
     sbom) wanted_args='|--image-src|docker| |--format|cyclonedx|' ;;
+    lock) wanted_args='|--offline-scan| |--scanners|vuln| |--exit-code|0| |--format|json|' ;;
+    locksbom) wanted_args='|--format|cyclonedx|' ;;
   esac
   for needed in $wanted_args; do
     case "$args" in
@@ -244,7 +260,7 @@ while IFS= read -r line; do
       *) report "$scan does not pass $needed to Trivy for a $kind call (arguments joined by |): ${line#ARGS }" ;;
     esac
   done
-  if [ "$kind" = sbom ]; then
+  if [ "$kind" = sbom ] || [ "$kind" = locksbom ]; then
     # With --format cyclonedx, Trivy disables the security scan and needs no
     # database; --scanners would add the vulnerabilities to the SBOM, which
     # lists components and versions (FR-020).
@@ -282,6 +298,7 @@ run_with_host() {
   printf 'ok\n' >"$work/bin/mode"
   printf 'clean\n' >"$work/bin/built-mode"
   printf 'ok\n' >"$work/bin/docker-mode"
+  printf 'clean\n' >"$work/bin/fs-mode"
   printf 'amd64\n' >"$work/bin/built-platform"
   : >"$log"
   : >"$docker_log"
@@ -703,6 +720,7 @@ scan_in() {
   printf '%s\n' high >"$work/bin/mode"
   printf '%s\n' clean >"$work/bin/built-mode"
   printf '%s\n' ok >"$work/bin/docker-mode"
+  printf '%s\n' clean >"$work/bin/fs-mode"
   printf '%s\n' amd64 >"$work/bin/built-platform"
   : >"$log"
   : >"$docker_log"

@@ -248,8 +248,8 @@ test_u03_refuses_another_schema_version if {
 }
 
 test_u03_refuses_a_report_that_is_not_an_image if {
-	other := {"path": "reports/1.json", "contents": {"SchemaVersion": 2, "ArtifactName": ".", "ArtifactType": "filesystem"}}
-	denied_with([other, example_exceptions([])], "ArtifactType filesystem, container_image expected")
+	other := {"path": "reports/1.json", "contents": {"SchemaVersion": 2, "ArtifactName": ".", "ArtifactType": "repository"}}
+	denied_with([other, example_exceptions([])], "ArtifactType repository, container_image or filesystem expected")
 }
 
 test_u03_refuses_a_missing_threshold if {
@@ -464,6 +464,77 @@ test_u03_accepts_the_amd64_report_in_a_run_for_amd64 if {
 test_u03_does_not_check_the_platform_of_a_reported_image if {
 	report := {"path": "reports/1.json", "contents": object.union(example_report(local_tool, []).contents, {"Metadata": example_metadata("amd64")})}
 	passes([report, example_exceptions([])])
+}
+
+# Decision of the DSI of 2026-11-26 (SECU review of #90): a system at the end
+# of its life gets no fixes, so an image that blocks is refused on it.
+eosl_metadata := {
+	"OS": {"Family": "debian", "Name": "12.0", "EOSL": true},
+	"ImageConfig": {"architecture": "arm64", "os": "linux"},
+}
+
+test_u03_refuses_a_built_image_on_a_system_at_the_end_of_its_life if {
+	contents := object.union(example_report(built_api, []).contents, {"Metadata": eosl_metadata})
+	files := [{"path": "reports/1.json", "contents": contents}, example_exceptions([])]
+	denied_with(files, "saas-b2b.invalid/api")
+	denied_with(files, "the operating system debian 12.0 is at end of life (Metadata.OS.EOSL)")
+}
+
+test_u03_refuses_an_unclassified_image_on_a_system_at_the_end_of_its_life if {
+	contents := object.union(example_report(example_app, []).contents, {"Metadata": eosl_metadata})
+	denied_with([{"path": "reports/1.json", "contents": contents}, example_exceptions([])], "is at end of life")
+}
+
+test_u03_does_not_judge_the_system_of_a_reported_image if {
+	contents := object.union(example_report(local_tool, []).contents, {"Metadata": eosl_metadata})
+	passes([{"path": "reports/1.json", "contents": contents}, example_exceptions([])])
+}
+
+test_u03_passes_a_system_that_is_not_marked_at_the_end_of_its_life if {
+	contents := object.union(example_report(built_api, []).contents, {"Metadata": {"OS": {"Family": "debian", "Name": "13.7", "EOSL": false}}})
+	passes([{"path": "reports/1.json", "contents": contents}, example_exceptions([])])
+}
+
+# The lock file of the front (trivy fs): react and react-dom are compiled into
+# dist/, so neither the SBOM nor the scan of the image sees them. The report
+# is named by a path under the host of the built images, so that the class
+# blocking and the exceptions hold for it like for an image.
+front_lock := "saas-b2b.invalid/front/package-lock.json"
+
+lock_report(vulnerabilities) := {"path": "reports/2.json", "contents": {
+	"SchemaVersion": 2,
+	"ArtifactName": front_lock,
+	"ArtifactType": "filesystem",
+	"Results": [{
+		"Target": "package-lock.json",
+		"Class": "lang-pkgs",
+		"Type": "npm",
+		"Vulnerabilities": vulnerabilities,
+	}],
+}}
+
+test_u03_refuses_a_high_finding_in_the_lock_file_of_the_front if {
+	files := [lock_report([example_vulnerability("CVE-2099-0010", "HIGH")]), example_exceptions([])]
+	denied_with(files, "saas-b2b.invalid/front/package-lock.json: CVE-2099-0010 (HIGH)")
+	denied_with(files, "class blocking")
+}
+
+test_u03_passes_a_clean_lock_file if {
+	passes([lock_report([]), example_exceptions([])])
+}
+
+test_u03_refuses_a_lock_file_report_without_results if {
+	empty := {"path": "reports/2.json", "contents": {"SchemaVersion": 2, "ArtifactName": front_lock, "ArtifactType": "filesystem"}}
+	denied_with([empty, example_exceptions([])], "the report of the lock file holds no Results")
+}
+
+test_u03_lets_a_valid_exception_cover_a_finding_of_the_lock_file if {
+	entry := object.union(example_entry, {"image": front_lock})
+	passes([lock_report([example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([entry])])
+}
+
+test_u03_does_not_ask_a_lock_file_report_for_a_platform if {
+	passes([lock_report([]), example_exceptions([])])
 }
 
 test_u03_refuses_a_run_without_a_platform if {

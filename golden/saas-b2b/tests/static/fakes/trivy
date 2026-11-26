@@ -20,7 +20,11 @@
 #   OS, one result and no finding, and a small CycloneDX SBOM for --format
 #   cyclonedx; "high" adds one HIGH finding; "empty" writes a report without
 #   Results nor Metadata.OS; "wrong-arch" writes the report of the other
-#   variant; "sbom-empty" writes an empty SBOM file.
+#   variant; "sbom-empty" writes an empty SBOM file;
+# - fs-mode is the behaviour for `trivy fs` on a lock file: "clean" writes a
+#   report of type filesystem with one npm result and no finding, and a small
+#   SBOM; "high" adds one HIGH finding (CVE-2099-1001); "empty" writes a
+#   report without Results; "sbom-empty" writes an empty SBOM file.
 set -euo pipefail
 
 here="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
@@ -92,6 +96,36 @@ built() {
       ;;
   esac
 }
+
+# lock: the report or the SBOM of a lock file, `trivy fs`, as fs-mode says.
+lock() {
+  local mode
+  mode="$(cat "$here/fs-mode")"
+  if [ "$format" = cyclonedx ]; then
+    case "$mode" in
+      sbom-empty) : >"$output" ;;
+      *) printf '{\n  "bomFormat": "CycloneDX",\n  "specVersion": "1.7",\n  "components": [{"type": "library", "name": "react"}]\n}\n' >"$output" ;;
+    esac
+    return 0
+  fi
+  case "$mode" in
+    empty)
+      printf '{"SchemaVersion": 2, "ArtifactName": "%s", "ArtifactType": "filesystem"}\n' "$image" >"$output"
+      ;;
+    high)
+      printf '{"SchemaVersion": 2, "ArtifactName": "%s", "ArtifactType": "filesystem", "Results": [{"Target": "package-lock.json", "Class": "lang-pkgs", "Type": "npm", "Vulnerabilities": [%s]}]}\n' \
+        "$image" "$(vulnerability CVE-2099-1001 1.1 HIGH)" >"$output"
+      ;;
+    *)
+      printf '{"SchemaVersion": 2, "ArtifactName": "%s", "ArtifactType": "filesystem", "Results": [{"Target": "package-lock.json", "Class": "lang-pkgs", "Type": "npm"}]}\n' "$image" >"$output"
+      ;;
+  esac
+}
+
+if [ "${1:-}" = fs ]; then
+  lock
+  exit 0
+fi
 
 if [ "$source" = docker ]; then
   built
