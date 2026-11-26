@@ -7,7 +7,14 @@ package scan_decision
 
 fixed_today := "2026-12-01"
 
-fixed_policy := {"severity_threshold": "HIGH", "max_exception_days": 90}
+fixed_policy := {
+	"severity_threshold": "HIGH",
+	"max_exception_days": 90,
+	"image_classes": {
+		"blocking": ["saas-b2b.invalid"],
+		"reported": ["docker.io/example/local-tool"],
+	},
+}
 
 example_app := "docker.io/example/app:1.0@sha256:1111111111111111111111111111111111111111111111111111111111111111"
 
@@ -250,4 +257,129 @@ test_u03_refuses_a_missing_date_of_the_day if {
 		with data.scan_today as null
 	some msg in msgs
 	contains(msg, "no date of the day (data.scan_today)")
+}
+
+# Decision of the DSI of 2026-11-25 (FR-021, FR-022): the scan blocks what
+# goes to production, and reports the third-party images that run on the
+# local cluster only. An image that no class holds blocks (closed on failure).
+local_tool := "docker.io/example/local-tool:3.1@sha256:3333333333333333333333333333333333333333333333333333333333333333"
+
+built_api := "saas-b2b.invalid/api:local"
+
+test_u03_reported_image_with_a_high_finding_passes if {
+	files := [example_report(local_tool, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([])]
+	passes(files)
+}
+
+test_u03_reported_image_with_a_critical_finding_passes if {
+	files := [example_report(local_tool, [example_vulnerability("CVE-2099-0005", "CRITICAL")]), example_exceptions([])]
+	passes(files)
+}
+
+test_u03_built_image_with_a_high_finding_is_refused if {
+	files := [example_report(built_api, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([])]
+	denied_with(files, "saas-b2b.invalid/api: CVE-2099-0001 (HIGH)")
+	denied_with(files, "class blocking")
+}
+
+test_u03_unclassified_image_is_refused_by_default if {
+	files := [example_report(example_app, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([])]
+	denied_with(files, "unclassified image, blocking by default")
+}
+
+test_u03_refuses_every_image_when_the_policy_has_no_classes if {
+	files := [example_report(local_tool, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([])]
+	msgs := data.scan_decision.deny with input as files
+		with data.scan_policy as {"severity_threshold": "HIGH", "max_exception_days": 90}
+		with data.scan_today as fixed_today
+	some msg in msgs
+	contains(msg, "unclassified image, blocking by default")
+}
+
+test_u03_a_reported_entry_does_not_cover_a_longer_repository if {
+	name := "docker.io/example/local-tool-extra:1.0@sha256:4444444444444444444444444444444444444444444444444444444444444444"
+	files := [example_report(name, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([])]
+	denied_with(files, "docker.io/example/local-tool-extra: CVE-2099-0001 (HIGH)")
+}
+
+test_u03_a_blocking_entry_covers_what_sits_under_it if {
+	name := "saas-b2b.invalid/web:local"
+	files := [example_report(name, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([])]
+	denied_with(files, "class blocking")
+}
+
+test_u03_blocking_wins_when_an_image_is_in_both_classes if {
+	policy := {
+		"severity_threshold": "HIGH",
+		"max_exception_days": 90,
+		"image_classes": {
+			"blocking": ["docker.io/example/local-tool"],
+			"reported": ["docker.io/example/local-tool"],
+		},
+	}
+	files := [example_report(local_tool, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([])]
+	msgs := data.scan_decision.deny with input as files
+		with data.scan_policy as policy
+		with data.scan_today as fixed_today
+	some msg in msgs
+	contains(msg, "class blocking")
+}
+
+test_u03_a_valid_exception_still_lets_a_blocking_image_pass if {
+	entry := object.union(example_entry, {"image": "saas-b2b.invalid/api"})
+	files := [example_report(built_api, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([entry])]
+	passes(files)
+}
+
+# The summary of a reported image: distinct identifiers at or above the
+# threshold, by level, and how many carry a fixed version in every row.
+test_u03_summarises_a_reported_image if {
+	findings := [
+		example_vulnerability("CVE-2099-0001", "HIGH"),
+		object.union(example_vulnerability("CVE-2099-0002", "HIGH"), {"FixedVersion": ""}),
+		example_vulnerability("CVE-2099-0005", "CRITICAL"),
+		example_vulnerability("CVE-2099-0006", "MEDIUM"),
+	]
+	files := [example_report(local_tool, findings), example_exceptions([])]
+	warned_with(files, "reported: docker.io/example/local-tool: 1 CRITICAL, 2 HIGH, 3 distinct at or above HIGH, 2 with a fixed version; does not block (class reported)")
+}
+
+test_u03_counts_an_identifier_once_across_targets if {
+	report := {"path": "reports/1.json", "contents": {
+		"SchemaVersion": 2,
+		"ArtifactName": local_tool,
+		"ArtifactType": "container_image",
+		"Results": [
+			{"Target": "a", "Vulnerabilities": [example_vulnerability("CVE-2099-0001", "HIGH")]},
+			{"Target": "b", "Vulnerabilities": [example_vulnerability("CVE-2099-0001", "HIGH")]},
+		],
+	}}
+	warned_with([report, example_exceptions([])], "0 CRITICAL, 1 HIGH, 1 distinct at or above HIGH, 1 with a fixed version")
+}
+
+test_u03_one_identifier_without_a_fix_in_one_target_is_not_fixed if {
+	report := {"path": "reports/1.json", "contents": {
+		"SchemaVersion": 2,
+		"ArtifactName": local_tool,
+		"ArtifactType": "container_image",
+		"Results": [
+			{"Target": "a", "Vulnerabilities": [example_vulnerability("CVE-2099-0001", "HIGH")]},
+			{"Target": "c", "Vulnerabilities": [object.union(example_vulnerability("CVE-2099-0001", "HIGH"), {"FixedVersion": ""})]},
+		],
+	}}
+	warned_with([report, example_exceptions([])], "0 CRITICAL, 1 HIGH, 1 distinct at or above HIGH, 0 with a fixed version")
+}
+
+test_u03_summarises_a_reported_image_without_findings if {
+	warned_with([example_report(local_tool, []), example_exceptions([])], "reported: docker.io/example/local-tool: 0 CRITICAL, 0 HIGH, 0 distinct at or above HIGH, 0 with a fixed version")
+}
+
+test_u03_keeps_the_summary_to_reported_images if {
+	files := [example_report(example_app, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([])]
+	not warned_with(files, "reported: ")
+}
+
+test_u03_a_reported_image_has_no_blocked_count if {
+	files := [example_report(local_tool, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([])]
+	not warned_with(files, "without a valid exception")
 }

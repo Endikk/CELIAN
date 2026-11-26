@@ -1,6 +1,12 @@
 # Policy of the example reports of U03 (tests/unit/u03-scan-decision.sh),
 # kept apart from security/scan-policy.yaml so that a change of the real
-# threshold does not change what U03 proves. Same keys as that file.
+# threshold or of the real classes does not change what U03 proves. Same
+# keys as that file.
 scan_policy:
   severity_threshold: HIGH
   max_exception_days: 90
+  image_classes:
+    blocking:
+      - saas-b2b.invalid
+    reported:
+      - docker.io/example/local-tool

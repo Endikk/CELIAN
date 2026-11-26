@@ -1,0 +1,3 @@
+# Example exceptions of U03, judged on the date of ../../today.yaml.
+# No exception: the HIGH finding is refused.
+exceptions: []

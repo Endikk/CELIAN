@@ -198,6 +198,69 @@ make_fixture "$work/profiles"
 refused profiles "step 12" standard
 refused profiles "usage:" heavy
 
+# 4. The gcp profile lists the images of the renders of gcp/k8s/<composition>/,
+# as written and without a digest requirement (the images built for gcp get
+# theirs when pushed). A Component is not rendered on its own, and a tree
+# without gcp/k8s lists nothing. S26 reads this list to refuse a reported
+# image deployed on gcp.
+make_fixture "$work/gcp"
+mkdir -p "$work/gcp/gcp/k8s/prod" "$work/gcp/gcp/k8s/component"
+printf '%s\n' 'apiVersion: kustomize.config.k8s.io/v1beta1' 'kind: Kustomization' 'resources:' '  - pod.yaml' \
+  >"$work/gcp/gcp/k8s/prod/kustomization.yaml"
+printf '%s\n' 'apiVersion: v1' 'kind: Pod' 'metadata:' '  name: example' 'spec:' '  containers:' \
+  '    - name: app' '      image: europe-docker.pkg.dev/project/repo/api:1' '    - name: proxy' '      image: nginx:1' \
+  >"$work/gcp/gcp/k8s/prod/pod.yaml"
+printf '%s\n' 'apiVersion: kustomize.config.k8s.io/v1alpha1' 'kind: Component' \
+  >"$work/gcp/gcp/k8s/component/kustomization.yaml"
+expected_gcp="$(printf '%s\n' 'docker.io/library/nginx:1' 'europe-docker.pkg.dev/project/repo/api:1')"
+if ! got="$(bash "$work/gcp/local/scripts/image-inventory.sh" gcp 2>&1)"; then
+  report "$script gcp fails on a tree with one render:"
+  printf '%s\n' "$got"
+elif [ "$got" != "$expected_gcp" ]; then
+  report "$script gcp prints:"
+  printf '%s\n' "$got" "instead of:" "$expected_gcp"
+fi
+
+make_fixture "$work/no-gcp"
+if ! got="$(bash "$work/no-gcp/local/scripts/image-inventory.sh" gcp 2>&1)" || [ -n "$got" ]; then
+  report "$script gcp must print nothing, and succeed, on a tree without gcp/k8s; it prints: $got"
+fi
+
+# 5. The classes of security/scan-policy.yaml against the inventory of lite:
+# a reported image is in the inventory (no entry outlives its image), and no
+# image built by task up is reported.
+classes_helper="tests/scan/image-classes.sh"
+policy_file="security/scan-policy.yaml"
+if [ ! -f "$classes_helper" ]; then
+  report "$classes_helper is missing: it reads the classes of $policy_file (spec 001, step 18)."
+else
+  if ! class_lines="$(bash "$classes_helper" "$policy_file" 2>&1)"; then
+    report "$policy_file: $class_lines"
+    class_lines=""
+  fi
+  inventory_repositories=""
+  while IFS= read -r ref; do
+    [ -n "$ref" ] || continue
+    repo="${ref%%@*}"
+    last="${repo##*/}"
+    inventory_repositories="$inventory_repositories
+${repo%/*}/${last%%:*}"
+  done < <(printf '%s\n' "$out")
+  while IFS= read -r line; do
+    [ "${line%%|*}" = reported ] || continue
+    entry="${line#*|}"
+    [ -n "$entry" ] || continue
+    if ! printf '%s\n' "$inventory_repositories" | grep -F -x -q -e "$entry"; then
+      report "$policy_file: reported image $entry is in no image of the inventory of lite: remove it, or the inventory lost the image."
+    fi
+    case "$entry" in
+      saas-b2b.invalid | saas-b2b.invalid/*)
+        report "$policy_file: $entry is built by the project, and a built image blocks: it is not reported."
+        ;;
+    esac
+  done < <(printf '%s\n' "$class_lines")
+fi
+
 if [ "$problems" -gt 0 ]; then
   exit 1
 fi
