@@ -303,6 +303,7 @@ Préfixes : S statique, sans cluster, en pre-commit ou en CI ; P contrôle préa
 | P04 | Port de l'hôte déjà pris : arrêt avant toute création, port nommé ; sonde indécidable refusée ; vraie sonde jouée sur le port 1, fermé (écart 18 de tasks.md) |
 | P05 | Kubeconfig de l'utilisateur pointé sur un autre contexte : ignoré |
 | P06 | Le miroir ne démarre pas sans la configuration du projet |
+| P08 | Attente d'un tirage (`local/scripts/lib/pull-wait.sh`), `kubectl` simulé : une erreur de tirage qui dure 60 s arrête `task up` en nommant l'image et son registre et en disant que le premier démarrage demande le réseau ; une erreur qui s'efface ne l'arrête pas ; à la limite, l'image qu'un conteneur attend encore est nommée ; aucun `kubectl rollout status` direct dans `platform.sh`, `app.sh` ni `cache.sh` (écart 170 de tasks.md) |
 | U01 | API : santé, prêt, validation des notes, lecture par le cache et provenance, réponses d'erreur |
 | U02 | Front : rendu, appels relatifs, erreurs affichées par champ, états de chargement |
 | U03 | Politique de décision du scan, sur des rapports d'exemple et une date fixée : faille au seuil sans exception, refus qui nomme l'image et la vulnérabilité ; exception complète et non échue, passage ; exception échue, incomplète ou visant une autre image, refus ; faille sous le seuil, passage |
@@ -328,7 +329,7 @@ Préfixes : S statique, sans cluster, en pre-commit ou en CI ; P contrôle préa
 | E20 | Volume du miroir hors de l'arborescence ; après purge et `task up` en ligne, il ne contient que les condensats du projet |
 | E21 | Volume de la base présent sans ses Secrets : `task up` s'arrête avec son message |
 | E22 | `task down` ne retire jamais un conteneur étranger au projet, même de nom voisin |
-| E23 | Miroir sous UID non root, sans capacités : essai, résultat consigné pour [SECU] |
+| E23 | Miroir sous UID non root, sans capacités : essai, résultat consigné pour [SECU] ; stockage écrit par cet UID et repris au `task up` suivant ; depuis un pod, lecture ouverte et six écritures refusées par 401, `PATCH`, `POST ?mount=` et `DELETE` de blob compris (écarts 166 à 168 de tasks.md) |
 | E24 | Kubeconfig leurre en variable d'environnement : `task up` réussit et ne le modifie pas |
 | E25 | Après `task up` dans chaque profil livré : l'image résolue de chaque conteneur en marche, dans le cluster (conteneurs d'initialisation compris) et sur le moteur, figure dans l'inventaire scanné ; échec qui nomme toute image absente |
 | E26 | Un SBOM CycloneDX JSON par image construite, non vide, gardé en artefact de l'exécution ; échec qui nomme l'image sans SBOM |

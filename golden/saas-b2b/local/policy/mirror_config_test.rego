@@ -9,7 +9,7 @@ read_only_access := {"repositories": {"**": {"anonymousPolicy": ["read"]}}}
 
 zot_config := {
 	"distSpecVersion": "1.1.1",
-	"storage": {"rootDirectory": "/var/lib/registry", "dedupe": false, "gc": false},
+	"storage": {"rootDirectory": "/home/nonroot", "dedupe": false, "gc": false},
 	"http": {"address": "0.0.0.0", "port": "5000", "compat": ["docker2s2"], "accessControl": read_only_access},
 	"log": {"level": "info"},
 	"extensions": {"sync": {"enable": true, "registries": [{"urls": ["https://index.docker.io"], "onDemand": true, "tlsVerify": true}]}},
@@ -157,16 +157,16 @@ test_s13_rejects_an_upstream_absent_from_the_list if {
 
 test_s13_rejects_storage_inside_the_container_root if {
 	zot := object.union(zot_config, {"storage": {"rootDirectory": "/tmp/zot", "dedupe": false, "gc": false}})
-	denied_with(files(zot, {"docker.io": mirror_hosts}, kind_cluster), "storage.rootDirectory must be /var/lib/registry")
+	denied_with(files(zot, {"docker.io": mirror_hosts}, kind_cluster), "storage.rootDirectory must be /home/nonroot")
 }
 
 test_s13_rejects_retention if {
-	zot := object.union(zot_config, {"storage": {"rootDirectory": "/var/lib/registry", "gc": false, "retention": {"dryRun": true}}})
+	zot := object.union(zot_config, {"storage": {"rootDirectory": "/home/nonroot", "gc": false, "retention": {"dryRun": true}}})
 	denied_with(files(zot, {"docker.io": mirror_hosts}, kind_cluster), "storage holds retention")
 }
 
 test_s13_rejects_the_garbage_collector if {
-	zot := object.union(zot_config, {"storage": {"rootDirectory": "/var/lib/registry", "gc": true}})
+	zot := object.union(zot_config, {"storage": {"rootDirectory": "/home/nonroot", "gc": true}})
 	denied_with(files(zot, {"docker.io": mirror_hosts}, kind_cluster), "storage.gc must be false")
 }
 

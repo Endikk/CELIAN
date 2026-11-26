@@ -93,6 +93,13 @@ run_mirror_case "mirror that stops at start: refused with its last log lines" FA
 expect_refused
 expect_output "simulated log line of the mirror"
 
+run_mirror_case "mirror that cannot write its volume: refused, the way out named" FAKE_MIRROR_LOG=permission \
+  -- up "$MIRROR_TEST_IMAGE"
+expect_refused
+expect_output "cannot write its volume"
+expect_output "permission denied"
+expect_output "task mirror:purge"
+
 run_mirror_case "unknown command: refused" -- start "$MIRROR_TEST_IMAGE"
 expect_refused
 expect_no_change

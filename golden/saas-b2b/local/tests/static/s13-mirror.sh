@@ -79,7 +79,7 @@ trap - EXIT
 run_mirror_case "launch of the mirror" -- up "$MIRROR_TEST_IMAGE"
 expect_ok
 for part in --detach "--network kind" "--name $mirror_name" "--label invalid.saas-b2b.role=registry-mirror" \
-  "--mount type=volume,src=saas-b2b-mirror,dst=/var/lib/registry" "$MIRROR_TEST_IMAGE serve /etc/zot/config.json"; do
+  "--mount type=volume,src=saas-b2b-mirror,dst=/home/nonroot" "$MIRROR_TEST_IMAGE serve /etc/zot/config.json"; do
   expect_run_has "$part"
 done
 # The hardening: no capability, no privilege gained, a read-only root
@@ -88,10 +88,15 @@ done
 for part in "--cap-drop ALL" "--security-opt no-new-privileges=true" --read-only; do
   expect_run_has "$part"
 done
-# No user override (zot runs as the user of its image), no extra privilege,
-# whatever the form: --user X, --user=X, -u X, -uX, --privileged[=true],
+# One user, the nonroot UID of the distroless image, written as UID:GID (ADR-011,
+# condition 6; E23 reads it back from the engine); no other form of the option
+# (--user=X, -u X, -uX), no extra privilege, whatever the form: --privileged[=true],
 # --cap-add; and one --security-opt only.
-expect_run_lacks "--user*"
+expect_run_has "--user 65532:65532"
+if [ "$(run_line | grep -o -- '--user' | wc -l | tr -d ' ')" != 1 ]; then
+  fail_case "the mirror has one --user, 65532:65532: $(run_line)"
+fi
+expect_run_lacks "--user=*"
 expect_run_lacks "-u"
 expect_run_lacks "-u*"
 expect_run_lacks "--privileged*"

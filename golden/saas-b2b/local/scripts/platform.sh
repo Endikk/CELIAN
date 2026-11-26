@@ -38,6 +38,8 @@ case "$here" in
 esac
 # shellcheck disable=SC1091 # lib/local-env.sh is checked on its own
 . "$here/lib/local-env.sh"
+# shellcheck disable=SC1091 # lib/pull-wait.sh is checked on its own
+. "$here/lib/pull-wait.sh"
 root="$(CDPATH='' cd -- "$here/../.." && pwd)"
 
 readonly VENDOR="$root/local/vendor"
@@ -56,7 +58,7 @@ readonly CONTROLLER_REPOSITORY="docker.io/envoyproxy/gateway"
 # platform answered in 75.9 s with the gateway images missing from the node
 # in BENCH-004 (ADR-005).
 readonly CRD_WAIT="60s"
-readonly CONTROLLER_WAIT="300s"
+readonly CONTROLLER_WAIT_SECONDS=300
 readonly CLASS_WAIT="60s"
 # The size cap of a vendored file, in bytes: a little above the largest render
 # of today, gateway-crds-helm.yaml (2.86 MB). A bigger file is refused, so
@@ -180,9 +182,9 @@ up() {
   watched_namespaces_exist
   apply "$PLATFORM/namespace.yaml" "$ENVOY_GATEWAY_RENDER" ||
     die "the controller of Envoy Gateway was not applied; the messages of kubectl are above."
-  if ! kube --namespace "$CONTROLLER_NAMESPACE" rollout status "deployment/$CONTROLLER_DEPLOYMENT" \
-    --timeout="$CONTROLLER_WAIT" >/dev/null; then
-    die "the controller of Envoy Gateway is not available within $CONTROLLER_WAIT. Look at its pods: kubectl --kubeconfig $KUBECONFIG_FILE --context $KUBE_CONTEXT --namespace $CONTROLLER_NAMESPACE get pods."
+  # A pull that fails stops the wait at once, naming the registry (T127).
+  if ! wait_rollout "$CONTROLLER_NAMESPACE" "deployment/$CONTROLLER_DEPLOYMENT" "$CONTROLLER_WAIT_SECONDS"; then
+    die "the controller of Envoy Gateway is not available within $CONTROLLER_WAIT_SECONDS s. Look at its pods: kubectl --kubeconfig $KUBECONFIG_FILE --context $KUBE_CONTEXT --namespace $CONTROLLER_NAMESPACE get pods."
   fi
   apply "$PLATFORM/envoy-proxy.yaml" "$PLATFORM/gateway-class.yaml" ||
     die "the EnvoyProxy and the GatewayClass were not applied; the messages of kubectl are above."

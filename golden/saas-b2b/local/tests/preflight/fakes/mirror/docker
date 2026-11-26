@@ -15,6 +15,9 @@
 # FAKE_KIND_NETWORK      present (default) or absent
 # FAKE_MIRROR_HEALTH     what the container reports once started: healthy
 #                        (default), starting, unhealthy, exited
+# FAKE_MIRROR_LOG        what the log of the mirror holds: line (default, one
+#                        ordinary line) or permission (a "permission denied" line,
+#                        as zot logs it when it cannot write its volume)
 # FAKE_LOG               file that receives one line per call
 set -euo pipefail
 
@@ -137,7 +140,12 @@ case "$*" in
   "volume create --label $LABEL_KEY=$ROLE $NAME") printf '%s\n' "$NAME" ;;
   "volume rm $NAME") printf '%s\n' "$NAME" ;;
   "run "*) printf '0123456789abcdef\n' ;;
-  "logs --tail "*) printf 'simulated log line of the mirror\n' ;;
+  "logs --tail "*)
+    case "${FAKE_MIRROR_LOG:-line}" in
+      permission) printf '{"level":"error","message":"failed to write restore-complete marker","error":"open /home/nonroot/_restore_complete: permission denied"}\n' ;;
+      *) printf 'simulated log line of the mirror\n' ;;
+    esac
+    ;;
   "system df -v --format "*) printf '%s=12.5MB;other-volume=0B;\n' "$NAME" ;;
   "image inspect --format {{.Id}} "*) printf 'sha256:2222222222222222222222222222222222222222222222222222222222222222\n' ;;
   *) unexpected "$@" ;;

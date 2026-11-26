@@ -40,8 +40,9 @@ Comportements attendus :
 | --- | --- |
 | Environnement existant | repris : rien de recréé, Secrets et données gardés |
 | Volume de la base présent sans ses Secrets | arrêt ; le message propose de supprimer les deux |
-| Registre public lent ou qui limite | échec dans un délai borné, qui nomme le registre |
-| Premier démarrage sans réseau | échec qui dit que le premier démarrage demande le réseau |
+| Registre public lent ou qui limite | échec dans un délai borné, qui nomme le registre : une erreur de tirage qui dure 60 s, ou la limite de l'étape (P08) |
+| Premier démarrage sans réseau | échec qui nomme le registre et l'image, et dit que le premier démarrage demande le réseau (E28 : 98 s sur le poste d'essai) |
+| Volume du miroir fait pour un autre utilisateur | arrêt qui nomme le volume et propose `task down`, `task mirror:purge`, puis `task up` (P06) |
 | Redémarrage sans réseau après un premier démarrage | succès par le miroir (FR-016) |
 
 ## `task reload`
@@ -67,7 +68,7 @@ Dit d'abord que le `task up` suivant demandera le réseau, puis supprime le volu
 | `task test` | tests unitaires de l'API et du front, tests de la décision du scan | non | U01 à U03 |
 | `task check` | contrôles statiques, rendus et parité, contrôles préalables simulés, inventaire, politique et exceptions du scan | non | S01 à S23, S25 à S28, S30, P01 à P06 |
 | `task test:e2e` | tests sur kind du profil courant | oui, créé et supprimé | E01 à E09, E11 à E24 selon le profil |
-| `task test:offline` | T2 du profil courant | oui | E10 |
+| `task test:offline` | T2 du profil courant, volume du miroir, miroir sous un UID non root, premier démarrage sans registre ; demande le réseau pour ses premiers démarrages, puis coupe les registres dans une copie du dépôt | oui, créé et supprimé | E10, E20, E23, E28 |
 | `task test:images` | relevé des images en marche, SBOM des images construites, scan de l'inventaire du profil courant ; demande le réseau pour la base de vulnérabilités | oui, déjà démarré | E25 à E27 |
 | `task gcp:validate` | init en lecture seule du verrou, puis validation | non | S14 |
 | `task gcp:policy` | politiques conftest sur le HCL et les manifests `gcp` | non | S15, S16 |
