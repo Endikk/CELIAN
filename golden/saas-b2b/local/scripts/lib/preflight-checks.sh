@@ -50,9 +50,14 @@ readonly KUBECTL_MINOR_SKEW=1
 # ADR-011, condition 3: older engines let the local network reach container
 # ports that are not published. On Linux only.
 readonly DOCKER_ENGINE_LINUX_MIN="28.0.0"
-# Starting thresholds of the profiles, in memory declared by the engine
-# (research RS-08: VM of 2.0 GiB for lite, 2.5 GiB for the known part of
-# standard). Recomputed on the first measure of the golden repo (T081).
+# Thresholds of the profiles, in memory declared by the engine (research
+# RS-08: VM of 2.0 GiB for lite, 2.5 GiB for the known part of standard).
+# Recomputed at the entry of the cache (T081): ADR-015, condition 11, keeps
+# the lite at a VM of 2.0 GiB, 108 to 122 MiB before the next step, with
+# the cache counted at 70.6 MiB on the node, an upper bound of [FINOPS].
+# The golden repo measures the node with the whole stack at step 17 (D03);
+# what the engine declares for a VM of 2.0 GiB is not measured (tasks.md,
+# gap 15).
 readonly LITE_MIN_MIB=2048
 readonly STANDARD_MIN_MIB=2560
 # The standard profile arrives with step 12 of spec 001; until then it is

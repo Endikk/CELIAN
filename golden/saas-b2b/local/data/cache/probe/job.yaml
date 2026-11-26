@@ -1,0 +1,74 @@
+# The probe of task up (ADR-015, condition 17): "ready" means an
+# authenticated PING that gets PONG through the Service cache, not a pod
+# Ready. local/scripts/cache.sh creates this Job once the layer is applied,
+# waits for it, then removes it.
+#
+# A client of the cache like the API: the NetworkPolicy admits it by its
+# label cache-probe; valkey-cli reads the password of cache-auth in
+# VALKEYCLI_AUTH, by secretKeyRef, never in an argument (research RS-11;
+# ADR-015, condition 5). The image is the one of the server, already on the
+# node, so that the probe pulls nothing; Renovate keeps both in step, and
+# S11 refuses two images. It prints PONG or NOAUTH, never the password.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cache-probe
+  namespace: saas-b2b
+  labels:
+    app.kubernetes.io/name: cache-probe
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 150
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cache-probe
+    spec:
+      restartPolicy: Never
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 1
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: probe
+          # renovate: datasource=docker depName=docker.io/valkey/valkey
+          image: docker.io/valkey/valkey:9.1.4-alpine@sha256:56729e68bdda139cbd3f6a2538683dc3523325fc5711ea1a379938f1b37893f0
+          command:
+            - sh
+            - -c
+            - |
+              tries=0
+              while [ "$tries" -lt 120 ]; do
+                answer="$(valkey-cli -t 2 -h cache -p 6379 ping 2>/dev/null || true)"
+                if [ "$answer" = PONG ]; then
+                  echo "cache-probe: authenticated PING through the Service cache: PONG."
+                  exit 0
+                fi
+                tries=$((tries + 1))
+                sleep 1
+              done
+              echo "cache-probe: no PONG to an authenticated PING through the Service cache within 120 tries; last answer: ${answer:-none}." >&2
+              exit 1
+          env:
+            - name: VALKEYCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: cache-auth
+                  key: password
+          resources:
+            requests:
+              memory: 16Mi
+              cpu: 10m
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

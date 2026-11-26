@@ -54,7 +54,7 @@
     },
     {
       "customType": "regex",
-      "description": "Images of the local layer of the golden repo, by tag and digest under a # renovate: comment: the node image of local/kind/cluster.yaml, under the key image; in local/tasks/local.yml the zot mirror, under MIRROR_IMAGE, and the controller of Envoy Gateway and the OCI artifacts of its two charts, under ENVOY_GATEWAY_*_IMAGE; the Postgres image of local/data/statefulset.yaml and the proxy of Envoy Gateway of local/platform/envoy-proxy.yaml, under the key image; Renovate follows the digest of the proxy tag, which docker versioning cannot order, and the tag moves by hand with Envoy Gateway (ADR-004, version rule; ADR-005, updates; ADR-011, condition 8; ADR-012, condition 5; ADR-016).",
+      "description": "Images of the local layer of the golden repo, by tag and digest under a # renovate: comment: the node image of local/kind/cluster.yaml, under the key image; in local/tasks/local.yml the zot mirror, under MIRROR_IMAGE, and the controller of Envoy Gateway and the OCI artifacts of its two charts, under ENVOY_GATEWAY_*_IMAGE; the images of the manifests of local/data/ (Postgres and the cache) and the proxy of Envoy Gateway of local/platform/envoy-proxy.yaml, under the key image; Renovate follows the digest of the proxy tag, which docker versioning cannot order, and the tag moves by hand with Envoy Gateway (ADR-004, version rule; ADR-005, updates; ADR-011, condition 8; ADR-012, condition 5; ADR-015, condition 2; ADR-016).",
       "managerFilePatterns": [
         "/^golden/saas-b2b/local/kind/cluster\\.yaml$/",
         "/^golden/saas-b2b/local/tasks/.+\\.ya?ml$/",
@@ -78,6 +78,12 @@
       "matchDatasources": ["docker"],
       "matchPackageNames": ["/^(docker\\.io/)?kindest/node$/"],
       "allowedVersions": "/^v1\\.36\\./"
+    },
+    {
+      "description": "ADR-015, conditions 2, 9 and 16, for the files of golden/: the cache image stays on the patches of the cache_engine_line of golden/saas-b2b/platform.yaml, the line that Memorystore for Valkey serves by default, in the Alpine variant alone. The line moves by hand with platform.yaml. Same entry as golden/saas-b2b/renovate.json; scripts/renovate/check-renovate.sh checks both against platform.yaml.",
+      "matchDatasources": ["docker"],
+      "matchPackageNames": ["/^(docker\\.io/)?valkey/valkey$/"],
+      "allowedVersions": "/^9\\.1\\.[0-9]+-alpine$/"
     },
     {
       "description": "ADR-004, version rule, point 5, for the files of golden/: kind and its node image move in one PR. Renovate cannot refuse a PR that holds only one of them: complete it by hand before merging.",

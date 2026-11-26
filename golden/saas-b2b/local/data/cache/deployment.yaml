@@ -1,0 +1,137 @@
+# The cache of the local layer (ADR-015): Valkey, one replica, nothing
+# persisted, around the image of the Valkey project, by tag and digest. The
+# cluster of GCP runs Memorystore for Valkey instead (step 20).
+#
+# - Condition 1: docker.io/valkey/valkey, Alpine variant, pulled by zot from
+#   docker.io, already in local/mirror/registries. The image has no
+#   signature: ADR-015 admits it under a dated waiver of ENF-03.
+# - Condition 3: UID 999 and GID 1000 of the user valkey of the image, set
+#   here because the image declares no USER (research RS-11); no privilege
+#   escalation, every capability dropped, seccomp RuntimeDefault, a
+#   read-only root, no service account token: the pod passes the restricted
+#   profile of the namespace. /data, the working directory, is a bounded
+#   emptyDir, and nothing is ever written there.
+# - Condition 4: the init container alone mounts cache-auth. It writes
+#   /etc/cache/cache.conf, in memory, with the SHA-256 of the password in
+#   the ACL line of the user default, and the server reads that file. The
+#   script is init/write-config.sh, through the ConfigMap
+#   cache-config-writer.
+# - Condition 5: the server keeps the entrypoint of the image and gets the
+#   path of its configuration alone. No env and no envFrom: the entrypoint
+#   ends with exec "$@" $VALKEY_EXTRA_FLAGS, and a variable would become an
+#   argument of the server. enableServiceLinks is off, so that the kubelet
+#   puts no variable either.
+# - Condition 10: 64Mi of memory and 25m of CPU requested, 128Mi of memory
+#   as limit, no CPU limit (Burstable); maxmemory 64mb in cache.conf. The
+#   init container gets the same values, so that the requests of the pod
+#   stay those of the server.
+# - Readiness: a TCP probe of the kubelet, which the NetworkPolicy lets in,
+#   since it comes from the node (research RS-11). task up then waits for an
+#   authenticated PING through the Service (condition 17,
+#   local/scripts/cache.sh).
+#
+# S11 checks this file once rendered, S21 the line of the image against the
+# cache_engine_line of platform.yaml. Renovate follows the image under the
+# comments below, on the patches of that line, Alpine variant alone
+# (condition 2); probe/job.yaml carries the same image.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cache
+  labels:
+    app.kubernetes.io/name: cache
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cache
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cache
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      initContainers:
+        - name: config
+          # renovate: datasource=docker depName=docker.io/valkey/valkey
+          image: docker.io/valkey/valkey:9.1.4-alpine@sha256:56729e68bdda139cbd3f6a2538683dc3523325fc5711ea1a379938f1b37893f0
+          command:
+            - sh
+            - /opt/cache-init/write-config.sh
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 25m
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: cache-auth
+              mountPath: /run/secrets/cache-auth
+              readOnly: true
+            - name: config
+              mountPath: /etc/cache
+            - name: config-writer
+              mountPath: /opt/cache-init
+              readOnly: true
+      containers:
+        - name: cache
+          # renovate: datasource=docker depName=docker.io/valkey/valkey
+          image: docker.io/valkey/valkey:9.1.4-alpine@sha256:56729e68bdda139cbd3f6a2538683dc3523325fc5711ea1a379938f1b37893f0
+          args:
+            - valkey-server
+            - /etc/cache/cache.conf
+          ports:
+            - name: resp
+              containerPort: 6379
+          readinessProbe:
+            tcpSocket:
+              port: resp
+            periodSeconds: 5
+          resources:
+            requests:
+              memory: 64Mi
+              cpu: 25m
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: config
+              mountPath: /etc/cache
+              readOnly: true
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: cache-auth
+          secret:
+            secretName: cache-auth
+            defaultMode: 0440
+        - name: config
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Mi
+        - name: data
+          emptyDir:
+            sizeLimit: 16Mi
+        - name: config-writer
+          configMap:
+            name: cache-config-writer
+            defaultMode: 0444

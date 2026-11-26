@@ -1,0 +1,19 @@
+# The Service of the cache on the local layer (ADR-015, condition 6): type
+# ClusterIP alone, no NodePort, no LoadBalancer, no TCP route of the
+# gateway. The API reaches it through CACHE_HOST and CACHE_PORT of the local
+# app-config (step 9): cache, 6379, CACHE_TLS_MODE Disable. task up sends
+# its authenticated PING through it (condition 17).
+apiVersion: v1
+kind: Service
+metadata:
+  name: cache
+  labels:
+    app.kubernetes.io/name: cache
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: cache
+  ports:
+    - name: resp
+      port: 6379
+      targetPort: resp

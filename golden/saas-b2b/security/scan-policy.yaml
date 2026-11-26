@@ -42,3 +42,6 @@ scan_policy:
       # Postgres of the local layer (local/data/): a third-party image, on the
       # cluster of the machine only; gcp uses Cloud SQL (ADR-012; tasks.md, gap 91).
       - docker.io/library/postgres
+      # Valkey of the local layer (local/data/cache/): a third-party image, on
+      # the cluster of the machine only; gcp uses Memorystore (ADR-015).
+      - docker.io/valkey/valkey

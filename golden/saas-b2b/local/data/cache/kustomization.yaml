@@ -1,0 +1,23 @@
+# The cache of the local layer (ADR-015), in the namespace of the
+# application, next to Postgres. The component of the local target,
+# local/k8s/component/, takes it in with Postgres (contracts/layers.md). The
+# generated ConfigMap gets the namespace from here, and keeps the hash
+# suffix: a new script gives a new name, and the Deployment follows it.
+#
+# probe/job.yaml stays outside this list on purpose: it is the probe that
+# task up runs once the layer is applied (local/scripts/cache.sh), and that
+# E13 imitates, not a part of the layer.
+#
+# S11 (local/tests/static/s11-cache.sh) checks the render of this folder,
+# S21 the line of its image against platform.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: saas-b2b
+resources:
+  - deployment.yaml
+  - service.yaml
+  - network-policy.yaml
+configMapGenerator:
+  - name: cache-config-writer
+    files:
+      - init/write-config.sh

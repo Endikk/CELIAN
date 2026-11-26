@@ -1,11 +1,12 @@
 # The component of the local target (contracts/layers.md, "Composition
 # Kustomize"; research RS-01): what the local layer adds to an overlay of
-# the common layer. Postgres for now (ADR-012); the local app-config joins
-# with step 9 (T087), the cache with step 19 (ADR-015). The GatewayClass
-# that the common Gateway asks for is applied with the platform, outside
+# the common layer. Postgres (ADR-012) and the cache (ADR-015); the local
+# app-config joins with step 9 (T087). The GatewayClass that the common
+# Gateway asks for is applied with the platform, outside
 # this composition (tasks.md, gap 35). The Secrets are never here: task up
 # creates them through a pipe (ADR-007, condition 1; S03).
 apiVersion: kustomize.config.k8s.io/v1alpha1
 kind: Component
 resources:
   - ../../data
+  - ../../data/cache

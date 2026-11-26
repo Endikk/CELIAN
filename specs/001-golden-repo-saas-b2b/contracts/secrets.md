@@ -7,11 +7,13 @@ L'application lit le même Secret, de même nom et de mêmes clés, sur les deux
 | Secret | Type | Clés | Producteur `local` | Producteur `gcp` | Lu par |
 | --- | --- | --- | --- | --- | --- |
 | `db-auth` | `kubernetes.io/basic-auth` | `username` (`app`), `password` | `task up` | synchronisation de GKE depuis Secret Manager (ADR-007) | API ; script d'initialisation de la base sur `local` |
-| `cache-auth` | `Opaque` | `password`, clés définitives fixées par l'ADR-015 | `task up`, à partir de l'étape 19 | selon l'authentification de Memorystore retenue par l'ADR-015, étape 20 (research RS-11) | API ; le cache sur `local` |
+| `cache-auth` | `Opaque` | `password` (ADR-015) | `task up`, à partir de l'étape 19 | selon l'authentification de Memorystore retenue par l'ADR-015, étape 20 (research RS-11) | API ; le cache sur `local` |
 | `db-superuser` | `kubernetes.io/basic-auth` | `username`, `password` | `task up` | aucun : Cloud SQL ne donne pas de superutilisateur (ADR-012) | conteneur Postgres seulement ; jamais l'application |
 | `gateway-tls` | `kubernetes.io/tls` | `tls.crt`, `tls.key` | `task up` : `openssl req -x509` écrit clé et certificat auto-signé (P-256, 365 jours, SAN `localhost` et `127.0.0.1`) sur sa sortie standard, `awk` les étiquette, un tube mène à `kubectl create -f -` ; ni fichier, ni variable, ni argument (research RS-10, 2026-11-26) | à trancher par [OPS] et [SECU] avec la classe de GKE | Gateway |
 
 L'API lit `db-auth` dans les fichiers `username` et `password` du dossier `/run/secrets/db-auth`, où la couche commune monte le Secret (étape 3, T021 ; montage écrit à l'étape 9, T087). Un saut de ligne final est ignoré ; un fichier absent ou vide arrête l'accès à la base, et le message nomme le fichier sans jamais donner sa valeur.
+
+L'API lit `cache-auth` dans le fichier `password` du dossier `/run/secrets/cache-auth`, de la même façon (étape 19, T080 ; montage écrit à l'étape 9, T087) : un fichier absent ou vide met le cache en erreur dans `/api/readyz`, et les lectures passent par la base. Sur `local`, seul le conteneur d'initialisation du cache monte aussi ce Secret ; le serveur du cache ne le monte pas (ADR-015, condition 4).
 
 `db-superuser` est un Secret de couche : son écart entre cibles se liste au README (ENF-02, ADR-012). Keycloak et Mailpit ajouteront leurs Secrets après leurs ADR. Flux n'a aucun identifiant Git par défaut (ADR-010, condition 4).
 

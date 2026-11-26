@@ -7,10 +7,11 @@
 #          creates nothing: task up runs it before it creates the cluster
 #   up     applies local/k8s/lite server-side (kubectl apply -k): the local
 #          environment of the common layer, namespace, Gateway and
-#          HTTPRoutes, with the component of the local target, Postgres for
-#          now (research RS-01). Then waits until the database answers an
+#          HTTPRoutes, with the component of the local target, Postgres and
+#          the cache (research RS-01). Then waits until the database answers an
 #          authenticated SELECT 1, with the user of db-auth, through its
-#          Service (ADR-012, condition 6).
+#          Service (ADR-012, condition 6). The cache is waited for by
+#          local/scripts/cache.sh, which task up runs next.
 #
 # Step 9 adds the build and the load of the API and the front, defined once
 # here (ADR-006, condition 6), and the rest of "ready". The Secrets come
@@ -56,7 +57,8 @@ check() {
   local file
   for file in local/k8s/lite/kustomization.yaml local/k8s/component/kustomization.yaml \
     local/data/kustomization.yaml local/data/statefulset.yaml local/data/service.yaml \
-    local/data/init/10-app-role.sh; do
+    local/data/init/10-app-role.sh local/data/cache/kustomization.yaml local/data/cache/deployment.yaml \
+    local/data/cache/probe/job.yaml; do
     [ -f "$root/$file" ] || die "$file is missing. Restore it from the repository. Nothing was applied."
   done
 }
