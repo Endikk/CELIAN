@@ -16,9 +16,9 @@ scan_policy:
   # confirmed by Lucas at GATE 2; spec 001, FR-021 and FR-022). The scan
   # blocks what goes to production and reports the rest:
   # - blocking: the images that the project builds (the API and the front,
-  #   under saas-b2b.invalid; they enter the scan with the second PR of step
-  #   18) and every image deployed on the gcp target. An entry is a repository
-  #   or a registry that covers what sits under it.
+  #   under saas-b2b.invalid; the scan builds them, for each platform, and
+  #   keeps their SBOM) and every image deployed on the gcp target. An entry is
+  #   a repository or a registry that covers what sits under it.
   # - reported: third-party images that run on the cluster of the machine
   #   only. A finding at or above the threshold is listed in the summary of the
   #   job and does not block; [SECU] reads that table at the monthly review of

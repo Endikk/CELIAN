@@ -1659,6 +1659,32 @@ Filtrage au seuil. `--severity` garde les niveaux listés (valeur par défaut, l
 | <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/result/filter.go> | 2026-11-25 | Filtre `--severity`, gravité vide lue `UNKNOWN` |
 | <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/guide/coverage/language/java.md> | 2026-11-25 | `--offline-scan` et dépôts Maven ; base non touchée |
 
+### Relevé du 2026-11-26 : SBOM et scan des images construites (T119 en partie, étape 18, seconde PR)
+
+Fait par [OPS] sur délégation du DSI ; [SECU] relit. Les mesures viennent du binaire Trivy 0.76.2 lancé sur ce poste et sur la CI de la PR #90, les autres faits des pages citées plus bas.
+
+Lecture d'une image construite. Depuis une archive (`docker save`, puis `trivy image --input api.tar`), le rapport porte `ArtifactName` = `api.tar` et `Metadata.RepoTags` = `["saas-b2b.invalid/api:scan-probe"]` : l'image n'est plus nommée par sa référence. Depuis le moteur (`--image-src docker`), `ArtifactName` est la référence passée, et la politique de décision, qui classe l'image et cherche ses exceptions par ce nom (écart 182 de tasks.md), la retrouve. Le socket du moteur se donne à Trivy par `DOCKER_HOST` (ou `--docker-host`), sinon Trivy prend le socket par défaut ; sous `env -i`, le script lui passe celui de l'appelant ou celui du contexte docker. Par défaut Trivy cherche une image dans le moteur local avant le registre, d'où `--image-src remote` gardé pour les images tirées.
+
+Variante lue. Le rapport copie la configuration de l'image dans `Metadata.ImageConfig` : `architecture` (`arm64`, `amd64`) et `os` (`linux`). La politique y lit la plateforme (écart 185). Une image tirée avec `--platform linux/arm64` donne un rapport `arm64` ; un index sans la variante demandée échoue : `unable to find the specified image ... in ["remote"]: remote error: no child with platform linux/s390x in index ghcr.io/project-zot/zot:v2.1.23` (essai avec une plateforme que zot ne publie pas).
+
+SBOM. `trivy image --format cyclonedx` écrit du CycloneDX 1.7 en JSON (`"specVersion": "1.7"`, `"$schema": "http://cyclonedx.org/schema/bom-1.7.schema.json"`) et affiche `INFO "--format cyclonedx" disables security scanning. Specify "--scanners vuln" explicitly if you want to include vulnerabilities in the "cyclonedx" report.` Sans `--scanners`, l'appel ne télécharge aucune base (le dossier `db` n'existe pas dans le cache après l'appel) et `vulnerabilities` est vide. `metadata.component` est l'image, de type `container`. Sur arm64 : API 108 composants (3 `application`, 104 `library`, 1 `operating-system`), front 22 (21 `library`, 1 `operating-system`).
+
+Runner arm64. GitHub propose `ubuntu-24.04-arm`, `ubuntu-22.04-arm` et `ubuntu-26.04-arm`, gratuits et sans limite pour un dépôt public, avec 4 processeurs, 16 Go et 14 Go de disque. Le job `scan-images-arm64` de la PR #90 y a tourné en 1 min 7 s, tirages et constructions compris.
+
+Action d'envoi d'artefacts. `actions/upload-artifact` v7.0.2, tag publié le 2026-10-07 (api GitHub des versions), qui pointe vers le commit `cf430e030ddbb5b0abf93d22962f4752f3646cd9` (type `commit`) ; `runs.using` vaut `node24`. Entrées utilisées : `name`, `path`, `if-no-files-found: error` (le défaut est `warn`). `retention-days` n'est pas posé : le défaut du dépôt s'applique, 90 jours, le maximum permis pour un dépôt public. Mesure sur l'exécution de la PR : les artefacts `sbom-amd64` (15,9 ko) et `sbom-arm64` (15,0 ko) expirent le 2027-02-24.
+
+kubectl arm64. `kubectl.sha256` de v1.36.6 pour `linux/arm64` vaut `35507ef408c3d38849e5d3203e18f8e861db822aa664101a9ced0869edd06046` ; celui de `linux/amd64` relu vaut `29818b6729dc9262b692307470d0558d027725e738be5dd47c760261868a2634`, la somme que le workflow épingle déjà.
+
+À vérifier encore (E25, étape suivante) : le champ du statut des pods qui porte l'image résolue, et la référence des images préchargées par l'image du nœud (RS-24).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://trivy.dev/latest/docs/target/container_image/> | 2026-11-26 | `DOCKER_HOST`, `--docker-host`, ordre par défaut des sources, `--input`, `--platform` |
+| <https://docs.github.com/en/actions/reference/runners/github-hosted-runners> | 2026-11-26 | Étiquettes arm64, gratuité en dépôt public, matériel |
+| <https://github.com/actions/upload-artifact/blob/v7.0.2/action.yml> | 2026-11-26 | Entrées, défaut de `if-no-files-found`, `node24` |
+| <https://dl.k8s.io/release/v1.36.6/bin/linux/arm64/kubectl.sha256> | 2026-11-26 | Somme de kubectl arm64 |
+| <https://dl.k8s.io/release/v1.36.6/bin/linux/amd64/kubectl.sha256> | 2026-11-26 | Somme de kubectl amd64, égale à celle du workflow |
+
 ## RS-23. Seuil de gravité et exceptions
 
 Décision : seuil `HIGH`. Une vulnérabilité `HIGH` ou `CRITICAL` fait échouer le scan, sauf exception valide. Le seuil est écrit une seule fois, dans `security/scan-policy.yaml` (nom provisoire), et la tâche de scan le lit là (S26).
