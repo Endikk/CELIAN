@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# control: S32
+# control: S33
 # carries: FR-012; ADR-010, conditions 5 and 6; ADR-004, condition 4; research RS-16
 #
 # The manifest of Config Sync that E16 applies on kind is third-party text, kept

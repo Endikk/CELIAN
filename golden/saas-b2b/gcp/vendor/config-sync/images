@@ -4,7 +4,7 @@
 # registry on 2026-11-26 with `docker buildx imagetools inspect` and equal to the
 # digests of tests/bench/bench-009-gitops.sh (research RS-16). The test E16
 # writes each digest into the manifest before it applies it, reconciler
-# templates included (ADR-010, condition 6), and S32 checks that this list names
+# templates included (ADR-010, condition 6), and S33 checks that this list names
 # exactly the images of the manifest. One line: the reference as the manifest
 # writes it, a space, the digest.
 gcr.io/config-management-release/gcenode-askpass-sidecar:v1.25.2 sha256:5a5f4ae00462acf27c34694029fe505a4cc8cbd8c0afce8c22bd2c61e7b9d56b

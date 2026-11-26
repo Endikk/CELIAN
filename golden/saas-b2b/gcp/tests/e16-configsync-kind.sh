@@ -6,7 +6,7 @@
 # version that GKE runs (spec 001, T132; plan, matrix E16). A runner of x64:
 # the images of Config Sync are published for linux/amd64 only (ADR-010).
 # What it shows, in this order:
-# 1. the manifest of Config Sync, vendored with its sum (S32) and with each image
+# 1. the manifest of Config Sync, vendored with its sum (S33) and with each image
 #    written by digest, installs and starts;
 # 2. the bootstrap of the layer (gcp/k8s/bootstrap: namespace, roles, admission
 #    rule and RootSync) applies, and the RootSync, whose source alone is pointed at
@@ -17,7 +17,7 @@
 #    admission policy, and the writes by name that the layer gives it;
 # 4. Config Sync takes over the admission policy and its binding, which the user
 #    created with the bootstrap and it did not, and updates them by name: a
-#    change made by hand to the policy is put back (tasks.md, gap 176);
+#    change made by hand to the policy is put back (tasks.md, gap 181);
 # 5. the rule refuses a pod without requests in the namespace of the application
 #    and lets the same pod through with them, and leaves other namespaces alone
 #    (ADR-008, condition 9; the server decides, `apply --dry-run=server`).
@@ -139,7 +139,7 @@ esac
 
 # --- The vendored files -----------------------------------------------------------
 
-bash gcp/tests/static/s32-vendor-sums.sh >/dev/null || die "S32 fails: the manifest of Config Sync is not the vendored one."
+bash gcp/tests/static/s33-vendor-sums.sh >/dev/null || die "S33 fails: the manifest of Config Sync is not the vendored one."
 gateway_crds="local/vendor/gateway-api/standard-install.yaml"
 want="$(awk -v f="gateway-api/standard-install.yaml" '$2 == f { print $1 }' local/vendor/SHA256SUMS)"
 [ -n "$want" ] && [ "$(sha256_of "$gateway_crds")" = "$want" ] || die "$gateway_crds does not match local/vendor/SHA256SUMS."
@@ -193,7 +193,7 @@ k apply -k gcp/k8s/bootstrap >/dev/null || die "the bootstrap of the layer does 
 # Deployments api and front never become ready (no image of the application is
 # there), and the apply waits for them up to that timeout before it records the
 # status of the ResourceGroup, which the checks below read. Their readiness is
-# not what E16 tests; it belongs to the test on GKE (tasks.md, gap 201).
+# not what E16 tests; it belongs to the test on GKE (tasks.md, gap 206).
 patch="$(printf '{"spec":{"git":{"repo":"%s","revision":"%s","dir":"%s","auth":"none","secretRef":null},"override":{"reconcileTimeout":"60s"}}}' "$repo" "$revision" "$dir")"
 k -n config-management-system patch rootsync root-sync --type merge -p "$patch" >/dev/null || die "the RootSync does not take the source of the test."
 
@@ -270,7 +270,7 @@ k patch validatingadmissionpolicy "$policy" --type merge -p '{"spec":{"failurePo
 put_back() {
   [ "$(k get validatingadmissionpolicy "$policy" -o 'jsonpath={.spec.failurePolicy}')" = Fail ]
 }
-wait_for 180 put_back || fail "Config Sync does not put back the policy changed by hand: it cannot update by name an object that it did not create (tasks.md, gap 176)."
+wait_for 180 put_back || fail "Config Sync does not put back the policy changed by hand: it cannot update by name an object that it did not create (tasks.md, gap 181)."
 
 # --- 5. A pod without requests is refused ------------------------------------------------
 

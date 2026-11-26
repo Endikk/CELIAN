@@ -240,7 +240,7 @@ deny contains msg if {
 	msg := sprintf("%s: container %s of the API must read app-config by envFrom", [label, c.name])
 }
 
-# --- The CA bundles of the managed services (tasks.md, gap 174) ---------------------------
+# --- The CA bundles of the managed services (tasks.md, gap 179) ---------------------------
 
 ca_mounts(app) := {mount.mountPath |
 	some volume in object.get(pod_spec(app), "volumes", [])

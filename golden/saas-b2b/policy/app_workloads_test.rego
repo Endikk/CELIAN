@@ -171,7 +171,7 @@ test_s30_rejects_an_api_without_the_cache_secret if {
 
 # The CA bundles of the managed services: an optional ConfigMap that the gcp
 # layer provides, mounted read-only, and the variable of Npgsql that names the
-# bundle of the database (research RS-12; tasks.md, gap 174).
+# bundle of the database (research RS-12; tasks.md, gap 179).
 test_s30_rejects_an_api_without_the_ca_volume if {
 	changed := with_pod(api, {"volumes": [
 		{"name": "db-auth", "secret": {"secretName": "db-auth", "defaultMode": 288}},

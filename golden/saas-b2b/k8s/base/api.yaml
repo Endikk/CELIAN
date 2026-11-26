@@ -22,7 +22,7 @@
 #   PGSSLROOTCERT is the variable that Npgsql reads for the root certificate of
 #   the database (research RS-12); it is set on every target, and read only
 #   under VerifyCA and VerifyFull. The bundle of the cache is named by
-#   CACHE_TLS_CA_FILE of app-config (tasks.md, gap 174).
+#   CACHE_TLS_CA_FILE of app-config (tasks.md, gap 179).
 # - The label app.kubernetes.io/name: api is the one that the NetworkPolicies
 #   of the database and the cache admit (tasks.md, gaps 104 and 122).
 # - Readiness is /api/readyz, the database and the cache reachable; liveness

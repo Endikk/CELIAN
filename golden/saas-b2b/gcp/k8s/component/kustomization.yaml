@@ -16,7 +16,7 @@
 # - The values that the user writes after the apply, in ../values/: app-config,
 #   app-ca and the SecretProviderClass of db-auth.
 # - The producer of db-auth: a ServiceAccount and a SecretSync. cache-auth and
-#   gateway-tls have none yet (S07 lists them as pending, tasks.md, gaps 177
+#   gateway-tls have none yet (S07 lists them as pending, tasks.md, gaps 182
 #   and 87 of main).
 # - The admission rule that refuses a pod without requests (S16), from ../admission,
 #   which the bootstrap lists too: Config Sync only updates it.

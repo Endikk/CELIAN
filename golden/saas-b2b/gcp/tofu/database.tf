@@ -73,7 +73,7 @@ resource "google_sql_database_instance" "main" {
       # the server identity", which is what VerifyCA does in app-config; the
       # shared CA of a region would also need the hostname checked, and a
       # private IP instance has no hostname in its certificate. Checked by
-      # S15 (gcp/policy/tofu_sql_tls.rego). Tasks.md, gap 173.
+      # S15 (gcp/policy/tofu_sql_tls.rego). Tasks.md, gap 178.
       server_ca_mode = "GOOGLE_MANAGED_INTERNAL_CA"
     }
 

@@ -4,7 +4,7 @@
 # applies them on kind so that Config Sync can apply the objects of the render;
 # they accept any field, which is the point: E16 tests the binding, the render
 # and the rights of the reconciler, not these two schemas, and S31 reads their
-# fields (tasks.md, gap 180). Never applied anywhere but on the kind cluster of
+# fields (tasks.md, gap 185). Never applied anywhere but on the kind cluster of
 # E16.
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
