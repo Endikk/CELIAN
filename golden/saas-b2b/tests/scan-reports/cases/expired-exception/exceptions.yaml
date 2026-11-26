@@ -1,0 +1,8 @@
+# Example exceptions of U03, judged on the date of ../../today.yaml.
+# Expired the day before: not taken into account.
+exceptions:
+  - vulnerability: CVE-2099-0001
+    image: docker.io/example/app
+    justification: Example only. Reached from inside the cluster, no fixed release yet.
+    written: "2026-09-01"
+    expires: "2026-11-30"

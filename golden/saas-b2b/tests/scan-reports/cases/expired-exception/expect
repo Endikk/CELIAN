@@ -1,0 +1,3 @@
+deny
+docker.io/example/app: CVE-2099-0001 (HIGH)
+expired on 2026-11-30; not taken into account

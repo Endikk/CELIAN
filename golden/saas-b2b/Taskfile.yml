@@ -59,6 +59,9 @@ tasks:
   test:
     desc: Run the unit tests of the API, the front and the scan decision.
     cmds:
+      # U03, the decision of the image scan on example reports, at a fixed
+      # date: conftest only, no network.
+      - bash tests/unit/u03-scan-decision.sh
       # U01, in the build image of the API: Docker, and no .NET SDK.
       - bash tests/unit/u01-api.sh
       # U02, in the build image of the front: Docker, and no Node.js.

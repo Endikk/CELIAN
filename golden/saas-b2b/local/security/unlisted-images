@@ -1,0 +1,13 @@
+# Images that a profile runs but that no file of the repository names
+# (spec 001, FR-021; research RS-24). local/scripts/image-inventory.sh adds
+# them to the inventory of the scan. One reference per line, written in full,
+# with its digest (S25); comments on their own lines.
+#
+# The proxy of Envoy Gateway 1.10.0: the controller carries it pinned in its
+# binary, DefaultEnvoyProxyImage of api/v1alpha1/shared_types.go at v1.10.0
+# (BENCH-004, source S11; ADR-005, "Versions et condensats"; research RS-02).
+# It changes with each release of Envoy Gateway, in the same PR.
+docker.io/envoyproxy/envoy:distroless-v1.40.2@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded
+#
+# The second PR of step 18 adds the images that the node image preloads
+# (T121).

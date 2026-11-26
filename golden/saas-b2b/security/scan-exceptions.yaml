@@ -1,0 +1,13 @@
+# Exceptions to the scan of the images that the project builds, the API and
+# the front under saas-b2b.invalid (spec 001, FR-022; research RS-23). The
+# images of the local layer have theirs in local/security/scan-exceptions.yaml.
+#
+# One entry per vulnerability and image, written and renewed by [SECU]:
+#   - vulnerability: CVE-2099-0001        # VulnerabilityID in the Trivy report
+#     image: docker.io/example/app        # repository in full, no tag or digest
+#     justification: why it cannot reach the users, and what lifts it
+#     written: "2026-11-25"               # YYYY-MM-DD
+#     expires: "2027-02-23"               # at most max_exception_days later
+# S27 refuses an incomplete or expired entry; the decision of the scan
+# ignores it (policy/scan_exceptions.rego).
+exceptions: []

@@ -1,0 +1,8 @@
+# Example exceptions of U03, judged on the date of ../../today.yaml.
+# Complete and within its dates: the HIGH finding passes.
+exceptions:
+  - vulnerability: CVE-2099-0001
+    image: docker.io/example/app
+    justification: Example only. Reached from inside the cluster, no fixed release yet.
+    written: "2026-11-25"
+    expires: "2027-02-20"

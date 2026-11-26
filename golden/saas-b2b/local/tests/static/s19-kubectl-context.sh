@@ -5,9 +5,12 @@
 # Every kubectl call of the tasks and of the scripts names the kubeconfig of
 # the project and the context of the local cluster, so that no command ever
 # reaches the cluster of the default kubeconfig of the user, a GKE context
-# above all (FR-019). The one exception is "kubectl version --client" of the
-# preflight checks, which reads no kubeconfig (research RS-08). A
-# port-forward listens on 127.0.0.1 only. The kind commands that write or
+# above all (FR-019). Two calls read no kubeconfig and are the exceptions:
+# "kubectl version --client" of the preflight checks (research RS-08), and
+# "kubectl kustomize", which renders files and builds no client, for the
+# inventory of the images (research RS-24), on a line that runs no other
+# kubectl.
+# A port-forward listens on 127.0.0.1 only. The kind commands that write or
 # remove a kubeconfig entry name the same file and the cluster, plural form
 # included (kind delete clusters). No docker command carries a global option
 # (--context, -H, --host): it would aim the command at another engine. Nothing sets
@@ -37,11 +40,17 @@ command_start='(^|[;&|(!{]|\$\(|(then|do|else|exec|time|-) |[A-Za-z_][A-Za-z0-9_
 
 # check_file FILE: one line per command of FILE that breaks the rule.
 check_file() {
-  local file="$1" number text
+  local file="$1" number text rest
   while IFS=$'\t' read -r number text; do
     if [[ $text =~ ${command_start}kubectl( |$) ]]; then
       case "$text" in
         *"kubectl version --client"*) ;;
+        *"kubectl kustomize "*)
+          rest="${text#*kubectl}"
+          case "$rest" in
+            *kubectl*) printf '%s:%s: kubectl kustomize with another kubectl on the line: %s\n' "$file" "$number" "$text" ;;
+          esac
+          ;;
         *"$kubeconfig_flag"*"$context_flag"* | *"$context_flag"*"$kubeconfig_flag"*) ;;
         *) printf '%s:%s: kubectl without %s and %s: %s\n' "$file" "$number" "$kubeconfig_flag" "$context_flag" "$text" ;;
       esac
@@ -93,7 +102,9 @@ printf '%s\n' \
   'docker -H tcp://192.0.2.1:2375 run x' \
   'docker --host=tcp://192.0.2.1:2375 volume rm x' \
   'export KUBECONFIG=/tmp/x' \
-  '  - kubectl apply -k k8s/overlays/local' >"$samples/bad.sh"
+  '  - kubectl apply -k k8s/overlays/local' \
+  'kubectl kustomize local/k8s/lite | kubectl apply -f -' \
+  'kubectl delete namespace saas-b2b; kubectl kustomize local/k8s/lite' >"$samples/bad.sh"
 printf '%s\n' \
   '# kubectl get pods, in a comment' \
   'kubectl --kubeconfig "$KUBECONFIG_FILE" --context "$KUBE_CONTEXT" get pods' \
@@ -107,10 +118,11 @@ printf '%s\n' \
   'docker info --format "{{.MemTotal}}"' \
   'docker context inspect --format "{{.Name}}"' \
   'if ! command -v docker >/dev/null 2>&1; then' \
-  'echo "docker --context is refused"' >"$samples/good.sh"
+  'echo "docker --context is refused"' \
+  'rendered="$(kubectl kustomize "local/k8s/$profile")"' >"$samples/good.sh"
 bad_found="$(check_file "$samples/bad.sh" | wc -l | tr -d ' ')"
-if [ "$bad_found" != 14 ]; then
-  echo "the rule caught $bad_found of the 14 findings of the 13 bad samples:" >&2
+if [ "$bad_found" != 16 ]; then
+  echo "the rule caught $bad_found of the 16 findings of the 15 bad samples:" >&2
   check_file "$samples/bad.sh" >&2
   exit 1
 fi

@@ -1272,6 +1272,39 @@ Liste d'autorisations de S17. Dans le Taskfile et les scripts de `gcp/`, OpenTof
 | <https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/container_cluster.html.markdown> | 2026-11-25 | `enable_k8s_tokens_via_dns`, `enable_k8s_certs_via_dns` |
 | <https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/sql_database_instance.html.markdown> | 2026-11-25 | `database_flags`, `name`, `value` |
 
+### Relevé du 2026-11-25 : scan des images avec Trivy 0.76.2 (T111, étape 18)
+
+Fait par [OPS] sur délégation du DSI, porteurs prévus [DEV] et [SECU] : [SECU] relit avant la fusion. Code et documentation de Trivy au tag `v0.76.2`, lus par `gh api` ; essais avec le binaire de la release (archive `macOS-ARM64`, SHA-256 égal à `tests/tools/SHA256SUMS`), sous `env -i`, cache dans un dossier temporaire.
+
+Code de sortie quand aucun registre de la base ne répond. `DownloadDB` renvoie « failed to download vulnerability DB » (`pkg/commands/operation/operation.go`, lignes 24 à 50). Le client essaie les dépôts dans l'ordre et ne passe au suivant que sur une erreur de transport temporaire ou `BLOB_UNKNOWN` ; sinon, ou après le dernier, il échoue (`pkg/oci/artifact.go`, lignes 287 à 340). L'erreur remonte à `main`, qui appelle `log.Fatal` (`cmd/trivy/main.go`, ligne 28) ; `log.Fatal` écrit sur la sortie d'erreur même avec `--quiet`, puis sort en 1 (`pkg/log/logger.go`, lignes 86 à 95). Essai avec `--db-repository registry.invalid/aquasec/trivy-db:2` : code 1, « FATAL Fatal error [...] failed to download vulnerability DB [...] lookup registry.invalid: no such host », aucun rapport écrit. La base se télécharge avant l'image : rien n'est tiré du registre de l'image dans ce cas. E27 joue ce cas.
+
+Options retenues pour `trivy image` (page `trivy_image.md` de 0.76.2) :
+
+- `--config ''`, `--ignorefile ''`, `--disable-telemetry`, `--skip-version-check` : comme pour le HCL (relevé précédent). L'essai en mode `--debug` montre « Version check and telemetry are disabled, skipping request » ;
+- `--scanners vuln` : la valeur par défaut est `vuln,secret` ; FR-021 ne demande que les vulnérabilités. Sans `misconfig`, aucun bundle de règles n'est tiré (aucune ligne « checks » dans l'essai) ;
+- `--image-src remote` : la valeur par défaut, `docker,containerd,podman,remote`, lirait d'abord une image locale de même référence ; `remote` tire le condensat écrit dans l'inventaire, sur le poste comme en CI ;
+- `--platform linux/amd64` : « set platform in the form os/arch if image is multi-platform capable ». Les images de l'inventaire sont des index amd64 et arm64 ; la CI tourne en amd64. La variante arm64 n'est pas scannée (écart 58 de tasks.md) ;
+- `--offline-scan` : « do not issue API requests to identify dependencies ». La page Java de 0.76.2 précise qu'il coupe les requêtes vers les dépôts Maven, et que « The `--offline-scan` flag does not affect the Trivy database » ;
+- `--exit-code 0` : `Exit` ne rend un code non nul que si `--exit-code` l'est (`operation.go`, lignes 122 à 133). Un code non nul de Trivy veut donc dire une erreur, jamais une faille ;
+- `--timeout 10m` : la valeur par défaut est 5m0s ; l'image du nœud est la plus lourde de l'inventaire ;
+- `--format json`, `--output <fichier>`.
+
+Restent interdits par S26 : `--skip-db-update`, `--skip-java-db-update`, `--ignore-unfixed`, et toute source autre que les dépôts par défaut de `--db-repository` (`mirror.gcr.io/aquasec/trivy-db:2`, puis `ghcr.io/aquasecurity/trivy-db:2`) et de `--java-db-repository` (`mirror.gcr.io/aquasec/trivy-java-db:1`, puis `ghcr.io/aquasecurity/trivy-java-db:1`), hors du cas de E27 sous `.invalid`. La base Java ne se tire que si l'image porte des fichiers JAR ; aucune image de l'inventaire n'en a tiré dans l'essai. `--vex` et `--sbom-sources` sont vides par défaut : ni VEX Hub ni Rekor ne sont appelés (« VEX filtering is disabled » dans l'essai).
+
+Requêtes sortantes constatées en mode `--debug`, cache vide : la base depuis `mirror.gcr.io/aquasec/trivy-db:2`, puis l'image depuis son registre (« Image found [...] source="remote" »). Rien d'autre. La seconde image d'une même exécution réutilise la base tirée par la première.
+
+Filtrage au seuil. `--severity` garde les niveaux listés (valeur par défaut, les cinq niveaux), et une gravité vide devient `UNKNOWN` avant le filtre (`pkg/result/filter.go`, lignes 83 à 119). Le scan ne filtre pas dans Trivy : le rapport garde tous les niveaux, et la politique Rego applique le seuil qu'elle lit dans `security/scan-policy.yaml`. Le seuil n'est ainsi lu qu'à un endroit, les failles `UNKNOWN` restent listées, et le décompte par niveau sert à [SECU] pour revoir le seuil (RS-23). Écart 56 de tasks.md.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/guide/references/configuration/cli/trivy_image.md> | 2026-11-25 | Options de `trivy image`, valeurs par défaut des dépôts et des niveaux |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/commands/operation/operation.go> | 2026-11-25 | `DownloadDB`, `Exit` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/oci/artifact.go> | 2026-11-25 | Repli d'un dépôt à l'autre, échec après le dernier |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/cmd/trivy/main.go> | 2026-11-25 | Erreur fatale |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/log/logger.go> | 2026-11-25 | `log.Fatal` : sortie d'erreur, code 1 |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/result/filter.go> | 2026-11-25 | Filtre `--severity`, gravité vide lue `UNKNOWN` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/docs/guide/coverage/language/java.md> | 2026-11-25 | `--offline-scan` et dépôts Maven ; base non touchée |
+
 ## RS-23. Seuil de gravité et exceptions
 
 Décision : seuil `HIGH`. Une vulnérabilité `HIGH` ou `CRITICAL` fait échouer le scan, sauf exception valide. Le seuil est écrit une seule fois, dans `security/scan-policy.yaml` (nom provisoire), et la tâche de scan le lit là (S26).
@@ -1292,6 +1325,48 @@ Alternatives : le fichier `.trivyignore.yaml` de Trivy, écarté. Son format est
 
 Sources : <https://trivy.dev/latest/docs/configuration/filtering/>, lue le 2026-11-23 (`--severity`, niveaux de l'exemple, `--ignore-unfixed`, format expérimental de `.trivyignore.yaml` et ses champs `id`, `paths`, `purls`, `expired_at`, `statement`) ; ADR-005, CVE-2026-97054 ; spec, FR-022.
 
+### Relevé du 2026-11-25 : rapport JSON, données de conftest et premier passage (T111, T118, étape 18)
+
+Fait par [OPS] sur délégation du DSI ; [SECU] relit, et reste porteur de T118 pour les exceptions.
+
+Rapport JSON de Trivy 0.76.2. `SchemaVersion` vaut 2 (`pkg/report/writer.go`, ligne 26). Le rapport porte `ArtifactName`, la référence passée à Trivy, `ArtifactType` (`container_image`), `Metadata` et `Results` (`pkg/types/report.go`, lignes 19 à 40). Chaque résultat a `Target`, `Class` (`os-pkgs`, `lang-pkgs`, ...) et `Vulnerabilities` (lignes 157 à 175). Chaque vulnérabilité a `VulnerabilityID`, `PkgName`, `InstalledVersion`, `FixedVersion` et `Severity` (`pkg/types/vulnerability.go`, lignes 8 à 35, et `pkg/types/types.go` de trivy-db au commit `cbebf2ecd6df` que nomme `go.mod`). `Severity` y est marqué « Deprecated », gardé jusqu'au schéma 3 de la base ; c'est le champ que filtre `--severity`. Les niveaux, dans l'ordre : `UNKNOWN`, `LOW`, `MEDIUM`, `HIGH`, `CRITICAL` (`SeverityNames`, même fichier). La politique refuse un rapport d'un autre schéma que 2, et lit une gravité absente comme `UNKNOWN`, comme Trivy. Une gravité hors de la liste bloque, faute de pouvoir la classer.
+
+conftest 0.71.1, qui embarque OPA 1.21.1 (`go.mod` de conftest au tag ; `conftest --version`). `--data` (`-d`) : « The paths at the flag are recursively searched for JSON and YAML files », et chaque clé de tête devient `data.<clé>` (page `options.md`). L'essai confirme qu'un chemin de fichier convient et que l'option se répète : `security/scan-policy.yaml` donne `data.scan_policy`, et un fichier temporaire `{"scan_today": "AAAA-MM-JJ"}` donne la date du jour en donnée. `--combine` réunit les fichiers dans un tableau d'objets `path` et `contents` (même page) ; l'ordre ne se garantit pas, et la politique reconnaît chaque fichier à sa forme. Une date YAML écrite sans guillemets arrive comme la chaîne `2026-11-25`. Aucune règle ne s'appelle `exception` : conftest réserve ce nom à ses propres exceptions (page `exceptions.md`).
+
+Dates en Rego. `time.parse_ns(layout, value)` et `time.add_date(ns, years, months, days)` existent dans OPA 1.21.1 (`builtin_metadata.json` au tag `v1.21.1`). La forme `2006-01-02` est `time.DateOnly` de Go (`src/time/format.go`, Go 1.25.0). Essai : une date impossible (`2026-13-45`) rend l'expression indéfinie sans erreur ; la politique en fait donc un motif de refus explicite.
+
+Règles de la décision, écrites dans `policy/scan_decision.rego` et `policy/scan_exceptions.rego` : une exception vaut si ses cinq champs sont des chaînes non vides, si `image` est un dépôt sans étiquette ni condensat, si `written` et `expires` sont des dates valides, `written` au plus tard aujourd'hui, `expires` après `written` et au plus `max_exception_days` jours plus tard (90, proposé, valeur de `security/scan-policy.yaml`), et si aujourd'hui ne dépasse pas `expires`, dernier jour où elle vaut. S27 refuse toute entrée qui ne vaut pas, échue comprise, en la nommant : un passage de `task check` qui réussit ne montre rien (`tests/run-static.sh`), et une entrée échue doit se voir. La décision du scan l'ignore et la liste en avertissement.
+
+Premier passage, le 2026-11-25. Trivy 0.76.2, `linux/amd64`, base du 2026-11-25 à 13:07 UTC (`UpdatedAt`). Les nombres comptent les lignes du rapport, une par vulnérabilité, paquet et cible ; « distinctes » compte les identifiants au seuil.
+
+| Image | CRITICAL | HIGH | MEDIUM | LOW | UNKNOWN | Distinctes au seuil | Dont avec correctif |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `docker.io/kindest/node:v1.36.4` (Debian 13.6) | 5 | 331 | 481 | 239 | 36 | 99 | 79 |
+| `ghcr.io/project-zot/zot:v2.1.23` | 0 | 2 | 21 | 10 | 3 | 2 | 2 |
+| `docker.io/envoyproxy/gateway:v1.10.0` | 0 | 0 | 17 | 10 | 2 | 0 | 0 |
+| `docker.io/envoyproxy/envoy:distroless-v1.40.2` | 0 | 0 | 16 | 10 | 2 | 0 | 0 |
+| `docker.io/library/postgres:18.7-trixie`, entrée avec l'étape 8 | 2 | 156 | 214 | 168 | 29 | 64 | 42 |
+
+Dans l'image du nœud, 160 lignes au seuil viennent des paquets Debian, le reste des binaires Go (kubelet, kubeadm, containerd, runc, crictl, greffons CNI), surtout la bibliothèque standard de Go (76) et `golang.org/x/net` (42). Les cinq critiques : `libbrotli1`, trois de `perl-base`, et `google.golang.org/grpc` dans `containerd-fuse-overlayfs-grpc`. Pour zot : CVE-2026-95839 (`github.com/containerd/containerd/v2` 2.4.1, corrigé en 2.4.2) et CVE-2026-78661 (`golang.org/x/net` 0.61.0, corrigé en 0.62.0). Pour Postgres : 132 lignes Debian, 26 dans `gosu` ; les deux critiques sont CVE-2026-6653 (`libxml2`, sans correctif) et CVE-2025-68121 (bibliothèque standard de Go 1.24.6 dans `gosu`).
+
+CVE-2026-97054 sort en MEDIUM dans le contrôleur d'Envoy Gateway (`SeveritySource` vide, gravité des autres fournisseurs : Red Hat, Alma, Amazon, Oracle, Photon à 2 sur 4), comme le relevait [SECU] (RS-02). Au seuil `HIGH`, aucune exception ne la vise.
+
+Conclusion. 101 identifiants au seuil sur les images de `main`, 165 avec Postgres : bien au-delà de ce qui se justifie une par une. T118 le prévoit : le seuil ou la spec se rediscutent avec Lucas, par le DSI. Aucune exception n'est écrite, et le job `scan-images` échoue sur l'image du nœud et sur zot tant que la décision n'est pas prise (écart 55 de tasks.md).
+
+Suite, décision du DSI du 2026-11-25 (par délégation de Lucas, réversible, à confirmer par Lucas à la GATE 2). Le seuil `HIGH` reste. Le scan ne bloque que les images que le projet construit, toute image déployée sur `gcp` et toute image que l'inventaire ne classe pas ; les images tierces du cluster local (nœud, zot, Envoy Gateway et son proxy, Postgres local) sont signalées dans un tableau du résumé du job, sans bloquer. La classe de chaque image s'écrit dans `security/scan-policy.yaml`, sous `image_classes`, et la politique de décision la lit comme elle lit le seuil. Raison : seuls l'API et le front partent en production sur `gcp` (Cloud SQL et Memorystore sont managés), et bloquer sur l'outillage local figerait toutes les PR sans protéger ce qui est déployé. Amendement de FR-021 et FR-022 dans spec.md ; écarts 55 et 57 de tasks.md. Les exceptions de RS-23 ne servent donc qu'aux images bloquantes.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/report/writer.go> | 2026-11-25 | `SchemaVersion = 2` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/types/report.go> | 2026-11-25 | `Report`, `Metadata`, `Result` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/pkg/types/vulnerability.go> | 2026-11-25 | `DetectedVulnerability` |
+| <https://github.com/aquasecurity/trivy-db/blob/cbebf2ecd6df/pkg/types/types.go> | 2026-11-25 | `SeverityNames`, `Severity` déprécié |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/docs/options.md> | 2026-11-25 | `--data`, `--combine` |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/docs/exceptions.md> | 2026-11-25 | Règle `exception` réservée |
+| <https://github.com/open-policy-agent/conftest/blob/v0.71.1/go.mod> | 2026-11-25 | OPA v1.21.1 |
+| <https://github.com/open-policy-agent/opa/blob/v1.21.1/builtin_metadata.json> | 2026-11-25 | `time.parse_ns`, `time.add_date` |
+| <https://github.com/golang/go/blob/go1.25.0/src/time/format.go> | 2026-11-25 | `DateOnly = "2006-01-02"` |
+
 ## RS-24. Inventaire des images
 
 Décision : l'inventaire d'un profil se calcule à chaque exécution, sans recopier les condensats. Il réunit les images des rendus du profil, celles des fichiers vendorés (Envoy Gateway, Flux), l'image du nœud de la configuration kind, celle du miroir et les images construites sous `saas-b2b.invalid`. S'y ajoute une courte liste versionnée, `local/security/unlisted-images` (nom provisoire), des images qu'aucun fichier du projet ne nomme : celles que l'image du nœud précharge (plan de contrôle, réseau, DNS, provisionneur de volumes), et l'image du proxy, que le contrôleur d'Envoy Gateway porte figée par condensat dans son binaire (BENCH-004).
@@ -1305,6 +1380,25 @@ Pourquoi : un inventaire tenu à la main en double des manifests ferait échouer
 À vérifier avant la seconde PR de l'étape 18 (porteur [DEV], avec [OPS]) : le champ du statut des pods qui porte l'image résolue ; la référence des images préchargées dans le nœud (registre amont, condensat d'index ou de plate-forme) et leur scan par Trivy depuis ce registre ; à défaut, leur export depuis le nœud vers une archive scannée, commande à vérifier.
 
 Sources : spec, FR-021 et entité « Inventaire des images » ; BENCH-004, image du proxy figée dans le binaire du contrôleur ; R-32.
+
+### Relevé du 2026-11-25 : inventaire calculé de la première PR (T114, T116, étape 18)
+
+Fait par [OPS]. `local/scripts/image-inventory.sh lite` réunit l'image du nœud (`local/kind/cluster.yaml`), celle du miroir (`MIRROR_IMAGE` de `local/tasks/local.yml`), les champs `image:` des fichiers vendorés, de `local/platform/` et de `local/data/`, le rendu de `local/k8s/<profil>` quand il existe, et `local/security/unlisted-images`. Le profil standard est refusé jusqu'à l'étape 12, comme dans les contrôles préalables.
+
+Références écrites en entier. Une référence sans hôte se lit comme Docker la lit : `docker.io` quand le premier élément n'a ni point, ni deux-points, ni majuscule et n'est pas `localhost`, `library/` devant un nom d'un seul élément, `index.docker.io` ramené à `docker.io` (`normalize.go` de `distribution/reference` v0.6.0, la version que nomme `go.mod` de Trivy 0.76.2, lignes 126 à 168). L'inventaire écrit `docker.io/kindest/node:...` là où `cluster.yaml` écrit `kindest/node:...`, et une exception nomme toujours le dépôt complet.
+
+Une référence sans condensat dans un fichier vendoré arrête l'inventaire, sauf celles d'une liste fermée du script : `docker.io/envoyproxy/ratelimit`, nommée par étiquette sous `rateLimitDeployment` et lancée seulement si `rateLimit` est posé, ce que S22 refuse sans condensat (ADR-005, condition 1 ; RS-02). Figée un jour par condensat, elle entre d'elle-même.
+
+Rendu. `kubectl kustomize` ne construit aucun client et ne lit aucun kubeconfig : `NewCmdKustomize` ne reçoit que les flux d'entrée et de sortie, sans `Factory` (`staging/src/k8s.io/kubectl/pkg/cmd/kustomize/kustomize.go`, ligne 30, et `pkg/cmd/cmd.go`, ligne 318, de Kubernetes v1.36.6). S19 l'accepte donc sans `--kubeconfig` ni `--context`, à condition que la ligne ne lance aucun autre `kubectl`. Le rendu de `local/k8s/<profil>` n'existe pas sur `main` ; il arrive avec l'étape 8 (T070), et l'inventaire le lit alors, en plus des fichiers de `local/data/` (écart 8 de tasks.md).
+
+Images construites. Une référence sous `saas-b2b.invalid` entre à l'inventaire, mais la première PR ne la scanne pas : elle se scanne dans le job qui la fait tourner, avec la seconde PR (plan, « SBOM et scan des images »).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/distribution/reference/blob/v0.6.0/normalize.go> | 2026-11-25 | Domaine par défaut, `library/`, `index.docker.io` |
+| <https://github.com/aquasecurity/trivy/blob/v0.76.2/go.mod> | 2026-11-25 | `distribution/reference` v0.6.0 |
+| <https://github.com/kubernetes/kubernetes/blob/v1.36.6/staging/src/k8s.io/kubectl/pkg/cmd/kustomize/kustomize.go> | 2026-11-25 | `NewCmdKustomize(streams)`, sans `Factory` |
+| <https://github.com/kubernetes/kubernetes/blob/v1.36.6/staging/src/k8s.io/kubectl/pkg/cmd/cmd.go> | 2026-11-25 | Ligne 318 : `kustomize.NewCmdKustomize(o.IOStreams)` |
 
 ## RS-25. Authentification de l'exemple
 

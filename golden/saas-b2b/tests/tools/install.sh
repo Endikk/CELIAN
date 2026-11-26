@@ -5,7 +5,9 @@
 # opened. No third-party GitHub Action is involved (spec 001, T011), and never
 # the actions of Trivy (S26).
 #
-# Usage: tests/tools/install.sh <directory>
+# Usage: tests/tools/install.sh <directory> [task|conftest|tofu|trivy ...]
+# Without a tool name, all four are installed. A job that needs fewer names
+# them, so that it downloads and runs nothing else.
 # Then put <directory> on PATH. Linux and macOS, amd64 and arm64.
 #
 # Versions and sums: research RS-09 (Task) and RS-18 (conftest), read on
@@ -40,8 +42,27 @@ die() {
   exit 1
 }
 
-[ "$#" -eq 1 ] || die "usage: tests/tools/install.sh <directory>"
+[ "$#" -ge 1 ] || die "usage: tests/tools/install.sh <directory> [task|conftest|tofu|trivy ...]"
 dest="$1"
+shift
+tools=" $* "
+if [ "$#" -eq 0 ]; then
+  tools=" task conftest tofu trivy "
+fi
+for name in "$@"; do
+  case "$name" in
+    task | conftest | tofu | trivy) ;;
+    *) die "unknown tool $name: task, conftest, tofu or trivy." ;;
+  esac
+done
+
+# True when tool $1 is among those asked for.
+wanted() {
+  case "$tools" in
+    *" $1 "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 case "$(uname -s)" in
   Linux) os="linux" ;;
@@ -74,6 +95,7 @@ mkdir -p "$dest"
 # Downloads release asset $1, checks it, unpacks it and copies binary $2.
 install_binary() {
   local key="$1" binary="$2" owner repo tag file url archive expected actual found count
+  wanted "$binary" || return 0
   owner="$(printf '%s' "$key" | cut -d / -f 1)"
   repo="$(printf '%s' "$key" | cut -d / -f 2)"
   tag="$(printf '%s' "$key" | cut -d / -f 3)"
@@ -127,7 +149,7 @@ install_binary \
   "aquasecurity/trivy/v$TRIVY_VERSION/trivy_${TRIVY_VERSION}_${trivy_os}-${trivy_arch}.tar.gz" \
   trivy
 
-"$dest/task" --version
-"$dest/conftest" --version
-"$dest/tofu" version
-"$dest/trivy" --version
+if wanted task; then "$dest/task" --version; fi
+if wanted conftest; then "$dest/conftest" --version; fi
+if wanted tofu; then "$dest/tofu" version; fi
+if wanted trivy; then "$dest/trivy" --version; fi

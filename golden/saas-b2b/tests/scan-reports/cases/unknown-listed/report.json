@@ -1,0 +1,45 @@
+{
+  "SchemaVersion": 2,
+  "Trivy": {
+    "Version": "0.76.2"
+  },
+  "CreatedAt": "2026-12-01T08:00:00Z",
+  "ArtifactName": "docker.io/example/app:1.0@sha256:1111111111111111111111111111111111111111111111111111111111111111",
+  "ArtifactType": "container_image",
+  "Metadata": {
+    "OS": {
+      "Family": "debian",
+      "Name": "13.7"
+    },
+    "ImageID": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
+    "RepoDigests": [
+      "example/app@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+    ]
+  },
+  "Results": [
+    {
+      "Target": "usr/local/bin/example",
+      "Class": "lang-pkgs",
+      "Type": "gobinary",
+      "Vulnerabilities": [
+        {
+          "VulnerabilityID": "CVE-2099-0003",
+          "PkgID": "stdlib@v1.99.0",
+          "PkgName": "stdlib",
+          "InstalledVersion": "v1.99.0",
+          "Status": "affected",
+          "Title": "Example advisory with the UNKNOWN severity",
+          "Severity": "UNKNOWN"
+        },
+        {
+          "VulnerabilityID": "CVE-2099-0004",
+          "PkgID": "stdlib@v1.99.0",
+          "PkgName": "stdlib",
+          "InstalledVersion": "v1.99.0",
+          "Status": "affected",
+          "Title": "Example advisory without a Severity field"
+        }
+      ]
+    }
+  ]
+}

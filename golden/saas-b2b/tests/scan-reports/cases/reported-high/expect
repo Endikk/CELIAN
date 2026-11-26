@@ -1,0 +1,2 @@
+pass
+reported: docker.io/example/local-tool: 0 CRITICAL, 1 HIGH, 1 distinct at or above HIGH, 1 with a fixed version; does not block (class reported)
