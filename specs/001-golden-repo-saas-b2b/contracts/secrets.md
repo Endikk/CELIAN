@@ -9,7 +9,7 @@ L'application lit le même Secret, de même nom et de mêmes clés, sur les deux
 | `db-auth` | `kubernetes.io/basic-auth` | `username` (`app`), `password` | `task up` | synchronisation de GKE depuis Secret Manager (ADR-007) | API ; script d'initialisation de la base sur `local` |
 | `cache-auth` | `Opaque` | `password`, clés définitives fixées par l'ADR-015 | `task up`, à partir de l'étape 19 | selon l'authentification de Memorystore retenue par l'ADR-015, étape 20 (research RS-11) | API ; le cache sur `local` |
 | `db-superuser` | `kubernetes.io/basic-auth` | `username`, `password` | `task up` | aucun : Cloud SQL ne donne pas de superutilisateur (ADR-012) | conteneur Postgres seulement ; jamais l'application |
-| `gateway-tls` | `kubernetes.io/tls` | `tls.crt`, `tls.key` | `task up`, méthode à trancher (research RS-10) | à trancher par [OPS] et [SECU] avec la classe de GKE | Gateway |
+| `gateway-tls` | `kubernetes.io/tls` | `tls.crt`, `tls.key` | `task up` : `openssl req -x509` écrit clé et certificat auto-signé (P-256, 365 jours, SAN `localhost` et `127.0.0.1`) sur sa sortie standard, `awk` les étiquette, un tube mène à `kubectl create -f -` ; ni fichier, ni variable, ni argument (research RS-10, 2026-11-26) | à trancher par [OPS] et [SECU] avec la classe de GKE | Gateway |
 
 L'API lit `db-auth` dans les fichiers `username` et `password` du dossier `/run/secrets/db-auth`, où la couche commune monte le Secret (étape 3, T021 ; montage écrit à l'étape 9, T087). Un saut de ligne final est ignoré ; un fichier absent ou vide arrête l'accès à la base, et le message nomme le fichier sans jamais donner sa valeur.
 
@@ -18,6 +18,7 @@ L'API lit `db-auth` dans les fichiers `username` et `password` du dossier `/run/
 ## Création sur `local`
 
 - Chaque mot de passe : 40 caractères alphanumériques tirés de `/dev/urandom`.
+- `gateway-tls` ne porte pas de mot de passe : sa clé et son certificat naissent d'un même `openssl req`, jamais écrits (research RS-10). Auto-signé, 365 jours, non installé dans le magasin de confiance du poste. Pour E04, la clé et le certificat diffèrent d'un environnement à l'autre, et la règle des 32 caractères ne s'y applique pas.
 - Chaque Secret passe par un tube vers `kubectl create -f -`, seulement s'il manque. Jamais `kubectl apply`, jamais de heredoc, jamais de valeur dans un fichier, une variable de Task ou un argument.
 - Les tâches qui créent un Secret sont silencieuses.
 - `db-auth` et `db-superuser` vivent avec le volume de la base : volume présent et Secret absent, `task up` s'arrête (ADR-012, condition 3). Un Secret présent sans volume reste valide.
