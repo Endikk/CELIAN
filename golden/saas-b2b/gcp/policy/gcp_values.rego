@@ -17,8 +17,14 @@
 #   encrypts without checking the server (decision of the DSI, 2026-11-26,
 #   gap 75; Npgsql, security page). CACHE_TLS_MODE is VerifyCA or VerifyFull
 #   as well: Disable is refused on gcp (gap 108). A host is a placeholder
-#   under .invalid, a private IPv4 address or a DNS name, never a loopback
-#   address, a URL or a name with a port.
+#   under .invalid (RFC 6761) or a private IPv4 address of RFC 1918, nothing
+#   else: the outputs of OpenTofu are addresses, and any other name, a public
+#   one, localhost.localdomain, a name of a resolver that answers 127.0.0.1,
+#   the metadata server, sends the connection elsewhere (SECU review of the
+#   PR 87). No URL, no port.
+# - no pod runs as the service account of the sync: an account that reads
+#   the secrets of Secret Manager is not an account that a workload may take
+#   (tasks.md, gap 151).
 # - app-ca: one ConfigMap with the bundles of the two CAs, public by nature.
 #   Each value is empty (placeholder) or one to four PEM certificates that
 #   parse, each a CA. A private key inside is refused.
@@ -148,17 +154,20 @@ deny contains msg if {
 	some [path, cm] in config_maps
 	some key in ["DATABASE_HOST", "CACHE_HOST"]
 	not host_ok(value_of(cm, key))
-	msg := sprintf("%s: %s, %s is %q: a placeholder under .invalid, a private IPv4 address or a DNS name, without scheme, port or path, never a loopback address", [label, path, key, value_of(cm, key)])
+	msg := sprintf("%s: %s, %s is %q: a placeholder under .invalid or a private IPv4 address (RFC 1918), nothing else: the outputs of OpenTofu are addresses, and any other name is a way to send the connection elsewhere", [label, path, key, value_of(cm, key)])
 }
 
-dns_name := `^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z][a-z0-9-]{0,61}[a-z0-9]$`
+# .invalid is reserved by RFC 6761, section 6.4 (read on 2026-11-26): resolvers
+# SHOULD return an immediate negative response and caching servers NXDOMAIN. A
+# SHOULD, not a guarantee, so a placeholder that fails closed in practice.
+placeholder := `^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+invalid$`
 
-ipv4 := `^[0-9]{1,3}(\.[0-9]{1,3}){3}$`
+# Four octets, each from 0 to 255 without a leading zero.
+octet := `(25[0-5]|2[0-4][0-9]|1[0-9][0-9]|[1-9]?[0-9])`
 
-host_ok(host) if {
-	regex.match(dns_name, host)
-	not host == "localhost"
-}
+ipv4 := sprintf("^(%s\\.){3}%s$", [octet, octet])
+
+host_ok(host) if regex.match(placeholder, host)
 
 host_ok(host) if {
 	regex.match(ipv4, host)
@@ -239,6 +248,16 @@ deny contains msg if {
 	some cert in parsed(pem)
 	not cert.IsCA == true
 	msg := sprintf("%s: %s, app-ca %s holds a certificate that is not a CA (subject %v): a server certificate pinned as the root would break at its rotation", [label, path, key, cert.Subject.CommonName])
+}
+
+# An expired CA fails every handshake: the bundle of the PR is refused, and a
+# rotation brings the new certificate before the old one ends.
+deny contains msg if {
+	some [path, cm] in ca_maps
+	some key, pem in object.get(cm, "data", {})
+	some cert in parsed(pem)
+	time.parse_rfc3339_ns(cert.NotAfter) <= time.now_ns()
+	msg := sprintf("%s: %s, app-ca %s holds an expired certificate (subject %v, not after %v)", [label, path, key, cert.Subject.CommonName, cert.NotAfter])
 }
 
 # --- db-auth ------------------------------------------------------------------
@@ -343,6 +362,42 @@ deny contains msg if {
 	some [path, sync] in secret_syncs
 	not sync.spec.serviceAccountName in service_accounts
 	msg := sprintf("%s: %s, %s uses the service account %v, which is not in the render (ADR-007, condition 2: the secrets are read by one account)", [label, path, describe(sync), object.get(object.get(sync, "spec", {}), "serviceAccountName", "unset")])
+}
+
+# The accounts that a SecretSync acts as, and the pod specs of the render.
+sync_accounts contains name if {
+	some [_, sync] in secret_syncs
+	name := sync.spec.serviceAccountName
+}
+
+pod_controllers := {"Deployment", "StatefulSet", "DaemonSet", "ReplicaSet", "Job"}
+
+pod_specs contains [path, obj, spec] if {
+	some [path, obj] in objects
+	obj.kind in pod_controllers
+	spec := obj.spec.template.spec
+}
+
+pod_specs contains [path, obj, spec] if {
+	some [path, obj] in objects
+	obj.kind == "CronJob"
+	spec := obj.spec.jobTemplate.spec.template.spec
+}
+
+pod_specs contains [path, obj, spec] if {
+	some [path, obj] in objects
+	obj.kind == "Pod"
+	spec := obj.spec
+}
+
+# No workload takes the account that reads Secret Manager, by either field
+# (serviceAccount is the deprecated name of serviceAccountName).
+deny contains msg if {
+	some [path, obj, spec] in pod_specs
+	some field in ["serviceAccountName", "serviceAccount"]
+	account := spec[field]
+	account in sync_accounts
+	msg := sprintf("%s: %s, %s runs as the service account %s of the sync: the account that reads the secrets of Secret Manager is not one that a workload may take (ADR-007, condition 2)", [label, path, describe(obj), account])
 }
 
 deny contains msg if {

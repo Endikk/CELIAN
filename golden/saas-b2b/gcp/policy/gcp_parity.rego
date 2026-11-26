@@ -153,6 +153,29 @@ deny contains msg if {
 	msg := sprintf("%s: the bootstrap creates the Namespace %v, which the common layer does not hold", [label, b[2]])
 }
 
+# 6. The admission policy and its binding, which the render of gcp holds and
+# Config Sync syncs, are in the bootstrap too, identical. The ClusterRole of the
+# RootSync has no create verb (S10): Config Sync updates these two objects by
+# name and cannot create them, so the user applies them first with the
+# bootstrap (SECU review of the PR 87; tasks.md, gap 145).
+admission_kinds := {"ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding"}
+
+deny contains msg if {
+	some g in gcp
+	g[0] in admission_kinds
+	not key(g) in keys_of(bootstrap)
+	msg := sprintf("%s: %s is synced by Config Sync and is not in the bootstrap: the RootSync cannot create it, the user applies it first", [label, describe(key(g))])
+}
+
+deny contains msg if {
+	some g in gcp
+	g[0] in admission_kinds
+	some b in bootstrap
+	key(g) == key(b)
+	g[4] != b[4]
+	msg := sprintf("%s: %s of the bootstrap differs from the one that Config Sync syncs", [label, describe(key(g))])
+}
+
 # 4. The producers.
 specs contains spec if {
 	some c in common

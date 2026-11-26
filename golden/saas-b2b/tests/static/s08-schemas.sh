@@ -86,13 +86,13 @@ dirs="k8s/base"
 for dir in k8s/overlays/*/; do
   dirs="$dirs ${dir%/}"
 done
-for dir in k8s/overlays/staging k8s/overlays/prod gcp/k8s/prod gcp/k8s/bootstrap gcp/k8s/values; do
+for dir in k8s/overlays/staging k8s/overlays/prod gcp/k8s/prod gcp/k8s/bootstrap gcp/k8s/values gcp/k8s/admission; do
   if [ ! -f "$dir/kustomization.yaml" ]; then
     echo "$dir/kustomization.yaml is missing: the prod and staging overlays (T133) and the gcp layer (T134) are not written yet." >&2
     exit 1
   fi
 done
-dirs="$dirs gcp/k8s/prod gcp/k8s/bootstrap gcp/k8s/values"
+dirs="$dirs gcp/k8s/prod gcp/k8s/bootstrap gcp/k8s/values gcp/k8s/admission"
 
 validate() {
   # $1 file, the rest are extra kubeconform options

@@ -18,7 +18,7 @@ CDPATH='' cd -- "$root" || exit 2
 
 for tool in conftest kubectl; do
   if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "$tool is not on PATH: S31 renders gcp/k8s/prod with kubectl kustomize and reads it with conftest." >&2
+    echo "$tool is not on PATH: S31 renders gcp/k8s/prod with the render of the cluster client and reads it with conftest." >&2
     exit 1
   fi
 done
@@ -29,8 +29,10 @@ fi
 
 work="$(mktemp -d)" || exit 2
 trap 'rm -rf "${work:?}"' EXIT
-if ! kubectl kustomize gcp/k8s/prod >"$work/gcp.yaml" 2>"$work/gcp.err"; then
-  echo "kubectl kustomize gcp/k8s/prod failed:" >&2
+kubectl kustomize gcp/k8s/prod >"$work/gcp.yaml" 2>"$work/gcp.err"
+status=$?
+if [ "$status" -ne 0 ]; then
+  echo "rendering gcp/k8s/prod failed:" >&2
   cat "$work/gcp.err" >&2
   exit 1
 fi

@@ -12,8 +12,10 @@
 # - gcp.yaml: gcp/k8s/prod, the same overlay with the component of the gcp
 #   target;
 # - layer.yaml: the files of the gcp layer as written, gcp/k8s/component/
-#   and the render of gcp/k8s/values/, to tell what comes from the layer;
-# - bootstrap.yaml: gcp/k8s/bootstrap, whose namespace is the common one.
+#   and the renders of gcp/k8s/values/ and gcp/k8s/admission/, to tell what
+#   comes from the layer;
+# - bootstrap.yaml: gcp/k8s/bootstrap, whose namespace is the common one and
+#   which holds the admission objects that Config Sync only updates.
 # The policy fails on a difference other than spec.gatewayClassName, on an
 # object that comes from nowhere, on a second Gateway, and on a Secret or a
 # ConfigMap that a pod of the common layer reads and the gcp layer does not
@@ -26,11 +28,11 @@ CDPATH='' cd -- "$root" || exit 2
 
 for tool in conftest kubectl; do
   if ! command -v "$tool" >/dev/null 2>&1; then
-    echo "$tool is not on PATH: S07 renders the layers with kubectl kustomize and compares them with conftest." >&2
+    echo "$tool is not on PATH: S07 renders the layers with the render of the cluster client and compares them with conftest." >&2
     exit 1
   fi
 done
-for dir in k8s/overlays/prod gcp/k8s/prod gcp/k8s/values gcp/k8s/bootstrap; do
+for dir in k8s/overlays/prod gcp/k8s/prod gcp/k8s/values gcp/k8s/admission gcp/k8s/bootstrap; do
   if [ ! -f "$dir/kustomization.yaml" ]; then
     echo "$dir/kustomization.yaml is missing: the prod overlay (T133) or the gcp layer (T134) is not written yet." >&2
     exit 1
@@ -42,8 +44,10 @@ trap 'rm -rf "${work:?}"' EXIT
 
 render() {
   # $1 folder, $2 output file
-  if ! kubectl kustomize "$1" >"$2" 2>"$work/render.err"; then
-    echo "kubectl kustomize $1 failed:" >&2
+  kubectl kustomize "$1" >"$2" 2>"$work/render.err"
+  status=$?
+  if [ "$status" -ne 0 ]; then
+    echo "rendering $1 failed:" >&2
     cat "$work/render.err" >&2
     exit 1
   fi
@@ -61,10 +65,9 @@ for file in gcp/k8s/component/*.yaml; do
   [ "$(basename "$file")" = kustomization.yaml ] && continue
   { printf -- '---\n'; cat "$file"; printf '\n'; } >>"$work/layer.yaml"
 done
-{ printf -- '---\n'; kubectl kustomize gcp/k8s/values; } >>"$work/layer.yaml" || {
-  echo "kubectl kustomize gcp/k8s/values failed." >&2
-  exit 1
-}
+render gcp/k8s/values "$work/values.yaml"
+render gcp/k8s/admission "$work/admission.yaml"
+{ printf -- '---\n'; cat "$work/values.yaml"; printf -- '---\n'; cat "$work/admission.yaml"; } >>"$work/layer.yaml"
 
 conftest verify --no-color --policy gcp/policy --namespace gcp_parity || exit 1
 conftest test --no-color --combine --policy gcp/policy --namespace gcp_parity \

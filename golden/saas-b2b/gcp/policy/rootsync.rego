@@ -26,9 +26,10 @@
 # - a Role sits in the namespace of its RootSync entry; the ClusterRole bound
 #   for the whole cluster (a ClusterRoleBinding, entry without namespace)
 #   reaches namespaces and admission policies only: it reads them, changes
-#   them by name, and creates only the policies that the rule of S16 is made
-#   of (the create verb has no resource name in Kubernetes RBAC, so it cannot
-#   be narrowed).
+#   them by name, and creates nothing: the create verb has no resource name in
+#   Kubernetes RBAC, so it cannot be narrowed, and the user applies the
+#   Namespace and the admission objects first, with the bootstrap;
+# - the kinds of a Role are a closed list, as the kinds of the ClusterRole.
 #
 # Input: the render of gcp/k8s/bootstrap given to `conftest test --combine`,
 # one entry per YAML document with its `path` and parsed `contents`
@@ -262,17 +263,40 @@ deny contains msg if {
 	msg := sprintf("%s: %s, %s grants %s on %v without resourceNames: a write for the whole cluster is limited to the objects of the environment", [label, path, describe(role), verb, rule.resources])
 }
 
-# create has no resource name in RBAC; it is left to the policies and the
-# bindings of S16, and to nothing else.
+# No create for the whole cluster, whatever the kind: the admission objects and
+# the Namespace are applied first by the user with the bootstrap, and Config
+# Sync updates them by name (SECU review of the PR 87; tasks.md, gap 145).
 deny contains msg if {
 	some [path, role] in roles
 	role.kind == "ClusterRole"
 	cluster_bound(role.metadata.name)
 	some rule in role.rules
 	"create" in rule.verbs
+	msg := sprintf("%s: %s, %s is bound for the whole cluster and grants create for the whole cluster on %v: the user applies those objects first, Config Sync only updates them by name", [label, path, describe(role), rule.resources])
+}
+
+# The kinds of a Role are a closed list: the kinds that the render of gcp/k8s/prod
+# holds in the namespace, each with its group, nothing else (SECU review of the
+# PR 87). A kind that the layer adds joins the list, with its reason, here.
+role_kinds := {
+	["", "configmaps"],
+	["", "serviceaccounts"],
+	["", "services"],
+	["apps", "deployments"],
+	["gateway.networking.k8s.io", "gateways"],
+	["gateway.networking.k8s.io", "httproutes"],
+	["secrets-store.csi.x-k8s.io", "secretproviderclasses"],
+	["secret-sync.gke.io", "secretsyncs"],
+}
+
+deny contains msg if {
+	some [path, role] in roles
+	role.kind == "Role"
+	some rule in role.rules
+	some group in rule.apiGroups
 	some resource in rule.resources
-	not resource in {"validatingadmissionpolicies", "validatingadmissionpolicybindings"}
-	msg := sprintf("%s: %s, %s is bound for the whole cluster and creates %s: the namespace of the environment exists before the RootSync", [label, path, describe(role), resource])
+	not [group, resource] in role_kinds
+	msg := sprintf("%s: %s, %s reaches %v of the group %q, outside the closed list of kinds of the Role", [label, path, describe(role), resource, group])
 }
 
 # A binding object in the render must not hand cluster-admin to anything.

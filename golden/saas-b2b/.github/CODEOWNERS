@@ -3,3 +3,8 @@
 # takes effect once the project stands alone. The template of phase 3 has
 # to replace this owner with the one of the generated project.
 * @Endikk
+
+# The values that the user writes after the first apply (host and CA of the
+# managed services, project of Secret Manager) get the same owner on their own
+# line, so that the rule survives a broader pattern above it (tasks.md, gap 141).
+/gcp/k8s/values/ @Endikk

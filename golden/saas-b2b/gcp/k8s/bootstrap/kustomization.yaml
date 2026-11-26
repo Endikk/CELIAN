@@ -1,6 +1,7 @@
 # What the user applies once, by hand, before Config Sync can read anything:
 # the namespace of the application, the roles that the reconciler of the
-# RootSync gets, and the RootSync itself (ADR-010, "Répartition par couche";
+# RootSync gets, the admission rule on requests (../admission, which Config
+# Sync then only updates: it has no right to create it), and the RootSync itself (ADR-010, "Répartition par couche";
 # contracts/layers.md, "Objets appliqués hors de cette composition"). Config
 # Sync never applies it: it cannot give itself its own rights, and the RootSync
 # is what tells it what to read.
@@ -21,4 +22,5 @@ kind: Kustomization
 resources:
   - namespace.yaml
   - rbac.yaml
+  - ../admission
   - root-sync.yaml
