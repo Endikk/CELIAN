@@ -310,3 +310,82 @@ test_s15_rejects_the_token_in_a_nested_block if {
 	connection := {"settings": [{"labels": token}]}
 	denied_with(patched(set("/resource/google_sql_database_instance", {"main": [connection]})), "settings.0.labels reads the token")
 }
+
+# Condition 18, every reference to the type, not only `.<name>.token`.
+
+test_s15_rejects_the_whole_token_resource_in_a_local if {
+	denied_with(patched(set("/locals", [{"t": "${google_memorystore_auth_token.cache}"}])), "local.t reads the token")
+}
+
+test_s15_rejects_values_of_the_token_resource_in_a_local if {
+	denied_with(patched(set("/locals", [{"t": "${values(google_memorystore_auth_token.cache)}"}])), "local.t reads the token")
+}
+
+test_s15_rejects_an_indexed_token_in_another_attribute if {
+	user := {"password_wo": "${google_memorystore_auth_token.cache[\"a\"].token}", "password_wo_version": 1}
+	denied_with(patched(set("/resource/google_sql_user", {"app": [user]})), "password_wo reads the token")
+}
+
+test_s15_rejects_the_token_resource_in_an_output_through_values if {
+	value := "${values(google_memorystore_auth_token.cache)}"
+	denied_with(patched(set("/output", {"t": [{"value": value}]})), "output.t carries the token")
+}
+
+test_s15_rejects_the_token_resource_in_a_module_argument if {
+	denied_with(patched(set("/module", {"m": [{"source": "./m", "t": token}]})), "module.m reads the token")
+}
+
+test_s15_accepts_an_indexed_token_in_secret_data_wo if {
+	value := "${google_memorystore_auth_token.cache[\"a\"].token}"
+	version := {"secret_data_wo": value, "secret_data_wo_version": 1}
+	accepted(patched(set("/resource/google_secret_manager_secret_version", {"cache": [version]})))
+}
+
+test_s15_accepts_a_dependency_on_the_token_resource if {
+	version := {"secret_data_wo": token, "secret_data_wo_version": 1, "depends_on": ["google_memorystore_auth_token.cache"]}
+	accepted(patched(set("/resource/google_secret_manager_secret_version", {"cache": [version]})))
+}
+
+# ACL rule without a token.
+
+test_s15_rejects_nopass_in_any_case if {
+	acl := {"rules": [{"username": "default", "rule": "on NoPass ~* +@all"}]}
+	denied_with(patched(set("/resource/google_memorystore_acl_policy", {"p": [acl]})), "a rule holds 'nopass'")
+}
+
+test_s15_rejects_nopass_in_the_second_rule if {
+	acl := {"rules": [{"username": "a", "rule": "on #abc ~* +@all"}, {"username": "b", "rule": "on nopass +@read"}]}
+	denied_with(patched(set("/resource/google_memorystore_acl_policy", {"p": [acl]})), "a rule holds 'nopass'")
+}
+
+# Resource types that are not part of the layer.
+
+test_s15_rejects_a_user_created_endpoint if {
+	extra := {"extra": [{"instance": "x"}]}
+	denied_with(patched(set("/resource/google_memorystore_instance_desired_user_created_endpoints", extra)), "google_memorystore_instance_desired_user_created_endpoints.extra: this resource type is not part of the layer")
+}
+
+test_s15_rejects_a_redis_cluster if {
+	denied_with(patched(set("/resource/google_redis_cluster", {"c": [{"shard_count": 3}]})), "google_redis_cluster.c: this resource type is not part of the layer")
+}
+
+# lifecycle and dynamic blocks hide what the instance says.
+
+test_s15_rejects_ignore_changes_on_the_instance if {
+	lifecycle := [{"ignore_changes": ["${authorization_mode}"]}]
+	denied_with(patched(set(concat("/", [instance_path, "lifecycle"]), lifecycle)), "lifecycle.ignore_changes is written")
+}
+
+test_s15_accepts_prevent_destroy_on_the_instance if {
+	accepted(patched(set(concat("/", [instance_path, "lifecycle"]), [{"prevent_destroy": true}])))
+}
+
+test_s15_rejects_a_dynamic_backup_block if {
+	dynamic := {"automated_backup_config": [{"for_each": [1], "content": [{"retention": "86400s"}]}]}
+	denied_with(patched(set(concat("/", [instance_path, "dynamic"]), dynamic)), "dynamic \"automated_backup_config\" is written")
+}
+
+test_s15_rejects_any_dynamic_block_on_the_instance if {
+	dynamic := {"persistence_config": [{"for_each": [1], "content": [{"mode": "AOF"}]}]}
+	denied_with(patched(set(concat("/", [instance_path, "dynamic"]), dynamic)), "dynamic \"persistence_config\" is written")
+}
