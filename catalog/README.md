@@ -8,7 +8,7 @@ Chaque brique a son fichier `catalog/<id>.yaml`, où `<id>` est le nom abstrait 
 
 Exemple réel : [`kubernetes-cluster.yaml`](kubernetes-cluster.yaml). Exemple minimal fictif : [`tests/catalog/valid/minimal.yaml`](../tests/catalog/valid/minimal.yaml).
 
-Les clés sont en anglais, les textes libres (`summary`, `detail`, `establishes`, `note`, `notes`, `managed_gap`) en français.
+Les clés sont en anglais, les textes libres (`summary`, `detail`, `establishes`, `note`, `notes`, `choose_when`) en français.
 
 ### Champs de la brique
 
@@ -22,7 +22,7 @@ Les clés sont en anglais, les textes libres (`summary`, `detail`, `establishes`
 
 ### Champs d'une cible
 
-Une cible est de type `oss` (composant libre que le projet généré fait tourner) ou `managed` (service managé du fournisseur cloud). La cible `local` n'accepte que `oss` (principe III). La cible `gcp` accepte `managed`, ou `oss` avec le champ `managed_gap` qui dit pourquoi aucun service managé de Google ne couvre le besoin.
+Une cible est de type `oss` (composant libre que le projet généré fait tourner) ou `managed` (service managé du fournisseur cloud). La cible `local` n'accepte que `oss` (principe III). La cible `gcp` porte une option, ou deux : voir « Options d'hébergement sur une cible cloud » plus bas.
 
 | Clé | `oss` | `managed` | Contenu |
 | --- | --- | --- | --- |
@@ -44,7 +44,44 @@ Une cible est de type `oss` (composant libre que le projet généré fait tourne
 | `artifacts` | facultatif | interdit | Condensat SHA-256 d'un binaire téléchargé, par plateforme (`darwin-arm64`, `darwin-amd64`, `linux-amd64`, `linux-arm64`), avec sa source et sa date |
 | `pending` | facultatif | facultatif | Champs encore ouverts : `topic`, `owner` (tag de rôle ou `Lucas`), `note` |
 | `notes` | facultatif | facultatif | Remarque libre, 500 caractères au plus |
-| `managed_gap` | `gcp` seulement, alors obligatoire | interdit | Pourquoi aucun service managé du fournisseur ne couvre le besoin |
+| `choose_when` | `gcp` seulement, alors obligatoire | `gcp` seulement, obligatoire en liste | Critères de choix de l'option, une ligne en français |
+| `validation` | `gcp` seulement, alors obligatoire | `gcp` seulement, obligatoire en liste | `covered` ou `not-covered` : la matrice de validation exerce ou non l'option |
+| `offered` | `gcp` seulement, alors obligatoire | `gcp` seulement, obligatoire en liste | `true` si l'entretien peut proposer l'option. Jamais `true` quand `validation` vaut `not-covered` |
+
+### Options d'hébergement sur une cible cloud
+
+Depuis la constitution 2.0.0 (principe III, [`constitution.md`](../.specify/memory/constitution.md)), le service managé n'est plus imposé sur un cloud : l'entretien choisit, brique par brique, entre managé, auto-hébergé dans le cluster et hybride, avec une raison écrite. Le catalogue liste donc, par cible cloud, l'option managée et l'option auto-hébergée quand les deux existent, chacune avec ses faits. Le principe V départage entre options de même nature, jamais entre managé et auto-hébergé. Le complément du 2026-11-26 de l'[ADR-009](../docs/adr/ADR-009-catalogue.md) fixe le cadre.
+
+`targets.gcp` prend deux formes :
+
+- une option seule, comme avant : `type: managed` ou `type: oss` directement sous `gcp` ;
+- une liste de deux options, le service managé d'abord, le composant libre ensuite.
+
+```yaml
+  gcp:
+    - type: managed
+      # faits du service managé, puis :
+      choose_when: Quand l'équipe ne veut pas exploiter la brique.
+      validation: covered
+      offered: true
+    - type: oss
+      # faits du composant libre, puis :
+      choose_when: Quand la portabilité compte plus que l'exploitation.
+      validation: not-covered
+      offered: false
+```
+
+Ce que le schéma exige :
+
+- chaque option de la liste porte `choose_when`, `validation` et `offered` ;
+- une option `oss` sur `gcp` les porte aussi quand elle est seule ;
+- une option `managed` seule peut les omettre : les entrées écrites avant ce changement restent valides telles quelles ;
+- `validation: not-covered` impose `offered: false`, et `offered` demande `validation`. Une option que la matrice ne couvre pas n'est jamais proposée par l'entretien (principe I) ;
+- `local` refuse ces trois champs : pas de choix d'hébergement sur le PC.
+
+`managed_gap` n'existe plus : un composant libre sur un cloud n'a plus à justifier l'absence de service managé. Aucune entrée du catalogue ne l'employait, et le schéma le refuse comme n'importe quelle clé inconnue.
+
+Ajouter une option auto-hébergée sur `gcp` demande ses faits vérifiés et datés (principe VIII), un ADR, et une validation dans la matrice avant de passer `validation` à `covered` (principe I). Tant que la matrice ne l'exerce pas, l'option s'écrit avec `validation: not-covered` et `offered: false`.
 
 Les dates s'écrivent `"AAAA-MM-JJ"`, entre guillemets. Sans guillemets, PyYAML les lit comme des dates Python et le schéma les refuse. Les condensats aussi s'écrivent entre guillemets.
 
@@ -74,7 +111,7 @@ Le standard est ce que la cible `local` et la cible `gcp` ont en commun, donc ce
 
 ## Ajouter une entrée
 
-1. Le service a son ADR, et son BENCH si le choix est structurant. Sur `gcp`, un service managé imposé par le principe III n'a pas besoin de BENCH, mais le choix entre deux services managés passe par un ADR.
+1. Le service a son ADR, et son BENCH si le choix est structurant. Sur `gcp`, un service managé seul n'a pas besoin de BENCH, mais le choix entre deux services managés, ou l'ajout d'une option auto-hébergée, passe par un ADR.
 2. Créer `catalog/<id>.yaml` en partant de l'exemple minimal.
 3. Remplir chaque champ depuis une source officielle, lue le jour même : dépôt ou site du projet, page de la fondation, documentation du fournisseur. Un blog, un guide tiers ou un résultat de recherche ne compte pas (principe VIII).
 4. Vérifier les principes au passage :
@@ -98,7 +135,7 @@ Une entrée vérifiée il y a plus de six mois fait échouer la CI (ADR-009), co
 Le contrôle est [`scripts/catalog/check_catalog.py`](../scripts/catalog/check_catalog.py), lancé par le hook pre-commit `catalog-check`. Sur chaque PR et chaque push sur `main` (job `pre-commit` de `ci.yml`, obligatoire pour fusionner), et chaque lundi sur `main` (`catalog-freshness.yml`), toutes les entrées passent le contrôle, modifiées ou non. Il échoue si :
 
 - le fichier n'est pas en UTF-8, porte une clé en double, un alias ou une clé de fusion `<<` ;
-- le fichier ne passe pas le schéma ;
+- le fichier ne passe pas le schéma, y compris une option `not-covered` marquée `offered: true` ou une option cloud sans `choose_when` ;
 - une chaîne finit par un saut de ligne : un bloc `>` ou `|` sans `-` en garde un, et le `pattern` du schéma le laisse passer ;
 - le nom du fichier diffère de `id`, ou deux fichiers portent le même `id` ;
 - `catalog/` contient autre chose que des fichiers `<id>.yaml` et ce README, ou un lien symbolique, refusé sans être suivi ;
@@ -111,6 +148,8 @@ Le contrôle est [`scripts/catalog/check_catalog.py`](../scripts/catalog/check_c
 - deux condensats portent la même plateforme.
 
 Il avertit, sans échouer, quand `verified_on` ou une source entre dans son dernier mois, quand `local` et `gcp` n'ont aucun standard en commun, quand une cible a des `pending`, et quand une licence est marquée à copyleft réseau (AGPL) dans la liste blanche : l'ADR de la brique dit alors comment le projet généré s'y conforme.
+
+Les règles du contrôle s'appliquent à chaque option d'une cible, au chemin de l'option (`targets/gcp/1/verified_on` pour la seconde d'une liste). L'avertissement sur les standards compte ceux de toutes les options d'une cible.
 
 Chaque message donne le fichier, le chemin JSON du champ et la règle, par exemple :
 
