@@ -35,6 +35,14 @@
 #   or none, is of another variant: the arm64 scan cannot pass on an amd64
 #   report. The reported images are not judged on this: nothing of what they
 #   carry blocks;
+# - the same images are refused when Metadata.OS.EOSL is true: a system at the
+#   end of its life gets no fixes (decision of the DSI, 2026-11-26);
+# - a report of type filesystem is the report of a lock file (trivy fs, the
+#   front: react and react-dom are compiled into dist/, so no image scan sees
+#   them). It is named by a path under the host of the built images, so that
+#   the class blocking and the exceptions hold for it like for an image. It
+#   has no platform and no operating system, and is refused when it holds no
+#   Results;
 # - levels in the order of Trivy: UNKNOWN, LOW, MEDIUM, HIGH, CRITICAL. A
 #   finding at or above the threshold blocks; UNKNOWN never blocks and is
 #   listed (research RS-23, to be confirmed by [SECU]); a missing severity
@@ -196,10 +204,41 @@ deny contains msg if {
 	msg := sprintf("%s: no platform of the run (data.scan_platform), as os/architecture such as linux/arm64", [label])
 }
 
-# The reports that are judged on their content and their platform.
+# The reports of a lock file (trivy fs), which describe packages and no image:
+# no platform, no operating system.
+lock_reports contains file if {
+	some file in reports
+	object.get(file.contents, "ArtifactType", "") == "filesystem"
+}
+
+# The reports that are judged on their content and their platform: the images
+# that are not reported.
 judged_reports contains file if {
 	some file in reports
+	not file in lock_reports
 	class(repository(file.contents.ArtifactName)) != "reported"
+}
+
+# A lock file that lists no package says nothing: the scan would pass on a
+# file that Trivy could not read.
+deny contains msg if {
+	some file in lock_reports
+	not has_results(file.contents)
+	msg := sprintf("%s: %s: %s: the report of the lock file holds no Results: it says nothing of the packages", [
+		label, file.path, repository(file.contents.ArtifactName),
+	])
+}
+
+# Decision of the DSI of 2026-11-26 (SECU review of #90): a system at the end
+# of its life gets no fixes, so an image that blocks is refused on it.
+deny contains msg if {
+	some file in judged_reports
+	os := object.get(file.contents, ["Metadata", "OS"], {})
+	object.get(os, "EOSL", false) == true
+	image := repository(file.contents.ArtifactName)
+	msg := sprintf("%s: %s: the operating system %s %s is at end of life (Metadata.OS.EOSL): it gets no fixes, and the image is %s", [
+		label, image, object.get(os, "Family", "?"), object.get(os, "Name", "?"), class_text(class(image)),
+	])
 }
 
 has_results(contents) if {
@@ -253,8 +292,8 @@ deny contains msg if {
 
 deny contains msg if {
 	some file in reports
-	object.get(file.contents, "ArtifactType", "") != "container_image"
-	msg := sprintf("%s: %s: ArtifactType %v, container_image expected", [label, file.path, object.get(file.contents, "ArtifactType", "")])
+	not object.get(file.contents, "ArtifactType", "") in {"container_image", "filesystem"}
+	msg := sprintf("%s: %s: ArtifactType %v, container_image or filesystem expected", [label, file.path, object.get(file.contents, "ArtifactType", "")])
 }
 
 deny contains msg if {

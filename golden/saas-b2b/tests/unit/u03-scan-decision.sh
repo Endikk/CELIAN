@@ -11,7 +11,9 @@
 #   tests/scan-reports/ (linux/arm64). Its expect file gives "pass" or "deny"
 #   on the first line, then one text per line that the output must hold. They
 #   include the cases of the second PR of step 18: a report that holds neither
-#   Results nor Metadata.OS, and a report of the amd64 variant in an arm64 run.
+#   Results nor Metadata.OS, a report of the amd64 variant in an arm64 run, an
+#   image on a system at the end of life, and the report of the lock file of the
+#   front (a HIGH finding, no Results, clean).
 # Called by `task test` and by the job unit of
 # .github/workflows/golden-saas-b2b.yml.
 set -euo pipefail

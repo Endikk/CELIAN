@@ -108,10 +108,13 @@ jobs:
   # under .invalid, where the scan must fail and say so, then for real, with
   # the database downloaded in this run and no cache (research RS-22). Trivy
   # comes from tests/tools/install.sh, checked against its SHA-256, never from
-  # an action of Aqua Security (S26). The SBOM of each built image, CycloneDX
-  # JSON, is kept as an artifact of the run, 90 days, the default of GitHub
-  # and its maximum for a public repository (FR-020; research RS-22). This job
-  # scans the linux/amd64 variant; scan-images-arm64 scans the other (decision
+  # an action of Aqua Security (S26). The lock file of the front is scanned too,
+  # with trivy fs, under the same policy: react and react-dom are compiled into
+  # dist/, which no image scan sees. The SBOM of each built image and of that
+  # lock file, CycloneDX JSON, is kept as an artifact of the run for 90 days
+  # (retention-days: the maximum of a public repository unless its settings say
+  # more, per the action.yml of upload-artifact v7.0.2, read on 2026-11-26;
+  # FR-020, research RS-22). This job scans the linux/amd64 variant; scan-images-arm64 scans the other (decision
   # of the DSI, 2026-11-26). The move of the scan into e2e-lite (T123) is not
   # done. No path filter: a finding published after a merge fails the next PR
   # (plan, "SBOM et scan des images"). Required check of the ruleset of main.
@@ -149,6 +152,7 @@ jobs:
           name: sbom-amd64
           path: ${{ runner.temp }}/sbom
           if-no-files-found: error
+          retention-days: 90
 
   # The same scan for the linux/arm64 variant of every image, on an arm64
   # runner so that the API and the front build natively: the variant of a Mac
@@ -189,6 +193,7 @@ jobs:
           name: sbom-arm64
           path: ${{ runner.temp }}/sbom
           if-no-files-found: error
+          retention-days: 90
 
   # X01: the golden repo as a project of its own, copied into a new Git
   # repository where its hooks, commitlint, actionlint and gitleaks run

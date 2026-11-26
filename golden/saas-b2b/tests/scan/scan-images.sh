@@ -24,6 +24,12 @@
 #   disables the security scan and needs no database: the SBOM lists
 #   components and versions, and nothing else (FR-020). The CI keeps that
 #   directory as an artifact of the run;
+# - the front compiles react and react-dom into dist/, so neither its SBOM nor
+#   the scan of its image lists them. The scan also runs trivy fs on its
+#   package-lock.json, with the same options, writes the report as one more
+#   report of the policy (named saas-b2b.invalid/front/package-lock.json, the
+#   class blocking) and an SBOM to <sbom-dir>/front-lock-<arch>.cdx.json
+#   (decision of the DSI, 2026-11-26);
 # - conftest runs policy/scan_decision.rego on the reports, the two
 #   exception files, the policy of security/scan-policy.yaml, the date of
 #   the day in UTC and the platform of the run. It refuses each image and
@@ -226,6 +232,46 @@ build_image() {
     fail "the image $built_host/$name was not built; the messages of docker are above."
 }
 
+# Scans the lock file $1 of the built image $2 with trivy fs, same policy and
+# same options as the images (research RS-22), and writes its SBOM. The front
+# compiles react and react-dom into dist/, so neither its SBOM nor its scan of
+# the image sees them: the lock file is the one place that lists them. The
+# file is copied under <built host>/<name>/ and read by that relative path, so
+# that Trivy names the artifact by it and the policy holds the class blocking
+# and the exceptions for it, like for an image. Sets n to the report number.
+scan_lock() {
+  local file="$1" name="$2" base rel sbom
+  [ -f "$file" ] || fail "$file is missing: the scan reads the packages that $built_host/$name compiles into its files there (FR-020, FR-021)."
+  base="$(basename "$file")"
+  rel="$built_host/$name/$base"
+  mkdir -p "$work/lock/$built_host/$name"
+  cp "$file" "$work/lock/$rel"
+  n=$((n + 1))
+  printf 'E27: scanning %s\n' "$rel"
+  set -- fs --quiet --config '' --cache-dir "$work/cache" \
+    --disable-telemetry --skip-version-check --ignorefile '' \
+    --timeout "$trivy_timeout"
+  if [ -n "$db_repository" ]; then
+    set -- "$@" --db-repository "$db_repository"
+  fi
+  (
+    CDPATH='' cd -- "$work/lock"
+    env -i PATH="$PATH" HOME="$work/home" trivy "$@" \
+      --scanners vuln --offline-scan --exit-code 0 --format json --output "$work/reports/$n.json" "$rel"
+  ) 2>"$work/trivy.err" || trivy_failed "$rel"
+  sbom="$sbom_dir/$name-lock-$arch.cdx.json"
+  (
+    CDPATH='' cd -- "$work/lock"
+    env -i PATH="$PATH" HOME="$work/home" trivy fs --quiet --config '' \
+      --cache-dir "$work/cache" --disable-telemetry --skip-version-check --ignorefile '' \
+      --timeout "$trivy_timeout" --format cyclonedx --output "$sbom" "$rel"
+  ) 2>"$work/trivy.err" || trivy_failed "$rel"
+  if [ ! -s "$sbom" ] || ! grep -q -F '"bomFormat": "CycloneDX"' "$sbom" || ! grep -q -F '"components"' "$sbom"; then
+    fail "the SBOM of $rel is empty or is not CycloneDX JSON with components: $sbom (FR-020)."
+  fi
+  printf 'E27: SBOM of %s: %s, %s bytes\n' "$rel" "$sbom" "$(wc -c <"$sbom" | tr -d ' ')"
+}
+
 # Says why Trivy failed on $1, from its messages in $work/trivy.err, and stops.
 trivy_failed() {
   local ref="$1"
@@ -275,6 +321,10 @@ for ref in $built_refs; do
     fail "the SBOM of $built_host/$name is empty or is not CycloneDX JSON with components: $sbom (FR-020)."
   fi
   printf 'E27: SBOM of %s for %s: %s, %s bytes\n' "$built_host/$name" "$platform" "$sbom" "$(wc -c <"$sbom" | tr -d ' ')"
+  if [ "$name" = front ]; then
+    front_context="$(app_constant FRONT_CONTEXT)"
+    scan_lock "$front_context/package-lock.json" front
+  fi
 done
 
 printf '{"scan_today": "%s", "scan_platform": "%s"}\n' "$(date -u +%Y-%m-%d)" "$platform" >"$work/run.json"

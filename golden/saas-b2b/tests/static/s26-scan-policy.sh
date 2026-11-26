@@ -30,6 +30,12 @@
 #   the tag it made, and fails when the build, the report, the SBOM or the
 #   variant of the platform is missing, or when no built image is in the
 #   inventory;
+# - the lock file of the front (decision of the DSI, 2026-11-26): react and
+#   react-dom are compiled into dist/, so neither the SBOM nor the scan of the
+#   image sees them. The scan runs trivy fs on package-lock.json, with the
+#   options of the images, offline and without configuration, under the class
+#   blocking, and keeps its CycloneDX SBOM; a HIGH finding, a report without
+#   Results or an empty SBOM fails it;
 # - the platform of the run: linux/amd64 or linux/arm64, nothing else, and
 #   each of the two is scanned by a job of its own, the arm64 one on an arm64
 #   runner that builds natively;
@@ -415,6 +421,38 @@ if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'the SBOM of saas-
   printf '%s\n' "$out"
 fi
 
+# The lock file of the front (decision of the DSI, 2026-11-26): react and
+# react-dom are compiled into dist/, so only trivy fs on package-lock.json
+# sees them. A HIGH finding there blocks like one in an image, a report
+# without Results fails, and so does an empty SBOM.
+fs_mode=high
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'saas-b2b.invalid/front/package-lock.json: CVE-2099-1001 (HIGH)' ||
+  ! printf '%s\n' "$out" | grep -q -F 'class blocking'; then
+  report "$scan does not fail, naming the lock file and the vulnerability, when package-lock.json of the front carries a HIGH finding:"
+  printf '%s\n' "$out"
+fi
+
+fs_mode=empty
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'the report of the lock file holds no Results'; then
+  report "$scan does not fail on a report of the lock file that holds no Results:"
+  printf '%s\n' "$out"
+fi
+
+fs_mode=sbom-empty
+run_scan ok lite
+if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'the SBOM of saas-b2b.invalid/front/package-lock.json'; then
+  report "$scan does not fail, naming the lock file, when its SBOM is empty (FR-020):"
+  printf '%s\n' "$out"
+fi
+for arch in amd64 arm64; do
+  case "$arch" in amd64) run_scan ok lite ;; *) run_scan ok --platform linux/arm64 lite ;; esac
+  if [ ! -s "$work/sbom/front-lock-$arch.cdx.json" ]; then
+    report "$scan keeps no SBOM of the lock file of the front at $work/sbom/front-lock-$arch.cdx.json."
+  fi
+done
+
 docker_mode=build-fails
 run_scan ok lite
 if [ "$status" -eq 0 ] || ! printf '%s\n' "$out" | grep -q -F 'saas-b2b.invalid/api was not built' ||
@@ -480,23 +518,27 @@ if [ "$in_celian" -eq 1 ]; then
       if (/--sbom-dir/) sbom[job] = 1
       if (/actions\/upload-artifact@/) upload[job] = 1
       if (/if-no-files-found:[ \t]*error/) strict[job] = 1
+      if (/retention-days:[ \t]*90([ \t]|$)/) keep[job] = 1
       if (/--platform linux\/arm64/) arm[job] = 1
       if (/runs-on:.*-arm/) armrunner[job] = 1
     }
-    END { for (j in scan) print name[j] "|" (sbom[j] + 0) "|" (upload[j] + 0) "|" (strict[j] + 0) "|" (arm[j] + 0) "|" (armrunner[j] + 0) }
+    END { for (j in scan) print name[j] "|" (sbom[j] + 0) "|" (upload[j] + 0) "|" (strict[j] + 0) "|" (arm[j] + 0) "|" (armrunner[j] + 0) "|" (keep[j] + 0) }
   ' "$celian_root/.github/workflows/golden-saas-b2b.yml" | LC_ALL=C sort)"
   if [ -z "$jobs_of_scan" ]; then
     report "$celian_root/.github/workflows/golden-saas-b2b.yml: no job runs the scan of tests/scan/ (T117)."
   fi
   arm_jobs=0
   amd_jobs=0
-  while IFS='|' read -r name sbom_dir upload strict arm armrunner; do
+  while IFS='|' read -r name sbom_dir upload strict arm armrunner keep; do
     [ -n "$name" ] || continue
     if ! grep -q -F "\"context\": \"$name\"" "$ruleset"; then
       report "$ruleset: the job $name of the scan is not a required check of main (FR-022)."
     fi
     if [ "$sbom_dir" != 1 ] || [ "$upload" != 1 ] || [ "$strict" != 1 ]; then
       report "the job $name of the scan does not keep its SBOM as an artifact of the run: it passes --sbom-dir to the scan, then an actions/upload-artifact step with if-no-files-found: error keeps that directory (FR-020)."
+    fi
+    if [ "$keep" != 1 ]; then
+      report "the job $name of the scan does not write retention-days: 90 on its upload-artifact step: the SBOM is kept for the time that the repository settings say, and the 90 days of the decision of the DSI (2026-11-26) are the maximum of a public repository."
     fi
     if [ "$arm" = 1 ]; then
       arm_jobs=$((arm_jobs + 1))
@@ -699,6 +741,10 @@ copy_scan_tree() {
   cp -R k8s policy security tests "$dir/"
   cp -R local "$dir/"
   rm -rf "${dir:?}/local/tests"
+  # The scan reads the lock file of the front (react and react-dom are compiled
+  # into dist/); the Dockerfiles it builds from stay out of the copy.
+  mkdir -p "$dir/src/front"
+  cp src/front/package-lock.json "$dir/src/front/"
 }
 
 write_classes() {
