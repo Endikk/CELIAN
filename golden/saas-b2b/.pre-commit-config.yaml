@@ -11,15 +11,17 @@ repos:
     rev: 3e8a8703264a2f4a69428a0aa4dcb512790b2c8c  # frozen: v6.0.0
     hooks:
       # local/vendor/ holds third-party manifests byte for byte, each pinned
-      # by local/vendor/SHA256SUMS: a fix would break its sum (S02).
+      # by local/vendor/SHA256SUMS: a fix would break its sum (S02). The JSON
+      # schemas of tests/schemas/ are third-party bytes too, pinned by their
+      # SHA256SUMS (S08), one of them above 500 kB.
       - id: trailing-whitespace
         args: [--markdown-linebreak-ext=md]
-        exclude: ^local/vendor/
+        exclude: ^(local/vendor|tests/schemas)/
       - id: end-of-file-fixer
-        exclude: ^local/vendor/
+        exclude: ^(local/vendor|tests/schemas)/
       - id: mixed-line-ending
         args: [--fix=lf]
-        exclude: ^local/vendor/
+        exclude: ^(local/vendor|tests/schemas)/
       # Kubernetes manifests keep several documents per file (research RS-17).
       - id: check-yaml
         args: [--allow-multiple-documents]
@@ -29,7 +31,7 @@ repos:
       # The CRDs of Envoy Gateway, rendered from their chart, weigh 2.8 MB.
       - id: check-added-large-files
         args: [--maxkb=500]
-        exclude: ^local/vendor/
+        exclude: ^(local/vendor|tests/schemas)/
       - id: detect-private-key
 
   # Secret detection on staged changes. CI also scans the full history.
@@ -88,4 +90,4 @@ repos:
         types: [text]
         # Third-party bytes, pinned by SHA256SUMS: a CRD description of Envoy
         # Gateway 1.10.0 holds the character.
-        exclude: ^local/vendor/
+        exclude: ^(local/vendor|tests/schemas)/

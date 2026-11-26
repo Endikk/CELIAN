@@ -65,6 +65,16 @@ resource "google_sql_database_instance" "main" {
       ipv4_enabled    = false
       private_network = google_compute_network.main.id
       ssl_mode        = "ENCRYPTED_ONLY"
+
+      # The CA of this instance alone, written out although it is the
+      # default (Google, authorize-ssl page, read on 2026-11-26: the mode
+      # "GOOGLE_MANAGED_INTERNAL_CA" is the per-instance hierarchy, the
+      # default when nothing is written). With it "Verifying the CA verifies
+      # the server identity", which is what VerifyCA does in app-config; the
+      # shared CA of a region would also need the hostname checked, and a
+      # private IP instance has no hostname in its certificate. Checked by
+      # S15 (gcp/policy/tofu_sql_tls.rego). Tasks.md, gap 142.
+      server_ca_mode = "GOOGLE_MANAGED_INTERNAL_CA"
     }
 
     backup_configuration {

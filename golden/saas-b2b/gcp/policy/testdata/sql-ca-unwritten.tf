@@ -20,5 +20,6 @@ output "database_private_ip" {
 }
 
 output "database_server_ca_cert" {
-  value = google_sql_database_instance.main.server_ca_cert[0].cert
+  value     = google_sql_database_instance.main.server_ca_cert[0].cert
+  sensitive = true
 }

@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Installs the tools of `task check` into a directory: Task, conftest,
+# Installs the tools of `task check` into a directory: Task, conftest, kubeconform,
 # OpenTofu and Trivy, from their GitHub releases. Each archive is checked
 # against the SHA-256 written in SHA256SUMS, next to this script, before it is
 # opened. No third-party GitHub Action is involved (spec 001, T011), and never
 # the actions of Trivy (S26).
 #
-# Usage: tests/tools/install.sh <directory> [task|conftest|tofu|trivy|kind|kubectl ...]
-# Without a tool name, the first four are installed. A job that needs fewer
+# Usage: tests/tools/install.sh <directory> [task|conftest|kubeconform|tofu|trivy|kind|kubectl ...]
+# Without a tool name, the first five are installed. A job that needs fewer
 # names them, so that it downloads and runs nothing else. kind and kubectl are
 # for the CI only (spec 001, tasks.md, gaps 26 and 40): they install on request,
 # on Linux amd64, the runner, and never by default.
@@ -19,7 +19,8 @@
 # of the kind release, kubectl.sha256 of dl.k8s.io), read on 2026-11-26.
 #
 # Versions and sums: research RS-09 (Task) and RS-18 (conftest), read on
-# 2026-11-23, RS-16 (OpenTofu) and RS-22 (Trivy), read on 2026-11-25, from
+# 2026-11-23, RS-16 (OpenTofu) and RS-22 (Trivy), read on 2026-11-25, and RS-18
+# (kubeconform), read on 2026-11-26, from
 # the checksum files that each release publishes. A new version changes the
 # constant below and its lines in SHA256SUMS together. For Trivy, [SECU]
 # first checks the sigstore signature of the checksum file with cosign
@@ -39,6 +40,8 @@ set -euo pipefail
 TASK_VERSION="3.54.0"
 # renovate: datasource=github-releases depName=open-policy-agent/conftest
 CONFTEST_VERSION="0.71.1"
+# renovate: datasource=github-releases depName=yannh/kubeconform
+KUBECONFORM_VERSION="0.8.0"
 # renovate: datasource=github-releases depName=opentofu/opentofu
 TOFU_VERSION="1.13.9"
 # renovate: datasource=github-releases depName=aquasecurity/trivy
@@ -55,17 +58,17 @@ die() {
   exit 1
 }
 
-[ "$#" -ge 1 ] || die "usage: tests/tools/install.sh <directory> [task|conftest|tofu|trivy|kind|kubectl ...]"
+[ "$#" -ge 1 ] || die "usage: tests/tools/install.sh <directory> [task|conftest|kubeconform|tofu|trivy|kind|kubectl ...]"
 dest="$1"
 shift
 tools=" $* "
 if [ "$#" -eq 0 ]; then
-  tools=" task conftest tofu trivy "
+  tools=" task conftest kubeconform tofu trivy "
 fi
 for name in "$@"; do
   case "$name" in
-    task | conftest | tofu | trivy | kind | kubectl) ;;
-    *) die "unknown tool $name: task, conftest, tofu, trivy, kind or kubectl." ;;
+    task | conftest | kubeconform | tofu | trivy | kind | kubectl) ;;
+    *) die "unknown tool $name: task, conftest, kubeconform, tofu, trivy, kind or kubectl." ;;
   esac
 done
 
@@ -183,6 +186,8 @@ install_binary \
   "open-policy-agent/conftest/v$CONFTEST_VERSION/conftest_${CONFTEST_VERSION}_${conftest_os}_${conftest_arch}.tar.gz" \
   conftest
 
+install_binary "yannh/kubeconform/v$KUBECONFORM_VERSION/kubeconform-${os}-${arch}.tar.gz" kubeconform
+
 install_binary "opentofu/opentofu/v$TOFU_VERSION/tofu_${TOFU_VERSION}_${os}_${arch}.tar.gz" tofu
 
 case "$os" in
@@ -199,6 +204,7 @@ install_binary \
 
 if wanted task; then "$dest/task" --version; fi
 if wanted conftest; then "$dest/conftest" --version; fi
+if wanted kubeconform; then "$dest/kubeconform" -v; fi
 if wanted tofu; then "$dest/tofu" version; fi
 if wanted trivy; then "$dest/trivy" --version; fi
 if wanted kind; then "$dest/kind" version; fi

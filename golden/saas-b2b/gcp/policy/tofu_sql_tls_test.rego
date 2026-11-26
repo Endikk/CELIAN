@@ -9,7 +9,7 @@ valid := {
 	}]}]}]}},
 	"output": {
 		"database_private_ip": [{"value": "${google_sql_database_instance.main.private_ip_address}"}],
-		"database_server_ca_cert": [{"value": "${google_sql_database_instance.main.server_ca_cert[0].cert}"}],
+		"database_server_ca_cert": [{"value": "${google_sql_database_instance.main.server_ca_cert[0].cert}", "sensitive": true}],
 	},
 }
 
@@ -63,4 +63,12 @@ test_s15_rejects_a_missing_ca_output if {
 test_s15_rejects_an_output_that_reads_something_else if {
 	ops := [{"op": "replace", "path": "/output/database_private_ip/0/value", "value": "10.0.0.1"}]
 	denied_with(patched(ops), "no output database_private_ip that reads")
+}
+
+test_s15_rejects_a_ca_output_without_the_sensitive_flag if {
+	denied_with(patched([{"op": "remove", "path": "/output/database_server_ca_cert/0/sensitive"}]), "not sensitive = true")
+}
+
+test_s15_rejects_a_ca_output_that_is_not_sensitive if {
+	denied_with(patched([{"op": "replace", "path": "/output/database_server_ca_cert/0/sensitive", "value": false}]), "not sensitive = true")
 }

@@ -1,0 +1,41 @@
+# The component of the gcp target (contracts/layers.md, "Composition
+# Kustomize"; research RS-01 and RS-16): what the gcp layer adds to an overlay
+# of the common layer. The composition gcp/k8s/prod/ puts it on k8s/overlays/
+# prod, and Config Sync renders that folder.
+#
+# - The class of the Gateway: the one object of the common layer that it
+#   changes, and only spec.gatewayClassName (S07). gke-l7-global-external-
+#   managed, the global external Application Load Balancer: the page of GKE on
+#   the capabilities of the GatewayClasses lists it with HTTP and HTTPS
+#   listeners, certificateRefs, allowedRoutes and the path types of the common
+#   routes (research RS-16, read on 2026-11-26). It is the class of BENCH-004
+#   and it needs no subnet of its own, which the network of gcp/tofu/ lacks.
+#   The load balancer it creates is billed and lives outside the state of
+#   OpenTofu: the Gateway is deleted before `tofu destroy` (ADR-005, reserve 1
+#   of [FINOPS]; R-15).
+# - The values that the user writes after the apply, in ../values/: app-config,
+#   app-ca and the SecretProviderClass of db-auth.
+# - The producer of db-auth: a ServiceAccount and a SecretSync. cache-auth and
+#   gateway-tls have none yet (S07 lists them as pending, tasks.md, gaps 146
+#   and 87 of main).
+# - The admission rule that refuses a pod without requests (S16).
+#
+# No Secret is here: the sync of GKE creates db-auth from Secret Manager, and
+# no value of it passes through the repository (S03).
+apiVersion: kustomize.config.k8s.io/v1alpha1
+kind: Component
+resources:
+  - ../values
+  - service-account.yaml
+  - secret-sync.yaml
+  - admission.yaml
+patches:
+  - target:
+      group: gateway.networking.k8s.io
+      version: v1
+      kind: Gateway
+      name: saas-b2b
+    patch: |-
+      - op: replace
+        path: /spec/gatewayClassName
+        value: gke-l7-global-external-managed

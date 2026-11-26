@@ -66,6 +66,21 @@ deny contains msg if {
 	msg := sprintf("%s: no output %s that reads %s: the user copies it into the manifests of gcp/k8s/values/ after the apply", [label, name, expression])
 }
 
+# The provider marks server_ca_cert sensitive (schema of
+# google_sql_database_instance at v8.12.0, Sensitive: true, read on
+# 2026-11-26), and OpenTofu refuses, at plan time, an output that reads a
+# sensitive value without the flag. No check here runs a plan, so the flag
+# is asked for. The certificate is public: the flag only keeps it out of the
+# listing of `tofu output`, and `tofu output -raw database_server_ca_cert`
+# still prints it.
+deny contains msg if {
+	count(blocks_of("google_sql_database_instance")) > 0
+	some file in tf_files
+	some body in object.get(file.contents, "output", {})["database_server_ca_cert"]
+	not body.sensitive == true
+	msg := sprintf("%s: output database_server_ca_cert is not sensitive = true: the provider marks server_ca_cert sensitive, and a plan refuses the output without the flag", [label])
+}
+
 output_reads(name, expression) if {
 	some out in outputs
 	out.name == name

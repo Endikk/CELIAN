@@ -1,0 +1,17 @@
+Schemas read by S08 (tests/static/s08-schemas.sh). Third-party files, pinned by
+SHA256SUMS, rewritten only by tests/schemas/regenerate.sh.
+
+kubernetes/
+  Files of https://github.com/yannh/kubernetes-json-schema, directory
+  v1.36.7-standalone-strict, at commit e62c03bd5a52fd34ff6ac28d083e2a300e0ae7c1,
+  copied byte for byte. Apache License 2.0, notice in kubernetes/LICENSE (same
+  commit), Copyright (C) 2017 Gareth Rushgrove and Yann Hamon. Read on 2026-11-26.
+
+gateway-api/
+  The openAPIV3Schema of the v1 version of the CRDs Gateway, GatewayClass and
+  HTTPRoute, in standard-install.yaml of release v1.5.0 of
+  https://github.com/kubernetes-sigs/gateway-api (SHA-256
+  510338cf6709f84410efcce5269268f4c7c5067efdc5d04c75aa2fd2f8380c96), the version of
+  Gateway API that GKE serves from 1.35.2-gke.1842000. Apache License 2.0. The
+  only change: every object that lists properties gets additionalProperties: false
+  (regenerate.sh says why). Read on 2026-11-26.

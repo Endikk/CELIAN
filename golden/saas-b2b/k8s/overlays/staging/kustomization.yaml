@@ -1,0 +1,10 @@
+# The staging environment, neutral towards the tool and the provider
+# (contracts/layers.md; ADR-010, condition 1): its settings join here when an
+# environment needs its own. No target layer composes it at the MVP, which
+# deploys one environment (ADR-010, Q6); it is rendered and checked all the
+# same (S06, S08), so that a second environment is a change of settings and not
+# of structure.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base

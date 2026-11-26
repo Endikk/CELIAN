@@ -1,0 +1,65 @@
+# The rights of the reconciler of the RootSync (ADR-010, condition 3; S10).
+# Without spec.override.roleRefs Config Sync binds the reconciler to
+# cluster-admin (type RootSyncOverrideSpec, GoogleContainerTools/
+# kpt-config-sync at v1.25.2, read on 2026-11-26). With it, the reconciler gets
+# these two roles and nothing else of the application:
+#
+# - saas-b2b-sync, a Role bound in the namespace of the application: the kinds
+#   that the render of gcp/k8s/prod holds, no wildcard, no Secret (the sync of
+#   GKE creates db-auth, not Config Sync), no RBAC object, no escalate. A
+#   second environment gets its own Role and its own namespace, and cannot
+#   write here.
+# - saas-b2b-sync-cluster, a ClusterRole bound for the whole cluster, because
+#   two kinds of the render are not in a namespace: the Namespace itself and
+#   the admission policy and its binding (S16). It reads these three kinds,
+#   changes the Namespace and the two objects by name, and creates policies
+#   and bindings: the create verb has no resource name in RBAC, so it cannot
+#   be narrowed, and a repository that the reconciler obeys could add a
+#   policy that refuses pods elsewhere. That is the price of keeping the rule
+#   of S16 in the layer (tasks.md, gap 145; [SECU] reads it). It never creates
+#   a namespace: the user applies namespace.yaml first.
+#
+# Which verbs and kinds the reconciler needs to sync this render is read in
+# the rules of Config Sync, not guessed: E16 on kind (T132) shows what it
+# lacks, and the first test on GKE with it. S10 holds the shape: nothing wider.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: saas-b2b-sync
+  namespace: saas-b2b
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps", "serviceaccounts", "services"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways", "httproutes"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["secrets-store.csi.x-k8s.io"]
+    resources: ["secretproviderclasses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["secret-sync.gke.io"]
+    resources: ["secretsyncs"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: saas-b2b-sync-cluster
+rules:
+  - apiGroups: ["", "admissionregistration.k8s.io"]
+    resources: ["namespaces", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    resourceNames: ["saas-b2b"]
+    verbs: ["update", "patch"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+    resourceNames: ["saas-b2b-require-requests"]
+    verbs: ["update", "patch", "delete"]
+  - apiGroups: ["admissionregistration.k8s.io"]
+    resources: ["validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+    verbs: ["create"]

@@ -1,0 +1,49 @@
+# The RootSync of the production environment (ADR-010; S10). One for the
+# project, since the MVP deploys one environment (ADR-010, Q6; [FINOPS],
+# reserve 1: each RootSync is a reconciler that Autopilot bills).
+#
+# - sourceFormat unstructured: without it the format is hierarchy, which
+#   refuses a Kustomize render.
+# - git.dir is the composition that Config Sync renders, gcp/k8s/prod. S10 checks
+#   that it exists and is a Kustomization.
+# - git.auth ssh, with a deploy key that reads this repository alone and the
+#   known_hosts of the Git host in the Secret git-creds, which the user creates
+#   and the repository never holds. Never the token of scope repo that the
+#   documentation of Google gives, never the token of gh, never a personal
+#   token (ADR-010, condition 4; R-07): S10 refuses auth token and cookiefile.
+#   An OCI source in Artifact Registry read by Workload Identity would need no
+#   secret at all, and stays an option for phase 3 (ADR-010, question 2).
+# - git.repo is a placeholder for the repository of the project; branch main is
+#   the protected branch (Q3).
+# - override.roleRefs binds the reconciler to the two roles of rbac.yaml and to
+#   no cluster-admin.
+# - monitoring.enabled false: no otel-agent sidecar, no export of the metrics to
+#   Cloud Monitoring (ADR-010, condition 7 and reserve 2 of [FINOPS]). The page
+#   of Google says the field is not supported on the root-sync that the console,
+#   gcloud or Terraform create, and works on a RootSync of its own.
+#
+# Fields: page "RootSync and RepoSync fields" of Google and the types of
+# GoogleContainerTools/kpt-config-sync at v1.25.2, read on 2026-11-26.
+apiVersion: configsync.gke.io/v1beta1
+kind: RootSync
+metadata:
+  name: root-sync
+  namespace: config-management-system
+spec:
+  sourceFormat: unstructured
+  git:
+    repo: ssh://git@github.com/OWNER/REPO.git
+    branch: main
+    dir: gcp/k8s/prod
+    auth: ssh
+    secretRef:
+      name: git-creds
+  override:
+    roleRefs:
+      - kind: Role
+        name: saas-b2b-sync
+        namespace: saas-b2b
+      - kind: ClusterRole
+        name: saas-b2b-sync-cluster
+  monitoring:
+    enabled: false

@@ -1,0 +1,11 @@
+# The namespace of the application, the same as k8s/base/namespace.yaml (S07
+# compares the two): the Role of the reconciler needs its namespace to exist
+# before Config Sync reads anything, and Config Sync takes the namespace of the
+# common layer over once it syncs. Pod Security Admission enforces the
+# restricted profile on every pod of it.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: saas-b2b
+  labels:
+    pod-security.kubernetes.io/enforce: restricted
