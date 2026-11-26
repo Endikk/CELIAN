@@ -447,7 +447,8 @@ test_u03_refuses_a_built_image_scanned_for_another_platform if {
 }
 
 test_u03_refuses_a_report_that_names_no_platform if {
-	report := {"path": "reports/1.json", "contents": object.union(example_report(built_api, []).contents, {"Metadata": {"OS": {"Family": "debian", "Name": "13.7"}}})}
+	contents := object.remove(example_report(built_api, []).contents, ["Metadata"])
+	report := {"path": "reports/1.json", "contents": object.union(contents, {"Metadata": {"OS": {"Family": "debian", "Name": "13.7"}}})}
 	denied_with([report, example_exceptions([])], "saas-b2b.invalid/api: scanned for no platform, linux/arm64 expected")
 }
 

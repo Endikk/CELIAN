@@ -7,9 +7,11 @@
 # - the tests of policy package scan_decision (policy/scan_decision_test.rego);
 # - each case of tests/scan-reports/cases/: its report.json and its
 #   exceptions.yaml go through the same conftest command as the scan
-#   (tests/scan/scan-images.sh), with the policy and the date of
-#   tests/scan-reports/. Its expect file gives "pass" or "deny" on the first
-#   line, then one text per line that the output must hold.
+#   (tests/scan/scan-images.sh), with the policy, the date and the platform of
+#   tests/scan-reports/ (linux/arm64). Its expect file gives "pass" or "deny"
+#   on the first line, then one text per line that the output must hold. They
+#   include the cases of the second PR of step 18: a report that holds neither
+#   Results nor Metadata.OS, and a report of the amd64 variant in an arm64 run.
 # Called by `task test` and by the job unit of
 # .github/workflows/golden-saas-b2b.yml.
 set -euo pipefail

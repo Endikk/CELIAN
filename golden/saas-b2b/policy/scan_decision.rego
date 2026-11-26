@@ -21,9 +21,20 @@
 # Input: the files given to `conftest test --combine`, a list of objects with
 # a `path` and the parsed `contents`: the reports of Trivy 0.76.2 (schema 2,
 # research RS-23) and the exception files. Data: data.scan_policy
-# (severity_threshold, max_exception_days) and data.scan_today (YYYY-MM-DD).
+# (severity_threshold, max_exception_days), data.scan_today (YYYY-MM-DD) and
+# data.scan_platform (os/architecture, as linux/arm64: the variant that this
+# run of the scan is for, the CI scanning each of the two in a job of its own).
 #
 # Rules:
+# - a report of an image that does not carry the class reported (blocking and
+#   unclassified images) must say something of the image and be of the
+#   platform of the run. A report with neither Results nor Metadata.OS says
+#   nothing: the policy would count no finding and pass, as for an image that
+#   Trivy could not read (tasks.md, gap 65). A report whose
+#   Metadata.ImageConfig names another os/architecture than data.scan_platform,
+#   or none, is of another variant: the arm64 scan cannot pass on an amd64
+#   report. The reported images are not judged on this: nothing of what they
+#   carry blocks;
 # - levels in the order of Trivy: UNKNOWN, LOW, MEDIUM, HIGH, CRITICAL. A
 #   finding at or above the threshold blocks; UNKNOWN never blocks and is
 #   listed (research RS-23, to be confirmed by [SECU]); a missing severity
@@ -172,6 +183,66 @@ deny contains msg if {
 deny contains msg if {
 	count(reports) == 0
 	msg := sprintf("%s: no Trivy report among the checked files", [label])
+}
+
+# The platform of the run, as os/architecture.
+platform := data.scan_platform if {
+	is_string(data.scan_platform)
+	regex.match(`^[a-z0-9]+/[a-z0-9]+$`, data.scan_platform)
+}
+
+deny contains msg if {
+	not platform
+	msg := sprintf("%s: no platform of the run (data.scan_platform), as os/architecture such as linux/arm64", [label])
+}
+
+# The reports that are judged on their content and their platform.
+judged_reports contains file if {
+	some file in reports
+	class(repository(file.contents.ArtifactName)) != "reported"
+}
+
+has_results(contents) if {
+	count(object.get(contents, "Results", [])) > 0
+}
+
+has_os(contents) if {
+	os := object.get(contents, ["Metadata", "OS"], null)
+	is_object(os)
+	count(os) > 0
+}
+
+deny contains msg if {
+	some file in judged_reports
+	not has_results(file.contents)
+	not has_os(file.contents)
+	image := repository(file.contents.ArtifactName)
+	msg := sprintf("%s: %s: %s: the report holds no Results and no Metadata.OS: it says nothing of the image, and the image is %s", [
+		label, file.path, image, class_text(class(image)),
+	])
+}
+
+# The os/architecture of the image that a report describes, from the
+# configuration of the image that Trivy copies into Metadata.ImageConfig.
+scanned_platform(contents) := concat("/", [os, architecture]) if {
+	config := object.get(contents, ["Metadata", "ImageConfig"], {})
+	os := object.get(config, "os", "")
+	architecture := object.get(config, "architecture", "")
+	is_string(os)
+	is_string(architecture)
+	os != ""
+	architecture != ""
+} else := "no platform"
+
+deny contains msg if {
+	platform
+	some file in judged_reports
+	scanned := scanned_platform(file.contents)
+	scanned != platform
+	image := repository(file.contents.ArtifactName)
+	msg := sprintf("%s: %s: scanned for %s, %s expected: the report is not of the variant that this run is for (%s)", [
+		label, image, scanned, platform, file.path,
+	])
 }
 
 deny contains msg if {

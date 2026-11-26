@@ -58,6 +58,9 @@
             "context": "scan-images"
           },
           {
+            "context": "scan-images-arm64"
+          },
+          {
             "context": "envoy-render"
           }
         ]

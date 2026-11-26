@@ -20,7 +20,10 @@
 # Outside the inventory: `task test` builds the test stages of the API and
 # front images with `docker build`, keeping the build cache and no image
 # (tests/unit/u01-api.sh, tests/unit/u02-front.sh).
-# Outside the inventory: `task test` builds the test stages of the API and
+# Outside the inventory: the job scan-images of the CI builds the runtime
+# stage of the API and front images with `docker build`, under the tag
+# saas-b2b.invalid/<name>:scan, and removes that tag alone with `docker rmi`
+# (tests/scan/scan-images.sh; S26 reads its calls through a fake docker).
 version: '3'
 
 includes:
