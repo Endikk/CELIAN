@@ -396,9 +396,11 @@ lu le 15/11/2026).
 
 La protection contre la suppression, active par défaut sur Cloud SQL et GKE
 dans les trois socles de BENCH-008 (2026-11-19), fait échouer `tofu destroy`.
-Le démontage se fait donc en deux temps : un apply qui lève la protection,
-lancé par l'utilisateur, puis le destroy. Sinon le cluster et l'instance
-restent et facturent.
+Memorystore la porte aussi : le golden repo écrit
+`deletion_protection_enabled = true` sur l'instance (étape 20, ADR-008,
+condition 10). Le démontage se fait donc en deux temps : un apply qui lève les
+protections, lancé par l'utilisateur, puis le destroy. Sinon le cluster et les
+instances restent et facturent.
 
 Mitigation : une procédure de démontage écrite (supprimer les Gateways et les
 PVC, lever la protection contre la suppression par un apply, puis

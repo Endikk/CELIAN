@@ -275,10 +275,12 @@ deny contains msg if {
 	msg := sprintf("%s: %s: the instance has a public IP (settings.ip_configuration.ipv4_enabled = false)", [label(6), where(instance)])
 }
 
+# ADR-015 replaces the Memorystore for Redis of BENCH-008 with Memorystore for
+# Valkey: mode, node type, replicas, authorization, encryption, persistence and
+# eviction are written and checked by tofu_memorystore.rego.
 deny contains msg if {
 	some cache in blocks_of("google_redis_instance")
-	object.get(cache.body, "tier", "") == ""
-	msg := sprintf("%s: %s: the tier of Memorystore is not written out", [label(6), where(cache)])
+	msg := sprintf("%s: %s: Memorystore for Redis is not the cache of the layer (ADR-015); write google_memorystore_instance", [label(6), where(cache)])
 }
 
 # Condition 8: a module is a local path, or a Git source at a full SHA

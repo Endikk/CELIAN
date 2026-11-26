@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # control: S15
-# carries: FR-011, FR-012; ADR-008, conditions 1 to 6 and 8, question 1; ADR-007, condition 2; ADR-010; R-32; R-05, R-17, R-18; research RS-16 (registry of the providers)
+# carries: FR-011, FR-012; ADR-008, conditions 1 to 6 and 8, question 1; ADR-007, condition 2; ADR-010; ADR-015, conditions 7, 13, 15, 16 and 18; R-32; R-05, R-17, R-18; research RS-16 (registry of the providers)
 #
 # Two parts, both on the HCL of the two roots, gcp/tofu/ and the budget root
 # gcp/budget/ (T110), without any credential:
@@ -31,7 +31,7 @@ part="${1:-both}"
 dir="gcp/tofu"
 budget_dir="gcp/budget"
 policies="gcp/policy"
-packages="tofu_adr008 tofu_secret_sync tofu_config_sync tofu_finops"
+packages="tofu_adr008 tofu_secret_sync tofu_config_sync tofu_finops tofu_memorystore"
 # Run on the two roots together, so it is not in the list above.
 budget_package="tofu_budget"
 # Run on each root alone, the budget root included: the registry of the

@@ -118,6 +118,8 @@ labelled := {
 	"google_container_cluster": "resource_labels",
 	"google_artifact_registry_repository": "labels",
 	"google_secret_manager_secret": "labels",
+	"google_memorystore_instance": "labels",
+	"google_network_connectivity_service_connection_policy": "labels",
 }
 
 deny contains msg if {

@@ -189,6 +189,10 @@ Lucas a délégué au DSI les choix à faire pendant son absence. Le DSI a pris 
 9. Choix d'[ARCHI] confirmés par le DSI : éviction `allkeys-lru` sur les deux cibles, posée sur `gcp` par `engine_configs` plutôt que le défaut `volatile-lru` de Google (condition 15) ; persistance coupée sur `gcp` aussi, sans sauvegarde automatique (condition 13) ; la brique s'appelle `cache` dans la spec abstraite, de valeur `redis` comme le disent le README du catalogue et BENCH-014, le nom du fichier du catalogue se fixant en phase 3.
 10. Le producteur de `cache-auth` sur `gcp` dépend d'une ressource du provider sans date de publication : risque R-41 ouvert au registre.
 
+### Complément du 2026-11-26
+
+Ajouté par la PR de la première partie de l'étape 20, sans réécrire le texte ci-dessus. La condition 7 demande une politique de connexion de service limitée au sous-réseau de GKE « sur les seuls ports du mode sans cluster ». Cela ne s'exprime pas : la ressource `google_network_connectivity_service_connection_policy` n'a aucun argument de port. La page sur le réseau de Memorystore for Valkey, lue par [SECU] le 2026-11-26, donne 6379 pour la connexion initiale et 11000 à 13047 pour les nœuds, sans distinguer les modes. Le contrôle repose donc sur le jeton, sur TLS et sur le sous-réseau unique de la politique, que S15 vérifie. Une règle de sortie du VPC, facultative, se décide après lecture de la page à la GATE 2. Sur `gcp`, tout pod du cluster peut atteindre le cache : cela se traite à l'étape 14 (écart 84 de `tasks.md`, RS-11).
+
 ## Conformité à la constitution
 
 Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en version 1.2.0.

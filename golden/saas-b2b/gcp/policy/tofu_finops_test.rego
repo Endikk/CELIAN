@@ -37,6 +37,8 @@ valid := {
 		"google_container_cluster": {"main": [{"resource_labels": "${local.labels}"}]},
 		"google_artifact_registry_repository": {"images": [{"labels": "${local.labels}"}]},
 		"google_secret_manager_secret": {"db_auth": [{"labels": "${local.labels}"}]},
+		"google_memorystore_instance": {"cache": [{"labels": "${local.labels}"}]},
+		"google_network_connectivity_service_connection_policy": {"cache": [{"labels": "${local.labels}"}]},
 		"google_compute_subnetwork": {"main": [{"log_config": [{
 			"aggregation_interval": "INTERVAL_15_MIN",
 			"flow_sampling": 0.1,
@@ -142,6 +144,14 @@ test_s15_rejects_a_registry_without_the_labels if {
 
 test_s15_rejects_a_secret_without_the_labels if {
 	denied_with(patched(drop("/resource/google_secret_manager_secret/db_auth/0/labels")), "labels is not local.labels")
+}
+
+test_s15_rejects_a_cache_without_the_labels if {
+	denied_with(patched(drop("/resource/google_memorystore_instance/cache/0/labels")), "google_memorystore_instance.cache: labels is not local.labels")
+}
+
+test_s15_rejects_a_connection_policy_without_the_labels if {
+	denied_with(patched(swap("/resource/google_network_connectivity_service_connection_policy/cache/0/labels", {"app": "x"})), "service_connection_policy.cache: labels is not local.labels")
 }
 
 test_s15_rejects_a_database_without_the_labels if {
