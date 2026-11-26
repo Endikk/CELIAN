@@ -7,6 +7,10 @@ package scan_decision
 
 fixed_today := "2026-12-01"
 
+# The platform that the run is for (data.scan_platform): the example reports
+# are those of the arm64 variant.
+fixed_platform := "linux/arm64"
+
 fixed_policy := {
 	"severity_threshold": "HIGH",
 	"max_exception_days": 90,
@@ -26,12 +30,18 @@ example_vulnerability(id, severity) := {
 	"Severity": severity,
 }
 
+example_metadata(architecture) := {
+	"OS": {"Family": "debian", "Name": "13.7"},
+	"ImageConfig": {"architecture": architecture, "os": "linux"},
+}
+
 example_report(name, vulnerabilities) := {
 	"path": "reports/1.json",
 	"contents": {
 		"SchemaVersion": 2,
 		"ArtifactName": name,
 		"ArtifactType": "container_image",
+		"Metadata": example_metadata("arm64"),
 		"Results": [{
 			"Target": "docker.io/example/app:1.0 (debian 13.7)",
 			"Class": "os-pkgs",
@@ -57,12 +67,14 @@ denials(files) := msgs if {
 	msgs := data.scan_decision.deny with input as files
 		with data.scan_policy as fixed_policy
 		with data.scan_today as fixed_today
+		with data.scan_platform as fixed_platform
 }
 
 warnings(files) := msgs if {
 	msgs := data.scan_decision.warn with input as files
 		with data.scan_policy as fixed_policy
 		with data.scan_today as fixed_today
+		with data.scan_platform as fixed_platform
 }
 
 passes(files) if {
@@ -203,8 +215,13 @@ test_u03_passes_an_image_without_findings if {
 	passes([example_report(example_app, []), example_exceptions([])])
 }
 
-test_u03_passes_a_report_without_results if {
-	clean := {"path": "reports/1.json", "contents": {"SchemaVersion": 2, "ArtifactName": example_app, "ArtifactType": "container_image"}}
+test_u03_passes_a_report_without_results_when_it_names_the_os if {
+	clean := {"path": "reports/1.json", "contents": {
+		"SchemaVersion": 2,
+		"ArtifactName": example_app,
+		"ArtifactType": "container_image",
+		"Metadata": example_metadata("arm64"),
+	}}
 	passes([clean, example_exceptions([])])
 }
 
@@ -382,4 +399,85 @@ test_u03_keeps_the_summary_to_reported_images if {
 test_u03_a_reported_image_has_no_blocked_count if {
 	files := [example_report(local_tool, [example_vulnerability("CVE-2099-0001", "HIGH")]), example_exceptions([])]
 	not warned_with(files, "without a valid exception")
+}
+
+# Second PR of step 18, gap 65: a report that says nothing of the image does
+# not pass for an image that blocks. Trivy writes neither Results nor
+# Metadata.OS for an image it could not read, and the policy would count
+# nothing and pass.
+empty_report(name) := {"path": "reports/1.json", "contents": {
+	"SchemaVersion": 2,
+	"ArtifactName": name,
+	"ArtifactType": "container_image",
+	"Metadata": {"ImageConfig": {"architecture": "arm64", "os": "linux"}},
+}}
+
+test_u03_refuses_an_empty_report_of_a_built_image if {
+	files := [empty_report(built_api), example_exceptions([])]
+	denied_with(files, "saas-b2b.invalid/api")
+	denied_with(files, "the report holds no Results and no Metadata.OS")
+}
+
+test_u03_refuses_an_empty_report_of_an_unclassified_image if {
+	denied_with([empty_report(example_app), example_exceptions([])], "the report holds no Results and no Metadata.OS")
+}
+
+test_u03_refuses_a_report_with_an_empty_list_of_results_and_no_os if {
+	report := {"path": "reports/1.json", "contents": object.union(empty_report(built_api).contents, {"Results": []})}
+	denied_with([report, example_exceptions([])], "the report holds no Results and no Metadata.OS")
+}
+
+test_u03_passes_a_report_with_results_and_no_os if {
+	report := {"path": "reports/1.json", "contents": object.union(empty_report(built_api).contents, {"Results": [{"Target": "app/Api.deps.json", "Class": "lang-pkgs"}]})}
+	passes([report, example_exceptions([])])
+}
+
+test_u03_does_not_judge_the_content_of_the_report_of_a_reported_image if {
+	files := [empty_report(local_tool), example_exceptions([])]
+	passes(files)
+}
+
+# The platform of the run (data.scan_platform): the report of an image that
+# blocks must be of that variant, so that the arm64 scan cannot pass on an
+# amd64 report, nor the reverse.
+test_u03_refuses_a_built_image_scanned_for_another_platform if {
+	report := {"path": "reports/1.json", "contents": object.union(example_report(built_api, []).contents, {"Metadata": example_metadata("amd64")})}
+	files := [report, example_exceptions([])]
+	denied_with(files, "saas-b2b.invalid/api: scanned for linux/amd64, linux/arm64 expected")
+}
+
+test_u03_refuses_a_report_that_names_no_platform if {
+	report := {"path": "reports/1.json", "contents": object.union(example_report(built_api, []).contents, {"Metadata": {"OS": {"Family": "debian", "Name": "13.7"}}})}
+	denied_with([report, example_exceptions([])], "saas-b2b.invalid/api: scanned for no platform, linux/arm64 expected")
+}
+
+test_u03_accepts_the_amd64_report_in_a_run_for_amd64 if {
+	report := {"path": "reports/1.json", "contents": object.union(example_report(built_api, []).contents, {"Metadata": example_metadata("amd64")})}
+	msgs := data.scan_decision.deny with input as [report, example_exceptions([])]
+		with data.scan_policy as fixed_policy
+		with data.scan_today as fixed_today
+		with data.scan_platform as "linux/amd64"
+	count(msgs) == 0
+}
+
+test_u03_does_not_check_the_platform_of_a_reported_image if {
+	report := {"path": "reports/1.json", "contents": object.union(example_report(local_tool, []).contents, {"Metadata": example_metadata("amd64")})}
+	passes([report, example_exceptions([])])
+}
+
+test_u03_refuses_a_run_without_a_platform if {
+	msgs := data.scan_decision.deny with input as [example_report(built_api, []), example_exceptions([])]
+		with data.scan_policy as fixed_policy
+		with data.scan_today as fixed_today
+	some msg in msgs
+	contains(msg, "no platform of the run (data.scan_platform)")
+}
+
+test_u03_refuses_a_platform_that_is_not_os_slash_architecture if {
+	msgs := data.scan_decision.deny with input as [example_report(built_api, []), example_exceptions([])]
+		with data.scan_policy as fixed_policy
+		with data.scan_today as fixed_today
+		with data.scan_platform as "arm64"
+	some msg in msgs
+	contains(msg, "no platform of the run (data.scan_platform)")
 }

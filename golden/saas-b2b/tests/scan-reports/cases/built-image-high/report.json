@@ -12,7 +12,11 @@
       "Name": "13.7"
     },
     "ImageID": "sha256:2222222222222222222222222222222222222222222222222222222222222222",
-    "RepoDigests": []
+    "RepoDigests": [],
+    "ImageConfig": {
+      "architecture": "arm64",
+      "os": "linux"
+    }
   },
   "Results": [
     {
