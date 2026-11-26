@@ -41,7 +41,7 @@ La couche commune ne nomme aucun outil ni aucun fournisseur. Seule `local/` nomm
 
 ## Couche GCP
 
-`gcp/tofu/` décrit la cible GCP en OpenTofu : réseau privé, GKE Autopilot, Cloud SQL, Artifact Registry, Secret Manager, Config Sync et identité de la CI par fédération. Rien dans ce dépôt ne la déploie. `task gcp:validate`, `task gcp:policy` et `task gcp:scan` la vérifient sans identifiant cloud, et `task check` les lance aussi. Le premier déploiement attend l'accord de Lucas et un budget validé.
+`gcp/tofu/` décrit la cible GCP en OpenTofu : réseau privé, GKE Autopilot, Cloud SQL, Artifact Registry, Secret Manager, Config Sync et identité de la CI par fédération. Rien dans ce dépôt ne la déploie. `task gcp:validate`, `task gcp:policy` et `task gcp:scan` la vérifient sans identifiant cloud, et `task check` les lance aussi. `gcp/budget/` porte l'alerte budget dans une racine à part, appliquée à la main avant la principale ([README](gcp/budget/README.md)). Le premier déploiement attend l'accord de Lucas et un budget validé.
 
 ## Écarts entre les cibles
 

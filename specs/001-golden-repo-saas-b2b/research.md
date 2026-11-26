@@ -1408,6 +1408,71 @@ Pourquoi : l'exemple n'a pas d'utilisateur, et rien n'écoute hors de la boucle 
 
 Conséquence à suivre : brancher l'API sur le fournisseur d'identité ajoute du code au-delà de FR-009 (santé, exemple, front). L'ADR-013 demandera donc un amendement de la spec, ou une lecture de Q7 par [PO]. Jusque-là, Keycloak tourne sans être appelé par l'API (RS-15).
 
+## RS-26. Alerte budget GCP (T110)
+
+Décision du DSI du 2026-11-25 (ADR-008, question 1) : une racine OpenTofu séparée, `gcp/budget/`, appliquée à la main avant la racine principale, avec `roles/billing.costsManager` sur le compte de facturation, jamais par la CI, détruite en dernier. Écrit par [OPS] le 2026-11-26 ; [SECU] et [FINOPS] relisent (voir « Choix à relire »).
+
+Sources : la documentation du provider `hashicorp/google` au tag `v8.12.0` (commit `5d2ae61997230ec12262ca575657308dbcbfa70b`), lue par `gh api` ; les pages de Google et d'OpenTofu ci-dessous, lues par WebFetch, c'est-à-dire résumées par un petit modèle à partir de la page : les citations entre guillemets sont celles qu'il a rendues, et chaque point décisif se relit sur la page avant la GATE 2. Rien n'a contacté Google Cloud : aucun plan, aucun apply, aucun identifiant.
+
+### Attributs, d'après la page `google_billing_budget` en 8.12.0
+
+- `billing_account` et `amount` sont requis. L'identifiant du compte s'écrit nu : l'`id` de la ressource est `billingAccounts/{{billing_account}}/budgets/{{name}}`, donc `billing_account` n'a pas le préfixe `billingAccounts/`.
+- `amount.specified_amount` : `currency_code` (« If specified, it must match the currency of the billing account »), `units` (une chaîne, les unités entières), `nanos`. `amount.last_period_amount` suit 100 % de la dépense de la période précédente ; la politique le refuse (une dérive d'un mois relèverait son propre plafond).
+- `budget_filter.projects` : « A set of projects of the form projects/{project_number} », le numéro et non l'identifiant. « If omitted, the report will include all usage for the billing account, regardless of which project the usage occurred on » : sans filtre, le budget compte tout le compte.
+- `budget_filter.calendar_period` (`MONTH`, `QUARTER`, `YEAR`) ou `custom_period` : « Exactly one ... must be provided ». `credit_types_treatment` vaut `INCLUDE_ALL_CREDITS` par défaut.
+- `threshold_rules.threshold_percent` : « a 1.0-based percentage, so 0.5 = 50% » ; `spend_basis` vaut `CURRENT_SPEND` par défaut, ou `FORECASTED_SPEND`. L'exemple du provider emploie les deux.
+- `all_updates_rule.disable_default_iam_recipients` : « Default recipients are those with Billing Account Administrators and Billing Account Users IAM roles for the target account ». `enable_project_level_recipients` : propriétaires (Owner) du projet, seulement si le budget n'a qu'un projet ; non employé ici.
+- Aucun argument `labels` sur le budget lui-même (`budget_filter.labels` filtre la consommation par étiquette, il n'étiquette rien) : les étiquettes `owner`, `env` et `ttl` de R-05 n'ont pas d'objet dans cette racine.
+- Avertissement de la page : avec les identifiants d'un utilisateur, il faut `billing_project` et `user_project_override = true` dans le provider, « Otherwise the Billing Budgets API will return a 403 error », et `serviceusage.services.use` sur ce projet. Page du provider : `billing_project` « is ignored if `user_project_override` is set to false or unset ».
+- Délais par défaut de 20 minutes pour create, update et delete ; `deletion_policy` vaut `DELETE` par défaut, donc `tofu destroy` du budget est permis.
+
+### Faits de Google
+
+- Rôles (page des rôles de facturation) : `roles/billing.costsManager`, « Manage budgets for a billing account, and view, analyze, and export cost information of a billing account », porte `billing.budgets.create`, `delete`, `get`, `list` et `update`. `roles/billing.admin` porte les mêmes et `billing.budgets.configureSpendCap`. `roles/billing.user` n'en porte aucune. `billing.resourcebudgets.write` est portée par `roles/admin`, `roles/owner`, `roles/writer` et `roles/editor`, et par un rôle d'agent de service. La relève de [SECU] se confirme pour Owner et Editor.
+- Précision sur cette relève : la page des budgets rattache `billing.resourcebudgets.write` à la création d'un budget de portée projet (avec `resourcemanager.projects.get` et `billing.resourcebudgets.read`), et `billing.budgets.create` à celle d'un budget de portée compte de facturation, ce que crée `google_billing_budget` (ressource `billingAccounts/.../budgets`). Les pages lues ne disent pas quels rôles de base portent `billing.budgets.*`. La séparation tient sans cette réponse : la politique refuse les six rôles dans tout IAM du dépôt.
+- Rôles de base : « The legacy basic roles are Owner (`roles/owner`), Editor (`roles/editor`), and Viewer (`roles/viewer`) » ; « In production environments, do not grant basic roles unless there is no alternative ».
+- Budgets : seuils par défaut « 50%, 90%, and 100% of the budget amount », sur la dépense réelle. Alerte prévue : envoyée quand le coût prévu atteint le seuil à la fin de la période calendaire courante ; « Budgets configured for a custom time range cannot trigger alerts on » le coût prévu ; la page ne donne aucun historique minimal pour la prévision (inconnu). « The budget doesn't automatically set a hard cap on spending » ; « it may take several hours before receiving the first email or Pub/Sub notification ». Destinataires par défaut : les administrateurs et les utilisateurs du compte de facturation. Les périodes calendaires commencent à minuit, heure du Pacifique (UTC-8).
+- API REST : `CreditTypesTreatment` `EXCLUDE_ALL_CREDITS` ajoute les crédits au coût net, donc compte le coût brut ; `FORECASTED_SPEND` « can only be set when the budget's time period is a » période calendaire, et pas avec `custom_period`.
+- Service : `billingbudgets.googleapis.com`, à activer « in the project you are using to call the Cloud Billing Budget API », permission `serviceusage.services.enable` ; l'API est « free to use ».
+- Identifiant du compte de facturation : « an 18-character alphanumeric value » ; les trois groupes de six viennent de l'exemple `010101-F0FFF0-10XX01`, pas d'une règle écrite. La validation de `billing_account_id` s'appuie sur cet exemple.
+
+### OpenTofu
+
+- Backend `gcs` : `prefix`, « GCS prefix inside the bucket. Named states for workspaces are stored in an object called `<prefix>/<name>.tfstate` » ; `bucket` est requis. La page ne dit pas où va l'espace de travail par défaut.
+- Configuration partielle : « You do not need to specify every required argument in the backend configuration » ; si les réglages viennent de plusieurs endroits, ils sont fusionnés et « any command-line options override the settings in the main configuration ». Donc `bucket` à l'init, `prefix` écrit dans le bloc, et un `-backend-config` qui poserait `prefix` écraserait le bloc sans qu'aucun fichier le montre : le README de la racine l'interdit, S15 ne le voit pas.
+- Essais, OpenTofu 1.13.9 (darwin_arm64), environnement vidé (`env -i`, `HOME` et `TF_DATA_DIR` temporaires) : `tofu fmt -check`, `tofu init -backend=false -lockfile=readonly` et `tofu validate` passent sur `gcp/budget/` ; `tofu validate` ne construit pas la clé KMS (RS-16). Le verrou de `gcp/budget/` reprend le bloc `google` de celui de `gcp/tofu/` ; `tofu providers lock` des quatre plateformes (linux et darwin, amd64 et arm64), lancé sur une copie, donne un fichier identique à octet près. Trivy 0.76.2, règles embarquées, mêmes options que S15 : aucune alerte sur `gcp/budget/`. conftest : 54 tests du paquet `tofu_budget` et ses 15 cas d'échec refusés, chacun par le message attendu ; les deux racines passent le paquet.
+
+### Choix à relire
+
+- Seuils : 50, 90 et 100 % de la dépense réelle, plus 100 % de la dépense prévue. Les trois premiers sont les seuils par défaut de la console. 50 % laisse du temps à mi-mois, 90 % est le dernier moment pour agir, 100 % constate le dépassement. Le quatrième est le seul qui prévient avant la dépense : les coûts arrivent en retard à la facturation et la première alerte peut venir des heures plus tard, donc une alerte sur la seule dépense réelle arrive après un emballement. Le provider le permet (`spend_basis = "FORECASTED_SPEND"`) à condition d'une période calendaire, d'où `calendar_period = "MONTH"`.
+- Crédits : `credit_types_treatment = "EXCLUDE_ALL_CREDITS"`, écrit. Avec le défaut, un essai gratuit ou une promotion masque la dépense : un compte neuf ne sonnerait jamais. [FINOPS] peut préférer le net.
+- Destinataires : par défaut, les administrateurs et utilisateurs du compte de facturation, aucun `all_updates_rule`. Qui s'y trouve n'est pas lisible ici.
+- `google_project_service` pour `billingbudgets.googleapis.com`, `disable_on_destroy = false` comme dans `gcp/tofu/apis.tf` : sans l'API sur le projet qui appelle, le premier appel échoue.
+- Préfixes d'état `budget` et `main`, écrits en littéral dans les deux racines : `gcp/tofu/versions.tf` gagne `prefix = "main"` (sa configuration partielle laissait le préfixe à l'init), pour que S15 puisse montrer la différence. Le seau reste à l'init.
+- Politique `tofu_budget` : refuse `roles/owner`, `roles/editor`, `roles/admin`, `roles/writer`, `roles/billing.admin` et `roles/billing.costsManager` dans toute ressource ou source IAM des deux racines, ainsi qu'un rôle qui n'est pas écrit en clair. Elle ne voit pas un rôle personnalisé qui porterait `billing.budgets.*` ou `billing.resourcebudgets.write`, ni un rôle accordé hors du dépôt.
+
+### Reste à lever au premier apply autorisé par Lucas
+
+- Que l'alerte part bien aux destinataires par défaut sans `all_updates_rule` (la page de Google le décrit, rien ne l'a essayé).
+- Que `projects/<numéro>` et la devise du compte sont acceptés par l'API.
+- Que l'activation de l'API et l'appel du budget passent dans le même apply avec les identifiants de l'utilisateur.
+- Le seuil de prévision sur un projet jeune : la page ne donne pas d'historique minimal.
+- Renovate : son gestionnaire `terraform` lit `**/*.tf` et le verrou (RS-16), donc suit `gcp/budget/` sans règle de plus ; la montée d'un provider présent dans les deux verrous devrait tenir en une seule PR. Aucun Renovate n'a tourné sur cette racine.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/r/billing_budget.html.markdown> | 2026-11-26 | Arguments, valeurs, avertissement du quota project, exemples |
+| <https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/website/docs/guides/provider_reference.html.markdown> | 2026-11-26 | `billing_project`, `user_project_override` |
+| <https://docs.cloud.google.com/iam/docs/roles-permissions/billing> | 2026-11-26 | `roles/billing.costsManager`, `roles/billing.admin`, `roles/billing.user`, porteurs de `billing.resourcebudgets.write` |
+| <https://docs.cloud.google.com/iam/docs/roles-overview> | 2026-11-26 | Rôles de base, mise en garde en production |
+| <https://docs.cloud.google.com/billing/docs/how-to/budgets> | 2026-11-26 | Seuils, prévision, destinataires, absence de plafond, délai, permissions par portée |
+| <https://docs.cloud.google.com/billing/docs/reference/budget/rest/v1/billingAccounts.budgets> | 2026-11-26 | `creditTypesTreatment`, `calendarPeriod`, `spendBasis` |
+| <https://docs.cloud.google.com/billing/docs/reference/budget/rest> | 2026-11-26 | Nom du service `billingbudgets.googleapis.com` |
+| <https://docs.cloud.google.com/billing/docs/how-to/budget-api-setup> | 2026-11-26 | Activation de l'API sur le projet appelant, gratuité |
+| <https://docs.cloud.google.com/billing/docs/how-to/find-billing-account-id> | 2026-11-26 | Format de l'identifiant du compte de facturation |
+| <https://opentofu.org/docs/language/settings/backends/gcs/> | 2026-11-26 | `prefix`, `bucket` requis |
+| <https://opentofu.org/docs/language/settings/backends/configuration/> | 2026-11-26 | Configuration partielle, fusion, priorité de la ligne de commande |
+
 ## Synthèse des points à vérifier
 
 | Point | Porteur | Étape bloquée |
