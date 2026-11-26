@@ -25,8 +25,9 @@
 #   more;
 # - a Role sits in the namespace of its RootSync entry; the ClusterRole bound
 #   for the whole cluster (a ClusterRoleBinding, entry without namespace)
-#   reaches namespaces and admission policies only: it reads them, changes
-#   them by name, and creates nothing: the create verb has no resource name in
+#   reaches namespaces and admission policies, which it reads and changes by
+#   name, and the kinds of the Role, which it only reads (the status watcher
+#   lists them at the cluster scope), and creates nothing: the create verb has no resource name in
 #   Kubernetes RBAC, so it cannot be narrowed, and the user applies the
 #   Namespace and the admission objects first, with the bootstrap;
 # - the kinds of a Role are a closed list, as the kinds of the ClusterRole.
@@ -242,6 +243,25 @@ cluster_bound(name) if {
 
 cluster_scope_resources := {"namespaces", "validatingadmissionpolicies", "validatingadmissionpolicybindings"}
 
+read_verbs := {"get", "list", "watch"}
+
+# A rule that only reads.
+read_only(rule) if {
+	every verb in rule.verbs {
+		verb in read_verbs
+	}
+}
+
+# The status watcher of Config Sync lists every kind of the render at the cluster
+# scope, since the render holds cluster-scoped objects (cli-utils, DefaultStatusWatcher,
+# read on 2026-11-26; E16): the ClusterRole may read the kinds of the Role, and only read.
+cluster_read_ok(rule, resource) if {
+	read_only(rule)
+	every group in rule.apiGroups {
+		[group, resource] in role_kinds
+	}
+}
+
 deny contains msg if {
 	some [path, role] in roles
 	role.kind == "ClusterRole"
@@ -249,7 +269,8 @@ deny contains msg if {
 	some rule in role.rules
 	some resource in rule.resources
 	not resource in cluster_scope_resources
-	msg := sprintf("%s: %s, %s is bound for the whole cluster and reaches %s: only namespaces and admission policies, by name", [label, path, describe(role), resource])
+	not cluster_read_ok(rule, resource)
+	msg := sprintf("%s: %s, %s is bound for the whole cluster and reaches %s: only namespaces and admission policies by name, and a read of the kinds of the Role", [label, path, describe(role), resource])
 }
 
 deny contains msg if {
@@ -289,6 +310,18 @@ role_kinds := {
 	["secret-sync.gke.io", "secretsyncs"],
 }
 
+# Read only, never written: the status of a Deployment is read from its ReplicaSets
+# and theirs from their Pods (cli-utils, kstatus statusreaders, read on 2026-11-26).
+observed_kinds := {
+	["apps", "replicasets"],
+	["", "pods"],
+}
+
+observed_read(rule, group, resource) if {
+	[group, resource] in observed_kinds
+	read_only(rule)
+}
+
 deny contains msg if {
 	some [path, role] in roles
 	role.kind == "Role"
@@ -296,6 +329,7 @@ deny contains msg if {
 	some group in rule.apiGroups
 	some resource in rule.resources
 	not [group, resource] in role_kinds
+	not observed_read(rule, group, resource)
 	msg := sprintf("%s: %s, %s reaches %v of the group %q, outside the closed list of kinds of the Role", [label, path, describe(role), resource, group])
 }
 

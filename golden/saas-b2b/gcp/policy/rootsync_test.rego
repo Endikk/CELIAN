@@ -245,9 +245,42 @@ test_s10_rejects_creating_admission_policies_for_the_cluster if {
 }
 
 # The kinds of the Role are a closed list too (SECU review of the PR 87).
-test_s10_rejects_pods_in_a_role if {
-	bad := json.patch(namespace_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": [""], "resources": ["pods"], "verbs": ["get"]}}])
+test_s10_rejects_writing_pods_in_a_role if {
+	bad := json.patch(namespace_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": [""], "resources": ["pods"], "verbs": ["create"]}}])
 	denied_with([bad, cluster_role, root_sync], "outside the closed list of kinds")
+}
+
+test_s10_accepts_reading_pods_and_replicasets_in_a_role if {
+	ok := json.patch(namespace_role, [
+		{"op": "add", "path": "/rules/-", "value": {"apiGroups": [""], "resources": ["pods"], "verbs": ["get", "list", "watch"]}},
+		{"op": "add", "path": "/rules/-", "value": {"apiGroups": ["apps"], "resources": ["replicasets"], "verbs": ["get", "list", "watch"]}},
+	])
+	accepted([ok, cluster_role, root_sync])
+}
+
+test_s10_rejects_writing_replicasets_in_a_role if {
+	bad := json.patch(namespace_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": ["apps"], "resources": ["replicasets"], "verbs": ["get", "delete"]}}])
+	denied_with([bad, cluster_role, root_sync], "outside the closed list of kinds")
+}
+
+test_s10_accepts_a_cluster_read_of_the_kinds_of_the_role if {
+	ok := json.patch(cluster_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": ["apps"], "resources": ["deployments"], "verbs": ["get", "list", "watch"]}}])
+	accepted([namespace_role, ok, root_sync])
+}
+
+test_s10_rejects_a_cluster_write_of_the_kinds_of_the_role if {
+	bad := json.patch(cluster_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": ["apps"], "resources": ["deployments"], "verbs": ["get", "list", "watch", "patch"]}}])
+	denied_with([namespace_role, bad, root_sync], "reaches deployments")
+}
+
+test_s10_rejects_a_cluster_read_of_a_kind_in_a_foreign_group if {
+	bad := json.patch(cluster_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": ["extensions"], "resources": ["deployments"], "verbs": ["get", "list", "watch"]}}])
+	denied_with([namespace_role, bad, root_sync], "reaches deployments")
+}
+
+test_s10_rejects_a_cluster_read_of_replicasets if {
+	bad := json.patch(cluster_role, [{"op": "add", "path": "/rules/-", "value": {"apiGroups": ["apps"], "resources": ["replicasets"], "verbs": ["get", "list", "watch"]}}])
+	denied_with([namespace_role, bad, root_sync], "reaches replicasets")
 }
 
 test_s10_rejects_jobs_in_a_role if {

@@ -12,7 +12,9 @@
 # - saas-b2b-sync-cluster, a ClusterRole bound for the whole cluster, because
 #   two kinds of the render are not in a namespace: the Namespace itself and
 #   the admission policy and its binding (S16). It reads these three kinds,
-#   and changes the Namespace and the two objects by name. It creates
+#   reads (only) the kinds of the Role for the whole cluster, because the
+#   status watcher lists them at that scope, and changes the Namespace and
+#   the two objects by name. It creates
 #   nothing: the create verb has no resource name in RBAC, so it cannot be
 #   narrowed, and a repository that the reconciler obeys could add a policy
 #   that refuses pods elsewhere. The user applies the Namespace, the policy and
@@ -45,6 +47,15 @@ rules:
   - apiGroups: ["secret-sync.gke.io"]
     resources: ["secretsyncs"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  # Read only: the status of a Deployment is read from its ReplicaSets, and
+  # theirs from their Pods (cli-utils, kstatus polling/statusreaders, read
+  # on 2026-11-26). Config Sync waits on that status after the apply.
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -53,6 +64,27 @@ metadata:
 rules:
   - apiGroups: ["", "admissionregistration.k8s.io"]
     resources: ["namespaces", "validatingadmissionpolicies", "validatingadmissionpolicybindings"]
+    verbs: ["get", "list", "watch"]
+  # Read only, for the whole cluster, on the kinds of the Role. The render holds
+  # cluster-scoped objects (the Namespace, the policy), so the status watcher of
+  # Config Sync sees more than one namespace and lists every kind of the render
+  # at the cluster scope (cli-utils, DefaultStatusWatcher: autoSelectRESTScopeStrategy,
+  # read on 2026-11-26; E16 showed it: "cannot list resource secretsyncs ... at
+  # the cluster scope"). Reading is all it gets: no Secret, no write.
+  - apiGroups: [""]
+    resources: ["configmaps", "serviceaccounts", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gateways", "httproutes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["secrets-store.csi.x-k8s.io"]
+    resources: ["secretproviderclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["secret-sync.gke.io"]
+    resources: ["secretsyncs"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
     resources: ["namespaces"]

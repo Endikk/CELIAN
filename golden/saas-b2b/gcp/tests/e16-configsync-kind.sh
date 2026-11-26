@@ -229,6 +229,14 @@ can no create namespaces
 can no delete namespaces
 can yes patch namespaces/saas-b2b
 can yes update validatingadmissionpolicies.admissionregistration.k8s.io/saas-b2b-require-requests
+can yes list deployments.apps
+can yes list secretsyncs.secret-sync.gke.io
+can no patch deployments.apps
+can no list secrets
+can no list secrets -n saas-b2b
+can no list pods
+can yes list pods -n saas-b2b
+can no create pods -n saas-b2b
 can no '*' '*'
 admin_bindings="$(k get clusterrolebindings,rolebindings -A -o json | jq -r --arg sa "root-reconciler" '
   [.items[] | select(.roleRef.name == "cluster-admin") | select(any(.subjects[]?; .name == $sa))] | length')"
