@@ -37,11 +37,10 @@ kubectl s'installe par la page officielle (<https://kubernetes.io/docs/tasks/too
 | Moteur de conteneurs | local, joint par la commande `docker` à travers un socket unix (un contexte `tcp://` ou `ssh://`, ou `DOCKER_HOST` vers une autre machine, est refusé) ; `docker info` répond en moins de 10 s |
 | kind | 0.33.0 exactement (ADR-004) |
 | kubectl | 1.35 à 1.37, une mineure autour de celle du cluster, 1.36 dans `platform.yaml` (ADR-006) |
+| `openssl` et `awk` | sur le `PATH`, seulement cherchés, jamais lancés par ces contrôles : `task up` fabrique avec eux la clé et le certificat du Secret `gateway-tls`, sans fichier. macOS fournit les deux ; sous Linux, `openssl` est le paquet de la distribution |
 | Docker Engine, sous Linux seulement | 28.0.0 ou plus (ADR-011) |
 | Mémoire déclarée par le moteur | 2048 Mio pour le profil lite, 2560 Mio pour le standard. Sous macOS, elle désigne la mémoire de la machine virtuelle du moteur (ADR-004) |
 | Ports de l'hôte | libres en 127.0.0.1 : 18080 pour HTTP, 18443 pour HTTPS |
-
-À venir (étape 7, seconde PR) : `openssl` et `awk` rejoignent les prérequis, pour fabriquer et lire le certificat de la gateway. Le contrôle préalable les cherche et les nomme s'ils manquent, avant toute création.
 
 ### Outils de `task check`
 
@@ -97,6 +96,8 @@ API: http://localhost:18080/api/
 ```
 
 Le port est publié sur 127.0.0.1 seulement, et rien n'écoute ailleurs que sur la boucle locale. Les routes de la gateway nomment l'hôte `localhost`, parce que Gateway API refuse une adresse IP dans `hostnames`. Une requête qui porte un autre `Host` reçoit 404, ce qui ferme la voie du rebinding DNS. Le port n'est pas publié en IPv6 : le navigateur doit résoudre `localhost` vers 127.0.0.1, ou y retomber. Cela a été essayé en bash, pas dans un navigateur.
+
+L'écouteur HTTPS (port 18443 de l'hôte, en 127.0.0.1) sert un certificat auto-signé : un navigateur le refuse et affiche un avertissement, ce qui est voulu. La section « Sécurité » dit quoi en faire.
 
 Le front affiche l'écran Notes : un formulaire d'ajout avec son état de chargement et ses erreurs par champ, la dernière note lue avec sa provenance (« Served from the cache » ou « Served from the database »), et la liste des notes les plus récentes. Les textes de l'écran sont en anglais, comme ceux des erreurs de l'API.
 
@@ -177,7 +178,7 @@ Liste tenue au fil des étapes (ENF-02). Seule la couche de cible change entre l
 | Version de Kubernetes | mineure 1.36 (`platform.yaml`), image de nœud v1.36.4 | mineure 1.36, canal Regular | écart de correctif admis : GKE avance dans son canal (ADR-004) |
 | Gateway | Envoy Gateway, CRD Gateway API v1.7.0 | GKE sert v1.5.0 à v1.6.0 selon sa version (ADR-005, relevé du 2026-11-19) | la couche commune n'emploie que des champs que GKE sert (ADR-005) ; À venir (étape 14) : la classe de GKE |
 | Hôte des routes | `localhost` | domaine de la spécification | À venir (étape 14) |
-| Certificat de `gateway-tls` | auto-signé, fabriqué par `task up` | à trancher avec la classe de GKE | À venir (étape 7, seconde PR) ; l'autorité de ce certificat n'entre jamais dans le magasin de confiance du poste |
+| Certificat de `gateway-tls` | auto-signé, fabriqué par `task up`, valable 365 jours | à trancher avec la classe de GKE | l'autorité de ce certificat n'entre jamais dans le magasin de confiance du poste ; À venir (étape 14) : la méthode sur `gcp` |
 | Secrets de l'application | créés par `task up` à partir de `/dev/urandom` | synchronisés depuis Secret Manager par GKE | ADR-007 |
 | Cache : moteur | Valkey 9.1.4 dans le cluster, sans persistance | Memorystore for Valkey, ligne 9.1, un nœud sans réplica | le correctif servi par Memorystore n'est pas publié (ADR-015) |
 | Cache : chiffrement, commandes, mémoire | pas de TLS, ACL plus stricte, `maxmemory 64mb` | TLS, liste de commandes bloquées de Memorystore, mémoire du type de nœud | le poste est plus strict, jamais moins (ADR-015) |
@@ -187,7 +188,7 @@ Le cache ne persiste rien sur les deux cibles : ses données se perdent au redé
 
 ## Couche GCP
 
-`gcp/tofu/` décrit la cible GCP en OpenTofu : réseau privé, GKE Autopilot, Cloud SQL, Memorystore for Valkey, Artifact Registry, Secret Manager, Config Sync et identité de la CI par fédération. `gcp/budget/` est une racine à part qui porte l'alerte budget du projet. Elle prévient, elle ne plafonne rien, et les coûts arrivent en retard à la facturation. Son README dit comment l'appliquer : à la main, avant la racine principale, par une identité distincte, et la détruire en dernier.
+`gcp/tofu/` décrit la cible GCP en OpenTofu : réseau privé, GKE Autopilot, Cloud SQL, Memorystore for Valkey, Artifact Registry, Secret Manager, Config Sync et identité de la CI par fédération. `gcp/budget/` est une racine à part qui porte l'alerte budget du projet. Elle prévient, elle ne plafonne rien, et les coûts arrivent en retard à la facturation. [Son README](gcp/budget/README.md) dit comment l'appliquer : à la main, avant la racine principale, par une identité distincte, et la détruire en dernier.
 
 Rien dans ce dépôt ne déploie la cible GCP. Aucune tâche et aucun workflow ne lance de plan, d'apply ni de destroy, et S17 le vérifie. `task gcp:validate`, `task gcp:policy` et `task gcp:scan` tournent sans identifiant cloud, et `task check` les lance aussi. Une action payante, création de ressources comprise, attend l'accord explicite de Lucas et un budget validé.
 
@@ -215,7 +216,7 @@ Ce qui limite le risque : `task up` tire chaque mot de passe au hasard, 40 carac
 | `cache-auth` | `password` | l'API, sous `/run/secrets/cache-auth` ; le conteneur d'initialisation du cache |
 | `db-superuser` | `username`, `password` | le conteneur Postgres seulement |
 
-À venir (étape 7, seconde PR) : le Secret `gateway-tls`, certificat auto-signé de la gateway. Ne l'installez jamais dans le magasin de confiance du poste : un navigateur qui ferait confiance à cette autorité la ferait pour tout le poste.
+Le Secret `gateway-tls` porte la clé et le certificat auto-signé de l'écouteur HTTPS. `task up` ne le recrée que s'il manque, et prévient, sans s'arrêter, quand le certificat expire dans moins de 30 jours. Pour le changer, supprimez-le dans le namespace `saas-b2b`, avec le kubeconfig et le contexte du projet, puis lancez `task up` : l'HTTPS est coupé le temps de l'opération. Ne l'installez jamais comme autorité de confiance dans le magasin du poste ou du navigateur : un navigateur qui ferait confiance à cette autorité la ferait pour tout le poste.
 
 ### Recherche de secrets et scan
 
