@@ -1,7 +1,7 @@
 # Feuille de route
 
-Mise à jour le 25/11/2026, en fin de session 5. Le DSI tient ce fichier à jour
-à la fin de chaque session.
+Mise à jour le 26/11/2026, en cours de session 6. Le DSI tient ce fichier à
+jour à la fin de chaque session.
 
 ## Phase en cours : 2, golden repo SaaS B2B
 
@@ -127,9 +127,34 @@ standard, avec le temps et le volume mesurés (R-04).
     cloud ;
   - bits d'exécution de cinq scripts rétablis (#69) ;
   - cinq points `pending` du catalogue fermés (#70).
-- Restent ouvertes en fin de session : #62 (étape 4, front React), #63
-  (durcissement de S20, empilée sur #62), #68 (étape 7, Gateway API et Envoy
-  Gateway, relecture [SECU] en cours) et #22 (release-please).
+- Fin de session 5, nuit du 25 au 26/11/2026 : étape 7, première PR (#68),
+  Gateway API et Envoy Gateway ; trois trous de la chaîne d'approvisionnement
+  fermés en CI (#72), dont le job `envoy-render` ; ROADMAP (#71).
+- Phase 2, session 6 (26/11/2026), PR #62, #63, #73, #74, #76, #79, #80 et
+  #81, toutes relues par [SECU] et, pour `gcp`, par [FINOPS] :
+  - étape 4, front React (#62), puis S20 durci côté front (#63) ;
+  - S02 ferme la liste des clés d'une Kustomization : neuf clés admises,
+    `helmCharts`, `generators` et `secretGenerator` refusés (#73) ;
+  - étape 18, première PR (#74) : scan des images tirées, job `scan-images`
+    requis ; images construites et images de `gcp` bloquantes, images tierces
+    locales signalées dans le résumé du job ;
+  - T110 (#76) : alerte budget dans la racine `gcp/budget/`, seuils 50, 90 et
+    100 % du réel et 100 % du prévu, coût brut, aucun montant écrit ; R-42
+    ouvert ; l'étape 13 est complète ;
+  - T071 (#79) : `gateway-tls` fabriqué par un seul `openssl req -x509` sur la
+    sortie standard, passé par un tube à `kubectl create -f -`, sans fichier ni
+    argument ; T072 à T074 débloquées ;
+  - registre `registry.opentofu.org` écrit dans les `source` des deux racines,
+    S15 et S14 refusent un autre hôte (#80) ; Renovate lisait déjà l'hôte du
+    verrou, aucune règle `registryUrls` n'est nécessaire ;
+  - étape 20, première PR (#81) : Memorystore for Valkey dans la couche
+    OpenTofu, CA par instance, politique de connexion limitée au sous-réseau de
+    GKE ; le jeton attend une version du provider qui l'apporte.
+- Restent ouvertes : #75 (étape 8, secrets locaux et Postgres, fusion au plus
+  tôt le 2026-11-27 à 10:01 UTC, délai du condensat Postgres), #77 (miroir zot
+  en lecture seule et image du proxy dans l'`EnvoyProxy`, empilée sur #75),
+  #78 (étape 19, cache local Valkey, empilée sur #75), toutes vertes et
+  relues ; #22 (release-please).
 
 ### Décisions de Lucas
 
@@ -193,6 +218,8 @@ standard, avec le temps et le volume mesurés (R-04).
   2027-03-21 ; gitleaks daté sur Docker Hub, tiré de ghcr.io ; feu vert aux
   étapes 6 et 13, puis délégation complète au DSI pendant son absence,
   fusions comprises, avec le choix du modèle des agents selon la tâche.
+- 26/11/2026 : tous les sous-agents tournent sur Sonnet, Opus reste à la
+  session principale.
 
 ### Décisions du DSI pendant l'absence de Lucas, confirmées à la GATE 1
 
@@ -265,32 +292,71 @@ standard, avec le temps et le volume mesurés (R-04).
     octets de tiers, vérifiés par `SHA256SUMS` ;
   - étape 7 lancée par délégation.
 
+### Décisions du DSI, session 6
+
+À confirmer par Lucas à la GATE 2, marquées comme telles dans les écarts :
+
+- périmètre bloquant du scan des images (étape 18) : images construites et
+  tout ce qui part sur `gcp`, une image non classée bloque ; images tierces
+  locales signalées sans bloquer ;
+- StackExchange.Redis 3.4.35 pour le client .NET du cache, par dérogation
+  écrite au principe V (trois mainteneurs, aucune fondation), contre
+  Valkey.Glide, dont les binaires Rust échappent à Trivy ; conditions de
+  réouverture écrites (écart 93 de #78) ;
+- même clé KMS pour les deux racines OpenTofu ; une clé propre à la racine du
+  budget reste une option.
+
+Autres arbitrages du 26/11/2026 :
+
+- le condensat Postgres de l'ADR-012 est gardé ; #75 fusionne quand il atteint
+  7 jours ;
+- le miroir zot passe en lecture seule pour les anonymes avant l'étape 9 :
+  l'essai sur kind a montré qu'un pod écrivait un manifeste (201) ;
+- `envoy-render` compare l'image du proxy au défaut compilé du contrôleur et
+  entre dans les contrôles requis ;
+- l'étape 20 se fait en deux PR, la seconde après l'étape 14 ; le jeton
+  Memorystore attend la version du provider qui l'apporte, puis 7 jours, puis
+  [SECU] ; `nopass` refusé dans les ACL ;
+- `openssl` et `awk` vérifiés par le contrôle préalable de `task up` ; E03
+  compare l'empreinte du certificat servi à celle du Secret ;
+- `Require` refusé pour la base sur `gcp`, seuls `VerifyCA` et `VerifyFull`
+  passent ;
+- l'étape 18 : arm64 scanné dans la seconde PR, aucune seconde source de
+  failles avant la fin du golden repo, aucun identifiant Docker Hub en CI ;
+- les quotas abaissés de R-05 sont portés par [FINOPS] et [OPS] à l'étape 14.
+
 ### Prochain
 
-1. Étape 4, front React (#62) : fusion à partir du 2026-11-26 à 01:50 UTC,
-   délai de nginx. Puis #63, le durcissement de S20, empilée sur #62.
-2. Étape 7, Gateway API et Envoy Gateway (#68) : finir après la relecture
-   [SECU], qui est en cours.
-3. Ensuite l'étape 8 (secrets et données), l'étape 19 (cache local, débloquée
-   par l'ADR-015), l'étape 9 (profil lite de bout en bout), l'étape 18 (SBOM
-   et scan) et l'étape 14.
+1. Le 2026-11-27 après 10:01 UTC : #75 (étape 8), rebasée sur `main` avec ses
+   écarts renumérotés, puis #77 (miroir en lecture seule) et #78 (étape 19),
+   une à la fois.
+2. Étape 7, seconde PR : l'écouteur HTTPS (T072 à T074), après #78.
+3. Étape 9, profil lite de bout en bout, qui dépend des étapes 3, 4, 8 et 19 ;
+   puis l'étape 18, seconde PR (SBOM et scan des images construites), l'étape
+   10 (hors réseau), l'étape 11 (README, avec le démontage `gcp` en deux
+   temps) et l'étape 14 (manifests `gcp`), suivie de la seconde PR de l'étape
+   20.
 4. Benchmark des scanners de secrets (gitleaks, Betterleaks, TruffleHog,
    Kingfisher au moins) après le golden repo et avant la mise en template, au
    plus tard le 2027-03-21 (R-40).
 5. Image `aspnet` chiseled pour l'API, qui retirerait 97 paquets Ubuntu :
    benchmark et ADR, après l'étape 9.
-6. Suites de Renovate : la règle des presets qui lisent `registryUrl` dans
-   les commentaires ; le registre `registry.opentofu.org`, que S23 empêche
-   aujourd'hui de déclarer (`registryUrls` refusé) : à trancher.
+6. Suite de Renovate : la règle des presets qui lisent `registryUrl` dans les
+   commentaires. Le registre d'OpenTofu est réglé (#80).
+7. Jeton Memorystore : à la version du provider `google` qui apporte
+   `google_memorystore_auth_token`, attendre 7 jours, puis relecture [SECU]
+   de sa page (écart 83).
 
 La PR release-please « release 0.1.0 » (#22) reste ouverte : pas de release
 tant qu'il n'y a rien à publier.
 
 Points restés ouverts : ce que lit Flux sur le PC (ADR-010, question 1) ; la
 gouvernance de Task ; les identifiants de services tiers sur le PC ; la
-portée de la règle de fraîcheur du catalogue ; la fabrication du certificat
-HTTPS local ; le TLS vers la base et le cache ; le propriétaire de la base
-`app` sur Cloud SQL et les privilèges de l'API (R-39, T107).
+portée de la règle de fraîcheur du catalogue ; le propriétaire de la base
+`app` sur Cloud SQL et les privilèges de l'API (R-39, T107) ; l'arrivée de
+l'hôte et de la CA de Memorystore dans Config Sync, à trancher avant la
+seconde PR de l'étape 20 ; le montant du budget, en coût brut, avant la GATE
+2.
 
 Actions de Lucas, hors GATE :
 
@@ -307,9 +373,13 @@ Actions de Lucas, hors GATE :
 - mettre Claude Code en 2.1.324 ou plus pour figer les marketplaces (R-02) ;
 - garder le Mac branché et le capot ouvert pendant les étapes qui lancent
   kind : la veille capot fermé coupe les séries (BENCH-012, BENCH-014) ;
-- lancer `scripts/github/apply-settings.sh`, pour rendre les jobs `unit` et
-  `e2e-lite` requis sur `main`, puis de nouveau quand le scan des images
-  entrera dans les contrôles requis (étape 18 du plan).
+- lancer `scripts/github/apply-settings.sh`, pour rendre requis sur `main`
+  les jobs `unit`, `e2e-lite` et `scan-images` (déjà dans
+  `.github/rulesets/main.json`), puis de nouveau après la fusion de #77, qui
+  y ajoute `envoy-render` ;
+- lire aussi la grille de Memorystore for Valkey (`SHARED_CORE_NANO`) et la
+  section Private Service Connect de la page VPC : l'outil des agents n'en
+  voit que le titre.
 
 ## Les six phases du MVP
 
