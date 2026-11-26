@@ -6,10 +6,10 @@ L'application lit le même Secret, de même nom et de mêmes clés, sur les deux
 
 | Secret | Type | Clés | Producteur `local` | Producteur `gcp` | Lu par |
 | --- | --- | --- | --- | --- | --- |
-| `db-auth` | `kubernetes.io/basic-auth` | `username` (`app`), `password` | `task up` | synchronisation de GKE depuis Secret Manager (ADR-007) | API ; script d'initialisation de la base sur `local` |
+| `db-auth` | `kubernetes.io/basic-auth` | `username` (`app`), `password` | `task up` | synchronisation de GKE depuis Secret Manager (ADR-007) : `SecretSync` de type `Opaque`, écart 144 | API ; script d'initialisation de la base sur `local` |
 | `cache-auth` | `Opaque` | `password` (ADR-015) | `task up`, à partir de l'étape 19 | selon l'authentification de Memorystore retenue par l'ADR-015, étape 20 (research RS-11) | API ; le cache sur `local` |
 | `db-superuser` | `kubernetes.io/basic-auth` | `username`, `password` | `task up` | aucun : Cloud SQL ne donne pas de superutilisateur (ADR-012) | conteneur Postgres seulement ; jamais l'application |
-| `gateway-tls` | `kubernetes.io/tls` | `tls.crt`, `tls.key` | `task up` : `openssl req -x509` écrit clé et certificat auto-signé (P-256, 365 jours, SAN `localhost` et `127.0.0.1`) sur sa sortie standard, `awk` les étiquette, un tube mène à `kubectl create -f -` ; ni fichier, ni variable, ni argument (research RS-10, 2026-11-26) | à trancher par [OPS] et [SECU] avec la classe de GKE | Gateway |
+| `gateway-tls` | `kubernetes.io/tls` | `tls.crt`, `tls.key` | `task up` : `openssl req -x509` écrit clé et certificat auto-signé (P-256, 365 jours, SAN `localhost` et `127.0.0.1`) sur sa sortie standard, `awk` les étiquette, un tube mène à `kubectl create -f -` ; ni fichier, ni variable, ni argument (research RS-10, 2026-11-26) | proposé : certificat auto-signé, clé en écriture seule dans Secret Manager, puis synchronisation de GKE, avec l'écouteur HTTPS (research RS-16, écart 146) | Gateway |
 
 L'API lit `db-auth` dans les fichiers `username` et `password` du dossier `/run/secrets/db-auth`, où la couche commune monte le Secret (étape 3, T021 ; montage écrit à l'étape 9, T087). Un saut de ligne final est ignoré ; un fichier absent ou vide arrête l'accès à la base, et le message nomme le fichier sans jamais donner sa valeur.
 

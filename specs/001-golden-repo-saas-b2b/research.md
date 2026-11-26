@@ -570,6 +570,8 @@ Décision : `db-auth`, `cache-auth`, `db-superuser` et `gateway-tls` en profil l
 
 Pourquoi : ADR-007, condition 1 ; ADR-012, conditions 3, 8 et 10.
 
+Sur `gcp`, la fabrication de `gateway-tls` est proposée à RS-16, « `gateway-tls` sur `gcp` » (étape 14, écart 146).
+
 ### Fabrication de `gateway-tls` (T071, décidée le 2026-11-26)
 
 Porteurs : [SECU] et [DEV]. Décision de [SECU], à valider par le DSI. BENCH-004 écrivait la clé dans un fichier, ce que la condition 1 de l'ADR-007 interdit au projet généré. La clé et le certificat naissent d'un seul `openssl req`, qui les écrit tous deux sur sa sortie standard ; `awk` étiquette les deux blocs PEM au fil du flux, et le manifeste passe par un tube à `kubectl create -f -`. Aucun fichier, aucune variable, aucun argument porteur de secret, aucun heredoc, aucun `base64`.
@@ -1031,6 +1033,58 @@ Si le propriétaire n'est pas `cloudsqlsuperuser`, ou si `inherit_option` est fa
 | <https://www.postgresql.org/docs/18/functions-info.html> | 2026-11-25 | `has_schema_privilege` (`CREATE`, `USAGE`), `pg_get_userbyid` |
 | <https://www.postgresql.org/docs/18/datatype-oid.html> | 2026-11-25 | Type `regrole` |
 
+### Relevé du 2026-11-26 : couche Kubernetes de `gcp` (T129, étape 14)
+
+Fait par [OPS], pour relecture de [SECU] et [QA]. Pages de Google lues par WebFetch, code des releases et des providers lu par `gh api`, essais hors ligne avec kubectl v1.37.1 (Kustomize v5.8.1), conftest 0.71.1 et kubeconform 0.8.0. Aucun cluster, aucun identifiant, aucun `tofu plan` ni `apply`. Les pages de Google n'affichent pas de date : la date est celle de la lecture.
+
+Classe de la Gateway. La page des capacités des GatewayClass de GKE donne neuf classes. `gke-l7-global-external-managed` est l'équilibreur d'application externe global, avec les écouteurs HTTP et HTTPS (mode `Terminate`), `certificateRefs`, `allowedRoutes`, et pour les HTTPRoute les chemins `Exact`, `PathPrefix` et `RegularExpression` ; elle ne mentionne aucun sous-réseau proxy, que le réseau de `gcp/tofu/` ne crée pas. Retenue : c'est la classe de BENCH-004. Parmi les neuf, les classes `-mc` sont multi-clusters, `gke-l7-gxlb` est l'équilibreur classique, `gke-l7-regional-external-managed` et `gke-l7-rilb` sont régionales et la dernière interne : celle-ci est la globale externe non classique. Le montant de l'équilibreur n'est pas lisible (R-05) : [FINOPS] le valide avant le premier apply. Il naît de Kubernetes, hors de l'état d'OpenTofu : la Gateway se supprime avant `tofu destroy` (R-15).
+
+Version de Gateway API et schéma. La même page donne Gateway API 1.5.0 à partir de GKE 1.35.2-gke.1842000, 1.4.0 à partir de 1.34.1-gke.1822000 ; la mineure 1.36 de `platform.yaml` est au-dessus. Le schéma est donc celui du canal standard v1.5.0 : release v1.5.0 de `kubernetes-sigs/gateway-api` (publiée le 2026-02-27, non immuable), `standard-install.yaml` de SHA-256 `510338cf6709f84410efcce5269268f4c7c5067efdc5d04c75aa2fd2f8380c96`, égal au champ `digest` de l'API et au fichier téléchargé. S08 valide la couche commune contre le `openAPIV3Schema` des CRD Gateway, GatewayClass et HTTPRoute de cette release, avec `additionalProperties: false` ajouté partout (une CRD laisse passer les champs inconnus, que le serveur d'API élague) : un champ de v1.7.0 que GKE ne sert pas fait échouer le contrôle. Essai : un champ inconnu sous `spec` de la Gateway et un port écrit en texte sont refusés, la couche commune de l'étape 7 passe. La couche commune n'emploie que des champs du cœur (RS-02).
+
+Synchronisation des secrets. Page « Sync Secret Manager secrets to Kubernetes Secrets » : `SecretProviderClass` en `secrets-store.csi.x-k8s.io/v1` avec `provider: gke` et `parameters.secrets`, un bloc YAML de `resourceName` (`projects/<projet>/secrets/<nom>/versions/<version>`, sans région) et `path` ; `SecretSync` en `secret-sync.gke.io/v1` avec `serviceAccountName`, `secretProviderClassName`, `secretObject.type` et `secretObject.data` (`sourcePath`, `targetKey`), dans le même namespace que la classe. « The secret version must be in the same region as the cluster » ; la page ne dit ni que `latest` est une version (son exemple écrit `versions/2`), ni quels types de Secret sont admis (`Opaque`, `tls`, `docker-registry` en exemples), ni ce qui arrive si un Secret du même nom existe. Écarts 144 et 151.
+
+Règle d'admission. `ValidatingAdmissionPolicy` est stable en `admissionregistration.k8s.io/v1` depuis Kubernetes 1.30 (page de Kubernetes). Sur Autopilot, d'après la page des mesures de sécurité, GKE exclut les namespaces gérés de la règle et refuse celles qui visent nœuds, volumes persistants, demandes de signature et revues de jeton, sans joker. La règle de la couche vise `pods` en `CREATE`, `failurePolicy: Fail`, et la liaison la limite à `saas-b2b` par l'étiquette `kubernetes.io/metadata.name`. L'expression CEL n'est pas compilée ici (écart 153).
+
+`RootSync`. Types de GoogleContainerTools/kpt-config-sync au tag v1.25.2 (publié le 2026-11-03) et page des champs de Google : `sourceFormat` (`hierarchy` par défaut, `unstructured` voulu), `override.roleRefs` (« If unset, a binding to cluster-admin will be created » ; pour un `ClusterRole`, `namespace` décide entre `RoleBinding` et `ClusterRoleBinding`), `monitoring.enabled` (« controls whether the OpenTelemetry (otel-agent) sidecar is deployed ») que la page dit non pris en charge sur le `root-sync` de la console, de `gcloud` ou de Terraform, `git.auth` parmi `ssh`, `cookiefile`, `gcenode`, `token`, `none` dans le code, `githubapp` et `gcpserviceaccount` en plus sur la page. Écart 145.
+
+Config Sync libre pour kind (T132, E16). La release v1.25.2 porte `config-sync-manifest.yaml` (307 385 octets), de SHA-256 `bb5cf3cafe4d8a04adbcd900cac709c26dad0d1856fdffdf4c599e4cd4058121`, égal au champ `digest` de l'API et au fichier téléchargé ; la release n'est pas immuable. Neuf images, relues au registre le 2026-11-26 par `docker buildx imagetools inspect` et égales aux condensats de BENCH-009 (lignes 94 à 102 de son script) : `gcr.io/config-management-release/` `reconciler-manager`, `reconciler`, `resource-group-controller`, `hydration-controller`, `oci-sync`, `helm-sync`, `gcenode-askpass-sidecar` en `v1.25.2`, `git-sync:v4.5.0-gke.3__linux_amd64` et `otelcontribcol:v0.159.0-gke.4`. Rien n'est vendoré : E16 n'est pas écrit (écart 150).
+
+Cloud SQL. Le schéma du provider au tag v8.12.0 (`resource_sql_database_instance.go`) accepte `CA_MODE_UNSPECIFIED`, `GOOGLE_MANAGED_INTERNAL_CA`, `GOOGLE_MANAGED_CAS_CA` et `CUSTOMER_MANAGED_CAS_CA` pour `settings.ip_configuration.server_ca_mode`, optionnel et calculé ; `server_ca_cert` est `Sensitive: true`. La page d'autorisation SSL de Google : `GOOGLE_MANAGED_INTERNAL_CA` est la CA par instance, défaut à la création ; la CA partagée demande de vérifier aussi le nom d'hôte ; le SAN ne porte le nom d'hôte que pour les instances à Private Service Connect. Écart 142.
+
+#### Hôte et CA des services managés
+
+Question de l'écart 87 de `main`, qui se pose de même pour Cloud SQL : l'adresse du point de terminaison de Memorystore, l'adresse privée de Cloud SQL et les deux CA n'existent qu'après l'apply, alors que l'`app-config` de `gcp` est un manifest versionné que lit Config Sync. Proposition de [OPS], pour décision du DSI.
+
+Voie proposée : trois manifests de `gcp/k8s/values/` que la personne qui applique écrit, à partir de sorties d'OpenTofu sans secret, dans une PR relue. `app-config.yaml` (hôtes), `app-ca.yaml` (paquets de CA, un ConfigMap) et `secret-provider-class.yaml` (projet de Secret Manager). Le dépôt les livre avec des valeurs d'attente qui échouent fermées : un hôte sous `.invalid` ne se résout jamais, un paquet vide arrête l'API au démarrage avec un message qui nomme le fichier (écart 143), un projet `PROJECT_ID` ne lit aucun secret. Le parcours : l'utilisateur applique la racine, lit `tofu output -raw database_private_ip` et `tofu output -raw database_server_ca_cert` avec ses identifiants (l'état est chiffré, ADR-008 condition 2), écrit les valeurs, ouvre la PR, puis applique `gcp/k8s/bootstrap/` une fois. Les valeurs sont dans Git avant le premier `RootSync`, donc les pods démarrent avec elles. Seule une rotation demande un redémarrage de l'API (écart 111).
+
+Raisons. Ce ne sont pas des secrets : un hôte privé et un certificat public. Les passer par Secret Manager et la synchronisation de GKE les ferait arriver dans un Secret Kubernetes, alors que l'API les lit dans `app-config` (variables d'environnement) et que la règle de parité compare ces références (ADR-007 condition 5) ; la synchronisation ne produit que des Secrets. Elle ajouterait des secrets, des liaisons IAM et des accès à la franchise de 10 000 par mois (ADR-007, condition 2), pour des valeurs publiques. Un fichier relu en PR garde l'historique, le retour arrière et un seul chemin pour toute valeur propre au déploiement. Voie écartée : un nom DNS stable, par une zone privée de Cloud DNS créée par OpenTofu, qui supprimerait les hôtes mais pas les CA, et ajouterait une ressource et un nom que `VerifyFull` ne vérifierait pas (écart 142).
+
+Ce que [SECU] relit. (1) Que la PR de valeurs soit relue par le propriétaire : `CODEOWNERS` du projet généré doit nommer `gcp/k8s/values/` ; remplacer l'hôte ou la CA suffirait à détourner la connexion de l'API vers un serveur du réseau privé. (2) S31 : modes `VerifyCA` et `VerifyFull` seuls, hôtes, CA qui doivent être des autorités, clé privée refusée. (3) Que les sorties ne portent aucun secret : S15 refuse déjà les jetons ; le paquet de CA est sensible pour le provider seulement. (4) L'empreinte SHA-256 de chaque certificat de la PR, à comparer avec la sortie. (5) La rotation de la CA et le redémarrage de l'API. Ce que la proposition ne fait pas : aucune écriture automatique des valeurs, qui demanderait un script qui lit l'état et une décision du DSI sur qui l'exécute.
+
+#### `gateway-tls` sur `gcp`
+
+Question de T129, avec [SECU]. Page de GKE sur la sécurisation d'une Gateway : trois voies, un Secret Kubernetes de type TLS cité par `certificateRefs` (la page l'illustre avec un certificat auto-signé et dit que le client doit alors le connaître), un certificat de Compute Engine, ou Certificate Manager (annotation `networking.gke.io/certmap`, qui ne se combine pas avec `certificateRefs`). Un certificat géré par Google demande un nom de domaine et un enregistrement DNS. Le golden repo n'a pas de domaine : la proposition est le Secret, produit comme `db-auth` par la synchronisation de GKE (ADR-007). Le provider `tls` 4.4.2 (publié le 2026-10-21) a la ressource éphémère `tls_private_key`, et `tls_self_signed_cert` accepte `private_key_pem_wo`, écriture seule, « never persisted to Terraform state » : la clé ne passe pas dans l'état. Le certificat, public, et la clé vont dans deux secrets de Secret Manager par `secret_data_wo`, puis un `SecretSync` de type `tls`, qui reste à vérifier comme le type de `db-auth` (écart 144). Il faut donner la même clé à `tls_self_signed_cert` et à `secret_data_wo` : question ouverte comme pour `db-auth`. Le producteur s'écrit avec l'écouteur HTTPS de la PR #83. Avec un domaine, Certificate Manager serait préférable et demanderait un ADR (annotation de la Gateway propre à GKE). Écart 146.
+
+#### Cache joignable de tout pod
+
+Écart 84 de `main` (« sur `gcp`, tout pod du cluster peut atteindre le cache, à traiter à l'étape 14 »), repris à l'écart 147. Le point de terminaison est dans le sous-réseau de GKE ; la politique de connexion de service limite le sous-réseau, non les pods. Une NetworkPolicy de sortie limiterait les pods de `saas-b2b`, demanderait l'adresse du point de terminaison et des règles de DNS et de ports non lues ; elle ne couvrirait pas les autres namespaces. Non écrite, décision à la GATE 2.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://docs.cloud.google.com/kubernetes-engine/docs/how-to/gatewayclass-capabilities> | 2026-11-26 | Neuf classes, Gateway API 1.5.0 dès GKE 1.35.2-gke.1842000, capacités de `gke-l7-global-external-managed` |
+| <https://docs.cloud.google.com/kubernetes-engine/docs/how-to/secure-gateway> | 2026-11-26 | Secret, certificat Compute Engine et Certificate Manager ; auto-signé admis avec un Secret |
+| <https://docs.cloud.google.com/secret-manager/docs/sync-k8-secrets> | 2026-11-26 | `SecretProviderClass`, `SecretSync`, `resourceName`, `type`, région, namespace |
+| <https://docs.cloud.google.com/kubernetes-engine/docs/concepts/autopilot-security> | 2026-11-26 | `ValidatingAdmissionPolicy` sur Autopilot : namespaces gérés exclus, kinds refusés |
+| <https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/> | 2026-11-26 | Stable depuis Kubernetes 1.30, forme de la règle et de la liaison |
+| <https://docs.cloud.google.com/kubernetes-engine/config-sync/docs/reference/rootsync-reposync-fields> | 2026-11-26 | Champs du `RootSync` |
+| <https://github.com/GoogleContainerTools/kpt-config-sync/tree/v1.25.2/pkg/api/configsync/v1beta1> | 2026-11-26 | `roleRefs` (cluster-admin par défaut), `MonitoringSpec`, `GitConfig`, `sourceFormat` |
+| <https://github.com/GoogleContainerTools/kpt-config-sync/releases/tag/v1.25.2> | 2026-11-26 | Publiée le 2026-11-03 ; `config-sync-manifest.yaml`, SHA-256 `bb5cf3ca…8121` |
+| `docker buildx imagetools inspect gcr.io/config-management-release/<image>` (buildx 0.37.2) | 2026-11-26 | Neuf condensats égaux à BENCH-009 |
+| <https://docs.cloud.google.com/sql/docs/postgres/authorize-ssl> | 2026-11-26 | Modes de CA du serveur, SAN et nom d'hôte, vérification de la CA |
+| <https://github.com/hashicorp/terraform-provider-google/blob/v8.12.0/google/services/sql/resource_sql_database_instance.go> | 2026-11-26 | `server_ca_mode` (valeurs), `server_ca_cert` sensible |
+| <https://github.com/hashicorp/terraform-provider-tls/tree/v4.4.2/docs> | 2026-11-26 | `tls_private_key` éphémère, `private_key_pem_wo` de `tls_self_signed_cert` ; v4.4.2 du 2026-10-21 |
+| <https://github.com/kubernetes-sigs/gateway-api/releases/tag/v1.5.0> | 2026-11-26 | v1.5.0 du 2026-02-27, `standard-install.yaml`, SHA-256 `510338cf…0c96` |
+
 ## RS-17. CI du golden repo dans CELIAN
 
 Décision : un workflow racine de CELIAN, `golden-saas-b2b.yml`, appelle les tâches du golden repo ; les workflows du golden repo appellent les mêmes tâches. Le contrôle X01 copie le golden repo dans un dépôt Git neuf pour exercer ses propres hooks et sa configuration.
@@ -1444,6 +1498,31 @@ Renovate de CELIAN : le gestionnaire `npm` lit par défaut `(^|/)package\.json$`
 ### Relevé du 2026-11-26 : outils de `task check` au README (T090)
 
 Le README du golden repo donne, pour conftest, OpenTofu et Trivy, la version de `tests/tools/install.sh`, la licence et la date : conftest 0.71.1, Apache-2.0, d'après son fichier `LICENSE` lu le 2026-11-23 (ci-dessus) ; Trivy 0.76.2, Apache-2.0 (RS-22, lu le 2026-11-23) ; OpenTofu 1.13.9, MPL-2.0 (API de `opentofu/opentofu`, lue le 2026-11-26). Le détail de ce relevé, avec Docker Engine, kind, kubectl, Task et Git, est au point RS-09. S18 (`tests/static/s18-readme.sh`) compare le tableau du README aux fichiers qui portent ces versions.
+
+### Relevé du 2026-11-26 : kubeconform et schémas de S08 (T129, étape 14)
+
+Fait par [OPS], choix à confirmer par [QA] : la consultation de [QA] est à faire par le DSI, l'agent n'a pas pu la mener. Sources lues par `gh api` et `gh release download`, essais hors ligne.
+
+Outil. kubeconform valide des manifests contre des schémas JSON, hors ligne quand les schémas sont des fichiers. Il n'a besoin d'aucun cluster, contrairement à `kubectl apply --dry-run=server`, et lit des schémas de CRD, que `kubectl --dry-run=client` ne valide pas. conftest ne valide pas contre un schéma. Version 0.8.0, publiée le 2026-06-04 à 20:08:59 UTC (plus de 7 jours, principe VI), licence Apache-2.0 (API de GitHub), dépôt non archivé, dernier push le 2026-06-13, aucune release postérieure. La release n'est pas immuable et ne publie aucune signature parmi ses 8 fichiers, seulement `CHECKSUMS` : les SHA-256 de `CHECKSUMS` sont égaux au champ `digest` de l'API, et l'archive téléchargée a la somme attendue.
+
+| Archive | SHA-256 |
+| --- | --- |
+| `kubeconform-linux-amd64.tar.gz` | `9bc2bffbf71f261128533edaf912153948b7ff238f9a531ae6d34466ec287883` |
+| `kubeconform-linux-arm64.tar.gz` | `1f53fc8e81258197a35e8603054162a5af1de8c5af13746c71ab680d9534ed87` |
+| `kubeconform-darwin-amd64.tar.gz` | `71dbc87ac9f24099a62b93570e65aa06312ba6ac8aea63b7f86e9d999edf5a92` |
+| `kubeconform-darwin-arm64.tar.gz` | `f84f4dfbebf4a6b0b230385fa065a39ea35e02608c2b50d025dcf64775a69d67` |
+
+Emploi, lu dans le Readme au tag v0.8.0 et essayé : `-schema-location` accepte un gabarit qui finit par `.json` et les variables `ResourceKind`, `ResourceAPIVersion`, `Group`, `KindSuffix` ; plusieurs emplacements s'essaient dans l'ordre ; sans `-ignore-missing-schemas`, un kind sans schéma échoue ; `-skip` nomme des kinds. `-strict` est décrit « disallow additional properties not in schema or duplicated keys ». Essayé sur le schéma d'une CRD tel que Gateway API le publie, il laisse passer un champ inconnu sous `spec`, le schéma ne fermant pas ses objets (la lecture du code de kubeconform n'a pas été faite, seul l'essai le dit). `tests/schemas/regenerate.sh` ajoute donc `additionalProperties: false`, par `jq`, aux objets des trois CRD de Gateway API qui listent des propriétés ; avec lui, le même champ est refusé.
+
+Schémas. Gateway API : le `openAPIV3Schema` de la version `v1` de Gateway, GatewayClass et HTTPRoute dans `standard-install.yaml` v1.5.0 (RS-16), converti par `conftest parse` et `jq`. Kubernetes : fichiers « standalone-strict » de `yannh/kubernetes-json-schema`, que kubeconform nomme sa source par défaut, au commit `e62c03bd5a52fd34ff6ac28d083e2a300e0ae7c1` (2026-11-25), dossier `v1.36.7-standalone-strict` (le dépôt liste de v1.34 à v1.37.3). Le défaut de kubeconform lit la branche `master` de ce dépôt à chaque exécution : S08 n'y va pas, il lit des fichiers versionnés, dont les sommes sont dans `tests/schemas/SHA256SUMS` et dont la licence est dans `tests/schemas/NOTICE`. Onze schémas de Kubernetes (Namespace, ConfigMap, ServiceAccount, Service, Deployment, NetworkPolicy, Role, RoleBinding, ClusterRole, ValidatingAdmissionPolicy et sa liaison) et trois de Gateway API pèsent 1,26 Mo, le Deployment 692 ko : au-dessus des 500 ko que `check-added-large-files` laisse passer, d'où l'exclusion du dossier (écart 155).
+
+Essais. La couche commune de l'étape 7 (4 objets) passe `-strict`. Un champ inconnu sous `spec` de la Gateway est refusé, comme un port écrit `eighty` : S08 le rejoue à chaque exécution pour prouver ses schémas. Les 7 rendus de la PR (base, trois overlays, composition `gcp/k8s/prod`, `bootstrap`, `values`) passent, `SecretProviderClass`, `SecretSync` et `RootSync` sautés par leur nom (écart 149).
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://api.github.com/repos/yannh/kubeconform/releases/tags/v0.8.0> | 2026-11-26 | Date, 8 fichiers, `digest`, release non immuable ; licence par l'API du dépôt |
+| <https://github.com/yannh/kubeconform/blob/v0.8.0/Readme.md> | 2026-11-26 | Options, gabarit de `-schema-location`, variables |
+| <https://github.com/yannh/kubernetes-json-schema/tree/e62c03bd5a52fd34ff6ac28d083e2a300e0ae7c1> | 2026-11-26 | Dossiers `v1.34` à `v1.37.3`, `v1.36.7-standalone-strict`, notice Apache-2.0 |
 
 ## RS-19. Mesures de la gate
 
