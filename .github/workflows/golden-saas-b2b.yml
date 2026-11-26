@@ -118,7 +118,7 @@ jobs:
 
       - name: Install Trivy and conftest
         run: |
-          bash tests/tools/install.sh "$RUNNER_TEMP/golden-tools"
+          bash tests/tools/install.sh "$RUNNER_TEMP/golden-tools" trivy conftest
           echo "$RUNNER_TEMP/golden-tools" >> "$GITHUB_PATH"
 
       # kubectl renders local/k8s/<profile> for the inventory once step 8

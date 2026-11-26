@@ -21,7 +21,7 @@ CDPATH='' cd -- "$root"
 
 scan="tests/scan/scan-images.sh"
 unreachable="registry.invalid/aquasec/trivy-db:2"
-pass_line="no blocking image carries a vulnerability at or above the threshold without a valid exception"
+pass_line="no pulled blocking image carries a vulnerability at or above the threshold without a valid exception; the images built by task up (saas-b2b.invalid) are scanned from the second PR of step 18"
 
 if out="$(bash "$scan" --db-repository "$unreachable" lite 2>&1)"; then
   printf '%s\n' "$out" >&2

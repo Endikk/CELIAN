@@ -41,7 +41,7 @@ platform="linux/amd64"
 # Trivy stops at 5m0s by default (research RS-22); the node image is the
 # heaviest of the inventory.
 trivy_timeout="10m"
-pass_line="no blocking image carries a vulnerability at or above the threshold without a valid exception"
+pass_line="no pulled blocking image carries a vulnerability at or above the threshold without a valid exception; the images built by task up (saas-b2b.invalid) are scanned from the second PR of step 18"
 
 usage="usage: tests/scan/scan-images.sh [--db-repository <repository under .invalid>] lite"
 
@@ -141,9 +141,11 @@ awk '
     print "| Image | CRITICAL | HIGH | Distinct identifiers | With a fix |"
     print "| --- | --- | --- | --- | --- |"
   }
-  / reported: [^ ]+: [0-9]+ CRITICAL, / {
+  # Anchored on the start of a WARN line: the deny lines carry package names
+  # that come from the reports.
+  /^WARN - .* reported: [^ ]+: [0-9]+ CRITICAL, / {
     line = $0
-    sub(/^.* reported: /, "", line)
+    sub(/^WARN - .* reported: /, "", line)
     image = line
     sub(/: [0-9]+ CRITICAL, .*$/, "", image)
     rest = line

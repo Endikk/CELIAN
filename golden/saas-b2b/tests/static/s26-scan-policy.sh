@@ -38,7 +38,7 @@ e27="tests/scan/e27-pulled-images.sh"
 inventory="local/scripts/image-inventory.sh"
 classes="tests/scan/image-classes.sh"
 trivy_floor="0.71.1"
-pass_line="no blocking image carries a vulnerability at or above the threshold without a valid exception"
+pass_line="no pulled blocking image carries a vulnerability at or above the threshold without a valid exception; the images built by task up (saas-b2b.invalid) are scanned from the second PR of step 18"
 problems=0
 
 report() {
@@ -328,6 +328,11 @@ $entry"
     done < <(printf '%s\n' "$blocking_entries")
   done < <(printf '%s\n' "$reported_entries")
   if [ -f "$dir/$inventory" ]; then
+    local gcp_refs
+    gcp_refs="$(CDPATH='' cd -- "$dir" && bash "$inventory" gcp 2>&1)" || {
+      printf '%s: the inventory of the gcp layer cannot be read, so no reported image is checked against it: %s\n' "$policy_file" "$gcp_refs"
+      return 0
+    }
     while IFS= read -r ref; do
       [ -n "$ref" ] || continue
       repo="${ref%%@*}"
@@ -339,7 +344,7 @@ $entry"
           printf '%s: %s is a reported image, which runs on the local cluster only, and the render of the gcp layer deploys it (%s): it would go to production without blocking the scan.\n' "$policy_file" "$entry" "$ref"
         fi
       done < <(printf '%s\n' "$reported_entries")
-    done < <(CDPATH='' cd -- "$dir" && bash "$inventory" gcp 2>&1)
+    done < <(printf '%s\n' "$gcp_refs")
   fi
 }
 
@@ -398,6 +403,12 @@ class_refused class-in-gcp "docker.io/example/tool is a reported image"
 digest_image="docker.io/example/tool@sha256:$(printf '%064d' 0 | tr 0 a)"
 make_class_fixture "$work/class-in-gcp-digest" docker.io/example/tool "$digest_image"
 class_refused class-in-gcp-digest "the render of the gcp layer deploys it"
+
+# A render of gcp that fails must fail S26: an inventory that cannot be read
+# checks nothing about the reported images.
+make_class_fixture "$work/class-render-fails" docker.io/example/tool europe-docker.pkg.dev/project/repo/api:1
+rm "$work/class-render-fails/gcp/k8s/prod/pod.yaml"
+class_refused class-render-fails "the inventory of the gcp layer cannot be read"
 
 make_class_fixture "$work/class-other" docker.io/example/tool europe-docker.pkg.dev/project/repo/api:1 \
   '    blocking:' '      - saas-b2b.invalid' '    reported:' '      - docker.io/example/tool' '    local:' '      - docker.io/example/other'
