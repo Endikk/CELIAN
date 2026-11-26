@@ -1,6 +1,6 @@
 # The CA bundles of the two managed services, public by nature, so a ConfigMap
 # and no Secret (ADR-015, condition 7). The common Deployment of the API mounts
-# this ConfigMap, optional, at /run/config/ca (tasks.md, gap 166): the bundle of
+# this ConfigMap, optional, at /run/config/ca (tasks.md, gap 174): the bundle of
 # the database is read through the variable PGSSLROOTCERT of Npgsql (research
 # RS-12), the one of the cache through CACHE_TLS_CA_FILE of app-config.
 #

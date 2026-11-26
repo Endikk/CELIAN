@@ -17,7 +17,7 @@
 #    admission policy, and the writes by name that the layer gives it;
 # 4. Config Sync takes over the admission policy and its binding, which the user
 #    created with the bootstrap and it did not, and updates them by name: a
-#    change made by hand to the policy is put back (tasks.md, gap 168);
+#    change made by hand to the policy is put back (tasks.md, gap 176);
 # 5. the rule refuses a pod without requests in the namespace of the application
 #    and lets the same pod through with them, and leaves other namespaces alone
 #    (ADR-008, condition 9; the server decides, `apply --dry-run=server`).
@@ -261,7 +261,7 @@ k patch validatingadmissionpolicy "$policy" --type merge -p '{"spec":{"failurePo
 put_back() {
   [ "$(k get validatingadmissionpolicy "$policy" -o 'jsonpath={.spec.failurePolicy}')" = Fail ]
 }
-wait_for 180 put_back || fail "Config Sync does not put back the policy changed by hand: it cannot update by name an object that it did not create (tasks.md, gap 168)."
+wait_for 180 put_back || fail "Config Sync does not put back the policy changed by hand: it cannot update by name an object that it did not create (tasks.md, gap 176)."
 
 # --- 5. A pod without requests is refused ------------------------------------------------
 

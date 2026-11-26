@@ -15,7 +15,7 @@
 # namespace of the application.
 #
 # The expression is CEL, checked by the API server at the first apply, not here:
-# no tool of the repo compiles it offline (tasks.md, gap 176; E16 and the test
+# no tool of the repo compiles it offline (tasks.md, gap 184; E16 and the test
 # of ADR-008 on GKE). It asks for requests.cpu and requests.memory on every
 # container and on every init container.
 #

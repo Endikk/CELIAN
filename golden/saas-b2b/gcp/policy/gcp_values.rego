@@ -24,7 +24,7 @@
 #   PR 87). No URL, no port.
 # - no pod runs as the service account of the sync: an account that reads
 #   the secrets of Secret Manager is not an account that a workload may take
-#   (tasks.md, gap 174).
+#   (tasks.md, gap 182).
 # - app-ca: one ConfigMap with the bundles of the two CAs, public by nature.
 #   Each value is empty (placeholder) or one to four PEM certificates that
 #   parse, each a CA. A private key inside is refused.
@@ -51,7 +51,7 @@ config_keys := {
 
 ca_keys := {"database-ca.pem", "cache-ca.pem"}
 
-# Where the common Deployment mounts app-ca (tasks.md, gap 166).
+# Where the common Deployment mounts app-ca (tasks.md, gap 174).
 cache_ca_path := "/run/config/ca/cache-ca.pem"
 
 tls_modes := {"verifyca", "verifyfull"}

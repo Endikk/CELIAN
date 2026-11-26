@@ -12,7 +12,7 @@
 # nor DOTNET_ENVIRONMENT to Development; the HTTPRoutes name localhost
 # (policy/layer_parity.rego). The gcp part follows, when gcp/k8s/ is there (a
 # project rendered for the local target alone has none): step 14 joined it, the
-# two parts are one control (tasks.md, gap 163). It is described below.
+# two parts are one control (tasks.md, gap 171). It is described below.
 #
 # The renders come from the Kustomize of kubectl, as in S06 and S12
 # (research RS-01). The objects of the local layer on their own are the

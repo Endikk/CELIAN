@@ -20,12 +20,12 @@
 #   no schema that this repo could pin: SecretProviderClass and SecretSync
 #   (no published CRD that was read), RootSync (the CRD is in the manifest of
 #   Config Sync, vendored by T132). They are skipped here by name, and
-#   S31 and S10 read their fields instead (tasks.md, gap 172);
+#   S31 and S10 read their fields instead (tasks.md, gap 180);
 # - the check is proved on the schemas themselves: the Gateway of the common
 #   layer with a field the schema lacks, and with a port written as text, is
 #   refused.
 # The local renders (local/k8s/) are not validated yet: their kinds
-# (StatefulSet, Job) have no schema here (tasks.md, gap 172).
+# (StatefulSet, Job) have no schema here (tasks.md, gap 180).
 set -uo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"

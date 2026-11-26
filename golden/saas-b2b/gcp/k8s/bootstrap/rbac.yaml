@@ -21,7 +21,7 @@
 #   its binding first, with this bootstrap (folder ../admission, also in the
 #   component), and Config Sync then only updates them by name. S10 refuses a
 #   create for the whole cluster, S07 asks for the two objects here (SECU
-#   review of the PR 87; tasks.md, gap 168).
+#   review of the PR 87; tasks.md, gap 176).
 #
 # Which verbs and kinds the reconciler needs to sync this render is read in
 # the rules of Config Sync, not guessed: E16 on kind (T132) shows what it
