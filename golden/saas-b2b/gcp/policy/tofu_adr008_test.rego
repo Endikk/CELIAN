@@ -257,8 +257,8 @@ test_s15_rejects_a_public_ip_left_to_its_default if {
 	denied_with(patched(drop(path)), "the instance has a public IP")
 }
 
-test_s15_rejects_a_memorystore_without_tier if {
-	denied_with(patched(set("/resource/google_redis_instance", {"cache": [{"memory_size_gb": 1}]})), "the tier of Memorystore is not written out")
+test_s15_rejects_a_memorystore_for_redis if {
+	denied_with(patched(set("/resource/google_redis_instance", {"cache": [{"tier": "BASIC", "memory_size_gb": 1}]})), "Memorystore for Redis is not the cache of the layer")
 }
 
 # Condition 8.
