@@ -18,7 +18,8 @@
 #
 # The gcp layer gets a stricter rule, an allowlist, until GATE 2: in its
 # Taskfile and scripts, OpenTofu runs only fmt, init (with -backend=false),
-# validate, version and providers; gcloud and kubectl do not appear. A list of
+# validate, version and providers; gcloud does not appear, and kubectl only as
+# `kubectl kustomize`, a render that calls no cluster (step 14). A list of
 # what is refused would miss import, state, console or taint. The failing
 # cases are in gcp/tests/static/s17-cases/, run through this script alone.
 set -euo pipefail
@@ -140,15 +141,58 @@ gcp_tofu_findings() {
   ' || true
 }
 
+# Allowlist of kubectl in the gcp layer, until GATE 2 (principle X; step 14).
+# The checks of the Kubernetes layer render it with `kubectl kustomize`, which
+# reads files and calls no cluster: no kubeconfig, no context, no network.
+# Every other use of kubectl is refused, because a call to a GKE context
+# would create billed resources outside the state of OpenTofu, a load
+# balancer for a Gateway for instance (ADR-005, CLAUDE.md, "Garde-fous").
+# Takes the first word after the options as the subcommand, as the OpenTofu
+# allowlist does, and prints "<line>|<rule>|<text>" for each use whose
+# subcommand is not kustomize. A use with no subcommand ("for tool in
+# kubectl; do", "command -v kubectl") passes. An option that takes a value,
+# --context gke_x, leaves the value as the subcommand, which is refused: the
+# conservative reading.
+gcp_kubectl_findings() {
+  code_lines "$1" | awk '
+    {
+      split_at = index($0, ":")
+      number = substr($0, 1, split_at - 1)
+      text = substr($0, split_at + 1)
+      rest = text
+      while (match(rest, /(^|[^A-Za-z0-9_.\/-])kubectl([^A-Za-z0-9_.\/-]|$)/)) {
+        seg = substr(rest, RSTART, RLENGTH)
+        skip = (substr(seg, 1, 1) == "k") ? 0 : 1
+        rest = substr(rest, RSTART + skip + 7)
+        tail = rest
+        sub_cmd = ""
+        while (tail != "") {
+          sub(/^[ \t]+/, "", tail)
+          if (tail == "") { break }
+          word = tail
+          sub(/[ \t].*$/, "", word)
+          if (word ~ /^-/) { tail = substr(tail, length(word) + 1); continue }
+          if (match(word, /^[A-Za-z][A-Za-z-]*/)) { sub_cmd = substr(word, 1, RLENGTH) }
+          break
+        }
+        if (sub_cmd == "") { continue }
+        if (sub_cmd != "kustomize") {
+          print number "|kubectl command outside the allowlist of the gcp layer (kustomize, a render with no cluster)|" text
+        }
+      }
+    }
+  ' || true
+}
+
 # The rules of the gcp layer, for its Taskfile and its scripts.
 check_gcp_layer() {
   local file="$1" number rule text
-  forbid "$file" "${word_start}(gcloud|kubectl)${word_end}" \
-    "gcloud or kubectl in the gcp layer, before GATE 2"
+  forbid "$file" "${word_start}gcloud${word_end}" \
+    "gcloud in the gcp layer, before GATE 2"
   while IFS='|' read -r number rule text; do
     [ -n "$number" ] || continue
     report "$file" "$number" "$rule: ${text#"${text%%[![:space:]]*}"}"
-  done < <(gcp_tofu_findings "$file")
+  done < <(gcp_kubectl_findings "$file"; gcp_tofu_findings "$file")
 }
 
 # The write permissions of release-please.yml ($2 is their pattern): exactly

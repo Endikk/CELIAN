@@ -5,8 +5,8 @@
 # The common layer names no tool and no provider (contracts/layers.md): it
 # renders k8s/base and each overlay of k8s/overlays/ with the Kustomize of
 # kubectl (research RS-01), then policy/common_neutral.rego reads every
-# rendered object. The overlay of the local environment must be there, from
-# step 7 on; staging and prod join with steps 9 and 14. The code of the API
+# rendered object. The overlays of the three environments must be there: local,
+# staging and prod (step 14, T133). The code of the API
 # is common too: neither src/ nor k8s/ names the cache engine of the local
 # layer or the managed cache of the gcp layer (ADR-015, condition 17).
 set -uo pipefail
@@ -20,9 +20,9 @@ for tool in conftest kubectl; do
     exit 1
   fi
 done
-for dir in k8s/base k8s/overlays/local; do
+for dir in k8s/base k8s/overlays/local k8s/overlays/staging k8s/overlays/prod; do
   if [ ! -f "$dir/kustomization.yaml" ]; then
-    echo "$dir/kustomization.yaml is missing: the common layer is not written yet (spec 001, T060)." >&2
+    echo "$dir/kustomization.yaml is missing: the common layer is not written yet (spec 001, T060; the staging and prod overlays, T133)." >&2
     exit 1
   fi
 done

@@ -1,0 +1,4 @@
+# Failing case of S17: a render sent to a cluster. The render alone is allowed.
+# expect: kubectl command outside the allowlist of the gcp layer
+
+      - kubectl kustomize gcp/k8s/prod | kubectl apply -f -
