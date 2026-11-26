@@ -25,6 +25,8 @@
 # first checks the sigstore signature of the checksum file with cosign
 # (research RS-22), then copies the sums.
 #
+# kubectl stays on the Kubernetes minor of platform.yaml: a rule of
+# renovate.json (allowedVersions, checked by S23) refuses another minor.
 # Renovate proposes the new versions: a custom manager of renovate.json (in
 # CELIAN, the one at the root) reads the "# renovate:" comment above each
 # constant, under the delay of 7 days. It changes the constant only, and no
@@ -85,6 +87,13 @@ case "$(uname -m)" in
   arm64 | aarch64) arch="arm64" ;;
   *) die "unsupported processor $(uname -m): amd64 and arm64 only." ;;
 esac
+
+# Before anything is created: on another system, the call fails without
+# leaving a directory behind.
+if wanted kind || wanted kubectl; then
+  [ "$os" = linux ] && [ "$arch" = amd64 ] ||
+    die "kind and kubectl install on Linux amd64 only, the runner of the CI; found $os $arch."
+fi
 
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -149,11 +158,6 @@ install_plain() {
   install -m 0755 "$file" "$dest/$binary"
   echo "Installed $binary from $url, SHA-256 checked."
 }
-
-if wanted kind || wanted kubectl; then
-  [ "$os" = linux ] && [ "$arch" = amd64 ] ||
-    die "kind and kubectl install on Linux amd64 only, the runner of the CI; found $os $arch."
-fi
 
 if wanted kind; then
   [ -f "$preflight_checks" ] || die "$preflight_checks is missing: it holds KIND_VERSION."
