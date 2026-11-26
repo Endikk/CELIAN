@@ -861,6 +861,35 @@ Nouvelle configuration, volume neuf : `GET /v2/_catalog` répond 200, `POST /v2/
 | <https://zotregistry.dev/v2.1.23/articles/authn-authz/> | 2026-11-26 | Actions, motif `**`, `anonymousPolicy` |
 | Essai sur kind du 2026-11-26 | 2026-11-26 | Écriture acceptée avant, refusée avec 401 après ; cache rempli |
 
+### Relevé du 2026-11-26 : miroir sous un UID non root et démarrage sans registre (étape 10)
+
+Fait par [OPS], sur le poste (arm64, OrbStack, Docker 29.8.2, kind 0.33.0, nœud v1.36.4), sous le verrou partagé des essais sur kind.
+
+UID non root (condition 6 de l'ADR-011, E23). L'utilisateur `nonroot` des images distroless a l'UID 65532 (`common/variables.bzl` : `NONROOT = 65532`) ; le test `base/testdata/base.yaml` attend le dossier `/home/nonroot` et la ligne `nonroot:x:65532:65532:nonroot:/home/nonroot:/sbin/nologin` de `/etc/passwd`. Les deux fichiers ne disent rien du propriétaire du dossier. Deux essais, par `mirror.sh` :
+
+- `--user 65532:65532` avec le volume sur `/var/lib/registry`, un dossier que l'image n'a pas : le volume neuf appartient à root, zot écrit 37 lignes `permission denied` (`_restore_complete`, `mkdir /var/lib/registry/envoyproxy`), répond 404 à chaque lecture de blob, et le volume reste à 0 B. `task up` réussit pourtant, en 86 s : sans ligne `server` dans `hosts.toml`, containerd se rabat sur docker.io. Un miroir qui ne peut pas écrire passe donc inaperçu tant que le réseau est là ;
+- le volume monté sur `/home/nonroot`, avec `storage.rootDirectory` à la même valeur : aucune erreur, 301,2 Mo après `task mirror:purge` puis `task up`, 87 s. Le volume neuf a pris le contenu et le propriétaire du dossier de l'image qu'il recouvre : constaté par le résultat, non lu dans la documentation (la page des volumes n'en dit rien, comme l'ADR-011 le notait). Le volume écrit par cet UID est repris par le `task up` suivant (E23, troisième partie).
+
+Le PR retient la seconde forme : `MIRROR_USER` à `65532:65532` dans `lib/local-env.sh`, le stockage sous `/home/nonroot`, et un arrêt de `mirror.sh up` qui nomme le volume et propose `task mirror:purge` quand le journal de zot porte `permission denied` (volume fait pour root par un `task up` d'avant, premier essai ci-dessus).
+
+Coupure des registres (E10, E28). La méthode est celle de BENCH-010 (`tests/bench/bench-010-offline.sh`, en-tête), sur une copie du golden repo : chaque `certs.d/<registre>/hosts.toml` gagne `server = "https://127.0.0.1:9"`, un `_default/hosts.toml` ne porte que ce `server`, et la synchronisation de zot vise le même cul-de-sac. Rien ne touche au réseau du poste ni à un autre conteneur. Constaté : un pod sur une image de quay.io absente de tout cache échoue sur `127.0.0.1:9` ; sur une image de docker.io absente du miroir, containerd garde la réponse du miroir, `503 Service Unavailable` (zot ne joint pas son amont), et n'essaie pas `server`. Dans les deux cas le tirage échoue, ce que les pods témoins de E10 exigent.
+
+Redémarrage sans registre (E10). Après un premier `task up` en ligne de 84 s et `task down`, `task up` recrée le cluster registres coupés et atteint « prêt » en 55 s (66 s à un premier essai). Le journal du miroir montre 15 lectures de `library/postgres` et 10 de `envoyproxy/gateway` répondues 200. Un pod sur l'image de Postgres de la pile, par condensat, en `imagePullPolicy: Always`, démarre : l'événement `Pulling` est là, le miroir répond en capacité `pull` seule (ADR-011, condition 1). Le moteur garde ses images de base (nœud, zot, bases de l'API et du front) et le cache de construction : ni les tirages du moteur ni une construction avec des sources changées ne sont coupés.
+
+Premier démarrage sans registre (E28). Miroir vide, registres coupés : `task up` s'arrête à l'étape de la plate-forme, 98 s après le début, par `platform: the image docker.io/envoyproxy/gateway:v1.10.0@sha256:c224... cannot be pulled from the registry docker.io (ErrImagePull for 61 s). The mirror holds only what an earlier task up pulled, so the first start needs the network: ...`. Sans `lib/pull-wait.sh`, la même exécution dépassait 300 s (CI du commit rouge : 336 s, arrêt par le test).
+
+Contenu du volume (E20). Après purge et un `task up` en ligne, le catalogue de zot liste `envoyproxy/envoy`, `envoyproxy/gateway`, `library/postgres` et `valkey/valkey`, soit les dépôts des images que font tourner les conteneurs du projet, et aucun de ces dépôts ne porte de tag. L'API de zot ne liste pas les condensats d'un dépôt : le contrôle porte sur les dépôts et les tags, non sur chaque condensat.
+
+Une anomalie, non expliquée. Au premier essai de E10, `task up` a échoué à l'étape du miroir : `open /etc/zot/config.json: no such file or directory`, le conteneur sorti aussitôt, juste après que le test eut remplacé `config.json` par `mv` (nouvel inode, après un premier montage du même chemin). Le second essai a passé, et deux reprises à la main, avec `mv` dans les deux cas, aussi. Le test écrit désormais le fichier sur place. À surveiller sur OrbStack : un `git pull` remplace aussi les fichiers par de nouveaux inodes.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://raw.githubusercontent.com/GoogleContainerTools/distroless/main/common/variables.bzl> | 2026-11-26 | `NONROOT = 65532`, `USERS = ["root", "nonroot"]` |
+| <https://raw.githubusercontent.com/GoogleContainerTools/distroless/main/base/testdata/base.yaml> | 2026-11-26 | `/home/nonroot` existe ; ligne de `/etc/passwd` du compte `nonroot` ; propriétaire du dossier non dit |
+| <https://github.com/GoogleContainerTools/distroless/blob/main/README.md> | 2026-11-26 | Étiquettes `latest`, `nonroot`, `debug`, `debug-nonroot` ; aucun UID |
+| `tests/bench/bench-010-offline.sh`, en-tête | 2026-11-26 | Méthode de coupure : `hosts.toml` au cul-de-sac, `_default`, zot au même cul-de-sac |
+| Essais sur le poste, 2026-11-26 | 2026-11-26 | `permission denied` sous `--user` sur `/var/lib/registry` ; volume sur `/home/nonroot` écrit ; 503 du miroir ; 84 s, 55 s, 98 s |
+
 ## RS-14. Flux dans le profil standard
 
 Décision de Lucas (2026-11-21) : Flux est livré dans le profil standard avec sa liaison suspendue (`spec.suspend`), et `task reload` reste seul maître des objets de l'application, jusqu'à ce que Lucas tranche ce que lit Flux sur le PC (ADR-010, question 1). `task up` installe Flux depuis son `install.yaml` vendoré, quatre contrôleurs, options de verrouillage de la condition 3 de l'ADR-010. Un seul acteur tient ainsi les objets de l'application, comme le demande la question 3 de l'ADR-010. S28 vérifie la suspension.
