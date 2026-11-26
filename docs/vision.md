@@ -1,7 +1,8 @@
 # Vision de CELIAN
 
 Statut : validée par Lucas à la GATE 0 le 15/11/2026. Section « Ce qui le
-distingue » révisée le 19/11/2026, après l'analyse des outils existants.
+distingue » révisée le 19/11/2026, après l'analyse des outils existants, puis le
+26/11/2026 pour le mode d'hébergement sur le cloud.
 
 Sources : brief v1.0 (sections 2, 3, 4 et 12), constitution 1.0.0 et
 `CLAUDE.md`, lus le 15/11/2026. Le détail du MVP est dans le
@@ -28,7 +29,9 @@ lui pour l'infrastructure et la sécurité.
 
 CELIAN prend la forme d'un plugin Claude Code qui pilote une CLI Python.
 L'utilisateur répond à un entretien guidé sur sa cible, son type de projet et
-ses contraintes. Ses réponses deviennent une spec YAML abstraite, source de
+ses contraintes. Sur un cloud, il pèse aussi, brique par brique, le mode
+d'hébergement (service managé, auto-hébergé ou hybride) et en garde la raison.
+Ses réponses deviennent une spec YAML abstraite, source de
 vérité du projet. Des blueprints testés génèrent le dépôt de façon
 déterministe, puis un agent écrit ce qui est propre au projet : les ADR et les
 textes du projet. Le code applicatif se limite à l'exemple livré par le
@@ -45,8 +48,9 @@ parité locale existe ailleurs. Mais aucun des douze outils
 [analysés](benchmarks/analyse-outils-existants.md) ne couvre entièrement plus
 de deux des six piliers de CELIAN. La différence tient à l'assemblage et à la
 curation. Le catalogue est daté : la CI du générateur rejette toute entrée
-incomplète. La règle « open source sur PC, managé sur GCP » vise une stack
-.NET et React.
+incomplète. Sur GCP, l'entretien choisit brique par brique entre service managé, composant
+auto-hébergé et montage hybride, et écrit la raison ; sur le PC, la règle est
+l'open source. Ces règles visent une stack .NET et React.
 L'agent n'écrit que les ADR et les textes, et la validation le renvoie
 corriger. Aucun des douze ne le fait ; c'est le point le moins éprouvé.
 

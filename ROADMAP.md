@@ -220,6 +220,17 @@ standard, avec le temps et le volume mesurés (R-04).
   fusions comprises, avec le choix du modèle des agents selon la tâche.
 - 26/11/2026 : tous les sous-agents tournent sur Sonnet, Opus reste à la
   session principale.
+- 26/11/2026 : « Cloud SQL peut être une solution ! Cela doit faire partie de
+  l'analyse à faire quand l'utilisateur passe un entretien. Si il faut utiliser
+  des solutions full cloud tu peux, mais il faut la bonne raison ! Hybride,
+  etc. » Le principe III passe en 2.0.0 : sur un cloud, le service managé est
+  une option, et l'entretien choisit brique par brique avec une raison écrite
+  (PRD US-013 et US-014, complément de l'ADR-009, R-43). Effet sur le MVP : le
+  golden repo construit et teste sur `gcp` la variante managée (Cloud SQL,
+  Memorystore). La variante auto-hébergée sur GKE, qui peut reprendre la couche
+  de données `local` (Postgres et Valkey dans le cluster), entre comme option de
+  blueprint en phase 3 ou 4 si la matrice de tests le permet. Deux options au
+  plus par brique dans le MVP, et une option non testée n'est jamais proposée.
 
 ### Décisions du DSI pendant l'absence de Lucas, confirmées à la GATE 1
 

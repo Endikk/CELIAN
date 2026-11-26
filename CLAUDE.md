@@ -26,8 +26,10 @@ en cas d'écart, il l'emporte sur ce résumé.
 1. Rien n'est généré sans être testé automatiquement.
 2. La spec est abstraite (`database: postgres`). Le catalogue la traduit en
    service concret selon la cible.
-3. Sur un cloud : services managés du fournisseur. En on-prem et sur PC :
-   technos gratuites et open source, la meilleure option du marché.
+3. Sur un cloud : le service managé est une option parmi d'autres (auto-hébergé,
+   hybride). L'entretien choisit brique par brique, avec une raison écrite ; le
+   full managé reste permis. En on-prem et sur PC : technos gratuites et open
+   source, la meilleure option du marché.
 4. Chaque techno du catalogue porte sa licence, sa gouvernance, son statut et
    la date de sa dernière vérification.
 5. Préférer les projets portés par une fondation (CNCF, Linux Foundation,

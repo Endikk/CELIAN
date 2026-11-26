@@ -157,6 +157,40 @@ La porte reste ouverte. Une cible AWS ou Azure s'ajoute par une version du sché
   bloquer que les PR qui touchent `catalog/` et les PR de release), et la
   lecture stricte des expressions de licence.
 
+### Complément du 2026-11-26 : le principe III devient une option
+
+Décision de Lucas du 2026-11-26 : sur un cloud, le service managé est une option
+parmi d'autres, et l'analyse de l'entretien choisit brique par brique, avec une
+raison écrite. Le principe III passe en version 2.0.0 de la constitution. Le
+texte ci-dessus reste celui du 2026-11-19 ; voici ce que le complément en
+change.
+
+1. Le principe III ne fixe plus un candidat unique sur une cible cloud. Les
+   candidats d'une brique sont l'option managée, l'option auto-hébergée dans le
+   cluster et les montages hybrides. La lecture « III fixe les candidats, V
+   départage » tient, sur un ensemble de candidats plus large. La phrase de la
+   section 2 selon laquelle le service managé « s'impose » sur `gcp`, et
+   l'obligation de `managed_gap` qui en découle, décrivaient la version 1.2.0 :
+   elles ne valent plus.
+2. Le catalogue liste, par cible cloud, l'option managée et l'option
+   auto-hébergée quand les deux existent. Chacune porte ses propres faits
+   (fournisseur ou licence, gouvernance, statut, date, sources, standards
+   exposés), ceux dont l'entretien a besoin pour peser les critères du
+   principe III : coût, charge d'exploitation, niveau de service, conformité et
+   souveraineté, résidence des données, portabilité, compétences, volumétrie.
+3. Le principe V départage toujours, entre options de même nature : deux
+   services managés entre eux (section 2, point 2a), deux composants libres
+   entre eux. Le choix entre managé et auto-hébergé revient à l'entretien, qui
+   l'écrit dans la spec et dans un ADR du projet généré.
+4. Sur `local`, rien ne change : `oss` seul, la meilleure option libre.
+
+Le format des entrées (plusieurs options par cible, fin de `managed_gap`),
+`schema/catalog-entry.schema.json`, `catalog/README.md` et le contrôle de
+`scripts/catalog/` ne changent pas dans ce complément. Ils s'ajustent par un ADR
+de la phase 3, avec le schéma de spec v1 (le champ de mode d'hébergement, voir
+US-013 du PRD). Les entrées existantes restent valides en attendant. Le tableau
+de conformité ci-dessous date du 2026-11-19 et se lit contre la version 1.0.0.
+
 ## Conformité à la constitution
 
 Vérifiée contre la [constitution](../../.specify/memory/constitution.md) en version 1.0.0. L'amendement 1.1.0 (PR #13) ne touche que la section « Périmètre du MVP ».
