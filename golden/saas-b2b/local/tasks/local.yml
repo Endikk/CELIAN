@@ -1,9 +1,9 @@
 # Tasks of the local layer, called by the public tasks of the root
 # Taskfile.yml, which includes this file as internal. They run in the folder
-# of the root Taskfile (research RS-09). Each stub below gives way to the
-# real task in the step it names (spec 001, tasks.md). The commands that
-# create or remove a container, a network, a volume or a cluster are listed
-# at the head of the root Taskfile.yml (ADR-011, condition 11).
+# of the root Taskfile (research RS-09). The commands that
+# create or remove a container, a network, a volume or a cluster, or that build
+# or load an image, are listed at the head of the root Taskfile.yml (ADR-011,
+# condition 11).
 
 version: '3'
 
@@ -36,36 +36,45 @@ vars:
 tasks:
   # Preflight checks first, before anything is created (contracts/task-cli.md),
   # with the host ports of the gateway; then the cluster, the mirror, the
-  # namespace of the application with the Secrets, the platform, and the
-  # application layer with Postgres (plan, "Ce que fait task up", points 2
-  # to 8). PROFILE forces the profile, given either way: PROFILE=lite task
-  # up, or task up PROFILE=lite. Task does not export a command-line
-  # variable to the commands, hence env; a PROFILE already in the
-  # environment wins over it (research RS-08). The API and the front arrive
-  # with step 9. The checks of the mirror, of the vendored platform and of
-  # the files of the application come before the cluster is created: a
-  # foreign container or volume, or a vendored file that differs from its
-  # SHA-256, stops task up at once; only the network kind, which kind
-  # creates, is checked after (mirror.sh up). The Secrets come before the
-  # platform: the controller of Envoy Gateway watches the namespace of the
-  # application, and its Role there needs the namespace (ADR-005, complement
-  # of 2026-11-25; tasks.md, gap 92).
+  # namespace of the application with the Secrets, the platform, the images,
+  # the application layer, and the wait for "ready" (plan, "Ce que fait task
+  # up", points 1 to 9). PROFILE forces the profile, given either way:
+  # PROFILE=lite task up, or task up PROFILE=lite. Task does not export a
+  # command-line variable to the commands, hence env; a PROFILE already in
+  # the environment wins over it (research RS-08). The checks of the mirror,
+  # of the vendored platform and of the files of the application come before
+  # the cluster is created: a foreign container or volume, or a vendored file
+  # that differs from its SHA-256, stops task up at once; only the network
+  # kind, which kind creates, is checked after (mirror.sh up). The Secrets
+  # come before the platform: the controller of Envoy Gateway watches the
+  # namespace of the application, and its Role there needs the namespace
+  # (ADR-005, complement of 2026-11-25; tasks.md, gap 92). The images come
+  # before the application: the Deployments name them. Each step that takes
+  # time goes through steps.sh, which prints its duration; UP_START is read
+  # when the task starts, for the total (FR-015, E17).
   up:
     silent: true
     env:
       PROFILE: '{{.PROFILE}}'
+    vars:
+      UP_START:
+        sh: date +%s
     cmds:
-      - bash local/scripts/preflight.sh '{{.GATEWAY_HTTP_PORT}}' '{{.GATEWAY_HTTPS_PORT}}'
+      - bash local/scripts/steps.sh run preflight -- bash local/scripts/preflight.sh '{{.GATEWAY_HTTP_PORT}}' '{{.GATEWAY_HTTPS_PORT}}'
       - bash local/scripts/mirror.sh check '{{.MIRROR_IMAGE}}'
       - bash local/scripts/platform.sh check '{{.ENVOY_GATEWAY_IMAGE}}'
       - bash local/scripts/app.sh check
-      - bash local/scripts/cluster.sh up
-      - bash local/scripts/mirror.sh up '{{.MIRROR_IMAGE}}'
+      - bash local/scripts/steps.sh run cluster -- bash local/scripts/cluster.sh up
+      - bash local/scripts/steps.sh run mirror -- bash local/scripts/mirror.sh up '{{.MIRROR_IMAGE}}'
       - task: secrets
-      - bash local/scripts/platform.sh up '{{.ENVOY_GATEWAY_IMAGE}}'
-      - bash local/scripts/app.sh up
-      - bash local/scripts/cache.sh wait
-      - echo 'task up stops after the database and the cache. The API and the front arrive with step 9 of spec 001.'
+      - bash local/scripts/steps.sh run platform -- bash local/scripts/platform.sh up '{{.ENVOY_GATEWAY_IMAGE}}'
+      - bash local/scripts/steps.sh run images -- bash local/scripts/app.sh images
+      - bash local/scripts/steps.sh run application -- bash local/scripts/app.sh apply
+      - bash local/scripts/steps.sh run database -- bash local/scripts/app.sh database
+      - bash local/scripts/steps.sh run cache -- bash local/scripts/cache.sh wait
+      - bash local/scripts/steps.sh run ready -- bash local/scripts/app.sh ready '{{.GATEWAY_HTTP_PORT}}'
+      - bash local/scripts/mirror.sh size
+      - bash local/scripts/steps.sh total '{{.UP_START}}'
 
   # The namespace of the application, then the Secrets of the database, each
   # only when it is missing (contracts/secrets.md; ADR-007, condition 1).
@@ -74,7 +83,7 @@ tasks:
   secrets:
     silent: true
     cmds:
-      - bash local/scripts/secrets.sh up
+      - bash local/scripts/steps.sh run secrets -- bash local/scripts/secrets.sh up
 
   # The mirror container first, so that nothing stays on the network kind
   # when the cluster goes (ADR-011), then the cluster; the mirror volume
@@ -86,16 +95,31 @@ tasks:
       - bash local/scripts/cluster.sh down
       - bash local/scripts/mirror.sh report '{{.MIRROR_IMAGE}}'
 
+  # The cluster stays; the mirror container goes as with task down, then the
+  # namespace of the application, with the database, its volume and its
+  # Secrets (contracts/task-cli.md). The profile standard will suspend the
+  # binding of Flux first, once Flux is delivered (step 12). The next task up
+  # recreates the Secrets, then the platform, whose Role in the namespace went
+  # with it (tasks.md, gap 93).
+  app-down:
+    silent: true
+    cmds:
+      - bash local/scripts/mirror.sh down
+      - bash local/scripts/app.sh down
+
   mirror-purge:
     silent: true
     cmds:
       - bash local/scripts/mirror.sh purge
 
+  # The images of the API and the front again, loaded, then the manifests: the
+  # steps of task up, defined once in app.sh (ADR-006, condition 6). The
+  # database and its data are not touched; with the same sources, the same
+  # images and so the same objects (E07).
   reload:
     silent: true
     cmds:
-      - echo 'task reload is not delivered yet. It arrives with step 9 of spec 001.' >&2
-      - exit 1
+      - bash local/scripts/steps.sh run reload -- bash local/scripts/app.sh reload '{{.GATEWAY_HTTP_PORT}}'
 
   # The tests on kind of the current profile; the cluster is created, then
   # deleted (contracts/task-cli.md). Until step 12, PROFILE=lite.

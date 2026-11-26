@@ -1,0 +1,35 @@
+# Who reaches Postgres on the local layer (ADR-012; tasks.md, gap 84): on TCP
+# 5432, the pods of the API (label app.kubernetes.io/name: api, which the
+# Deployment of the API carries) and Postgres itself, in this namespace
+# alone. Postgres itself, because task up and the tests run psql inside its
+# pod, against the Service postgres, whose address leads back to that pod.
+# Any other pod of the cluster, in this namespace or another, gets no answer:
+# before this policy, the pg_hba of the server was the only barrier, and E12
+# only checked the authentication.
+#
+# Ingress alone: the pod opens no connection, but nothing here depends on
+# that. The kubelet still reaches the pod for its probes (traffic from the
+# node of a pod is always admitted). kind applies NetworkPolicy, and E12
+# proves it on each run: a pod without the label times out.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgres
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - api
+                  - postgres
+      ports:
+        - protocol: TCP
+          port: 5432

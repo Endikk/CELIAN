@@ -1,11 +1,12 @@
 # One origin for the API and the front (plan, "Routage et adresses";
 # contracts/layers.md, "Routage"): the path prefix /api goes to the API,
 # which serves its routes under /api itself, and / to the front. No path
-# rewrite, no host name: core fields of Gateway API only (research RS-02).
-# PathPrefix matches path element by element, so /api never takes /apiary.
+# rewrite, no host name: core fields of Gateway API only (research RS-02). The
+# host name of a route is the target's: the local layer sets it by a patch
+# (tasks.md, gaps 45 and 120). PathPrefix matches path element by element, so
+# /api never takes /apiary.
 #
-# The Services api and front, on port 80, arrive with step 9 (T087); until
-# then the Gateway answers 500 on both routes (research RS-02).
+# The Services api and front, on port 80, are in api.yaml and front.yaml.
 apiVersion: gateway.networking.k8s.io/v1
 kind: HTTPRoute
 metadata:

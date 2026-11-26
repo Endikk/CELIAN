@@ -1,7 +1,8 @@
 # S01: every base image of a Dockerfile carries a digest; only images under
 # saas-b2b.invalid, built by task up, are exempt (spec 001, plan matrix; FR-008;
 # ADR-004, condition 3; ADR-006, condition 7; ADR-011, condition 4). Step 9
-# extends the rule to the rendered manifests (T086).
+# extends the rule to the rendered manifests: every image of a container of a
+# render, init containers included (T086).
 #
 # Input: the Dockerfiles given to `conftest test --combine`, a list of objects
 # with a `path` and the parsed `contents`, one entry per instruction with `Cmd`
@@ -93,4 +94,35 @@ deny contains msg if {
 	some [instruction, ref, stage] in all_references(file)
 	reason := problem(file, ref, stage)
 	msg := sprintf("%s: %s: %s %s", [label, file.path, instruction, reason])
+}
+
+# --- Rendered manifests (T086) --------------------------------------------------
+#
+# A render is a manifest read by `conftest test --combine`: one entry per
+# document, its parsed `contents` an object. Every image of a container, an
+# init container or an ephemeral container of a pod template or of a pod must
+# name a digest, except under saas-b2b.invalid, which task up builds. A field
+# named image elsewhere (a ConfigMap, say) is no container.
+
+container_lists := {"containers", "initContainers", "ephemeralContainers"}
+
+rendered_images contains [file.path, doc, image] if {
+	some file in input
+	doc := file.contents
+	is_object(doc)
+	walk(doc, [path, image])
+	is_string(image)
+	last := count(path) - 1
+	path[last] == "image"
+	list_at := count(path) - 3
+	path[list_at] in container_lists
+}
+
+describe(doc) := sprintf("%v %v", [object.get(doc, "kind", "object"), object.get(object.get(doc, "metadata", {}), "name", "")])
+
+deny contains msg if {
+	some [path, doc, image] in rendered_images
+	not regex.match(exempt_pattern, image)
+	not regex.match(digest_pattern, image)
+	msg := sprintf("%s: %s: %s runs %s, which names no digest (@sha256:<64 hex digits>)", [label, path, describe(doc), image])
 }

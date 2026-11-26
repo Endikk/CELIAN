@@ -1,0 +1,89 @@
+# The front of the example (spec 001, T087), the same on every target.
+# Checked by S30 (policy/app_workloads.rego).
+#
+# - The image is under the reserved host saas-b2b.invalid, tagged by task up
+#   through Kustomize, as the API's (research RS-07).
+# - The restricted profile: nginx runs as UID 101 of the image on port 8080,
+#   with a read-only root filesystem. It writes its PID file and its
+#   temporary files to /tmp (src/front/nginx.conf), an emptyDir with a size
+#   limit.
+# - It reads no Secret and no app-config: the page calls the API by relative
+#   paths, on the same origin.
+# - Readiness and liveness: the page itself.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: front
+  labels:
+    app.kubernetes.io/name: front
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: front
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: front
+    spec:
+      automountServiceAccountToken: false
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: front
+          image: saas-b2b.invalid/front:unbuilt
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 16Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: front
+  labels:
+    app.kubernetes.io/name: front
+spec:
+  selector:
+    app.kubernetes.io/name: front
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080

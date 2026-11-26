@@ -10,6 +10,7 @@ namespace: saas-b2b
 resources:
   - statefulset.yaml
   - service.yaml
+  - network-policy.yaml
 configMapGenerator:
   - name: postgres-init
     files:

@@ -62,6 +62,7 @@ readonly SUPERUSER="postgres"
 # reads it, local/data/cache/deployment.yaml.
 readonly CACHE_SECRET="cache-auth"
 readonly CACHE_DEPLOYMENT="cache"
+readonly API_DEPLOYMENT="api"
 # The password: PASSWORD_LENGTH alphanumeric characters kept out of
 # RANDOM_BYTES bytes of /dev/urandom, about a quarter of which are
 # alphanumeric. Its base64 form in the Secret is PASSWORD_BASE64_LENGTH
@@ -164,6 +165,21 @@ restart_cache() {
   printf 'Secrets: the Deployment %s restarts to read the new %s.\n' "$CACHE_DEPLOYMENT" "$CACHE_SECRET"
 }
 
+# restart_api: the API reads the password of the cache from its mounted file
+# and keeps it in memory. A new cache-auth leaves it with the old password,
+# which the cache now refuses (WRONGPASS), so the Deployment api restarts too
+# when it is there (tasks.md, gap 107). The client also reads the file again
+# after a failure, once the kubelet has refreshed it; this restart makes it
+# immediate.
+restart_api() {
+  local state
+  state="$(present deployment "$API_DEPLOYMENT")"
+  [ "$state" = yes ] || return 0
+  kube --namespace "$APP_NAMESPACE" rollout restart "deployment/$API_DEPLOYMENT" >/dev/null ||
+    die "the Deployment $API_DEPLOYMENT was not restarted after the new Secret $CACHE_SECRET; the messages of kubectl are above. Run task down, then task up."
+  printf 'Secrets: the Deployment %s restarts to read the new %s.\n' "$API_DEPLOYMENT" "$CACHE_SECRET"
+}
+
 # ensure NAME [USER]: NAME kept when it exists, created and checked when it
 # does not.
 ensure() {
@@ -178,6 +194,7 @@ ensure() {
   printf 'Secrets: %s created, %s random characters.\n' "$1" "$PASSWORD_LENGTH"
   if [ "$1" = "$CACHE_SECRET" ]; then
     restart_cache
+    restart_api
   fi
 }
 

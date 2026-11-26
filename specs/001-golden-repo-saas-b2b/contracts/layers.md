@@ -49,7 +49,7 @@ Une exception qui vise une image de la couche `local` vit dans la couche `local`
 
 Rendus comparés : la couche commune seule (overlay d'un environnement), puis ce même overlay avec le composant de cible `local`, puis avec le composant de cible `gcp`.
 
-1. Chaque objet de la couche commune se retrouve à l'identique dans les deux rendus de cible, à une exception près : `spec.gatewayClassName` de la Gateway.
+1. Chaque objet de la couche commune se retrouve à l'identique dans les deux rendus de cible, à deux champs près, que chaque cible fixe : `spec.gatewayClassName` de la Gateway et `spec.hostnames` des HTTPRoute (écart 120). La couche commune ne nomme aucun hôte ; la couche `local` nomme `localhost`.
 2. Un objet présent dans un rendu de cible et absent de la couche commune vient d'un fichier de la couche de cette cible.
 3. Une seule Gateway par rendu (ADR-005, condition 5).
 4. Les références aux Secrets et à `app-config` (nom, clés, lecture par fichier ou par variable) sont identiques dans les deux rendus (ADR-007, condition 5).
@@ -61,8 +61,8 @@ Contrôle : S07. Un écart voulu passe par un ADR et se liste au README (ENF-02)
 | Élément | Valeur |
 | --- | --- |
 | Gateway | une, dans le namespace de l'application ; écouteurs HTTP et HTTPS ; routes admises du même namespace |
-| HTTPRoute `api` | préfixe de chemin `/api` vers le Service de l'API |
-| HTTPRoute `front` | préfixe `/` vers le Service du front |
+| HTTPRoute `api` | préfixe de chemin `/api` vers le Service de l'API, port 80 ; hôte posé par la couche de cible |
+| HTTPRoute `front` | préfixe `/` vers le Service du front, port 80 ; hôte posé par la couche de cible |
 | Réécriture de chemin | aucune : l'API sert ses routes sous `/api` |
 | Écouteur HTTPS | certificat du Secret `gateway-tls` |
 

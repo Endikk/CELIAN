@@ -45,7 +45,8 @@ replace_in() {
     *"$from"*) ;;
     *) return 1 ;;
   esac
-  printf '%s\n' "${text/"$from"/"$to"}" >"$file"
+  # No quotes around the replacement: bash 3.2 would keep them in the text.
+  printf '%s\n' "${text/"$from"/$to}" >"$file"
 }
 
 ns="$E2E_APP_NAMESPACE"

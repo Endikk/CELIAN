@@ -349,6 +349,16 @@ Non essayé : que `kind load docker-image` et le kubelet acceptent ce nom. Porte
 
 Sources : ADR-011, condition 4 ; ADR-006, condition 7.
 
+### Essai du 2026-11-26 (T082)
+
+Poste arm64, Docker 29.8.2 (pilote de stockage overlay2, lu par `docker info`), kind 0.33.0 (nœud v1.36.4), kubectl 1.37.1, cluster créé par `task up` en lite. Les images `saas-b2b.invalid/api` et `saas-b2b.invalid/front` sont construites depuis `src/Api/Dockerfile` et `src/front/Dockerfile`, cible `runtime`, avec une étiquette quelconque.
+
+- `kind load docker-image` accepte les deux noms et les charge sur le nœud (« not yet present on node, loading », code 0).
+- Un pod du front (UID 101) et un pod de l'API (UID 1654), profil `restricted`, `readOnlyRootFilesystem: true`, `emptyDir` sur `/tmp`, avec `imagePullPolicy: IfNotPresent`, passent à Running sans aucun tirage. L'API, sans `app-config`, journalise `app-config has no value for DATABASE_HOST` et reste en Production.
+- Un pod avec `imagePullPolicy: Always` échoue en `ImagePullBackOff` : `failed to resolve reference "saas-b2b.invalid/front:t082": ... dial tcp: lookup saas-b2b.invalid on ...: no such host`. Le nœud ne cherche pas l'image au miroir ni sur un registre public : le nom ne résout nulle part.
+
+Décision : `saas-b2b.invalid` est retenu, sans repli. Le manifest d'un pod construit ne doit jamais demander `Always` (le Deployment de base dit `IfNotPresent`). Non essayé : le magasin d'images containerd de Docker (le poste est en overlay2), qui change l'identifiant que `docker image inspect` rend et le comportement de `kind load` ; ni amd64. Le job `e2e-lite` de la CI (runner x64) rejoue le chargement à chaque exécution.
+
 ## RS-08. Profils et mémoire
 
 Décision : profil choisi selon la mémoire que déclare le moteur ; variable `PROFILE` pour forcer, sous les mêmes contrôles. Seuils de départ : VM de 2,0 Gio pour le lite, 2,5 Gio pour la partie connue du standard. Seuils recalculés sur la première mesure, à l'entrée du cache retenu par l'ADR-015, et à celle de Keycloak et de Mailpit.

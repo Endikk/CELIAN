@@ -181,7 +181,8 @@ public sealed class RespCacheTests : IDisposable
         await Assert.ThrowsAnyAsync<Exception>(() => cache.PingAsync(CancellationToken.None));
 
         Assert.Equal([Password, NewPassword], passwords);
-        Assert.Equal(1, disposed);
+        // Each failed call found its connection down and dropped it.
+        Assert.Equal(2, disposed);
     }
 
     [Fact]

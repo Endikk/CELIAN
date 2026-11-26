@@ -126,7 +126,7 @@ fi
 CASE="task up checks the mirror before the cluster"
 CASES=$((CASES + 1))
 check_line="$(grep -n "^ *- bash local/scripts/mirror.sh check " local/tasks/local.yml | head -1 | cut -d: -f1)"
-cluster_line="$(grep -n "^ *- bash local/scripts/cluster.sh up" local/tasks/local.yml | head -1 | cut -d: -f1)"
+cluster_line="$(grep -n "^ *- bash local/scripts/\(steps.sh run cluster -- bash local/scripts/\)\{0,1\}cluster.sh up" local/tasks/local.yml | head -1 | cut -d: -f1)"
 if [ -z "$check_line" ] || [ -z "$cluster_line" ] || [ "$check_line" -ge "$cluster_line" ]; then
   fail_case "local/tasks/local.yml must call mirror.sh check before cluster.sh up (check at line ${check_line:-none}, cluster at line ${cluster_line:-none})"
 fi

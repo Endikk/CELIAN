@@ -30,9 +30,9 @@ Effets, dans l'ordre du [plan](../plan.md) (section « Ce que fait `task up` »)
 Sortie en cas de succès :
 
 - le profil retenu ;
-- l'adresse du front et celle de l'API, en `http://127.0.0.1:<port>/` et `http://127.0.0.1:<port>/api/` ;
-- la durée de chaque étape et la durée totale (FR-015) ;
-- la taille du volume du miroir.
+- l'adresse du front et celle de l'API, en `http://localhost:<port>/` et `http://localhost:<port>/api/`, une par ligne (`Front: ...`, `API: ...`). Le port est publié sur 127.0.0.1 seulement ; les HTTPRoute locales nomment l'hôte `localhost`, parce que Gateway API refuse une IP dans `hostnames` (écart 120) ;
+- la durée de chaque étape, une ligne `Step <nom>: <n> s.` dans l'ordre du plan (preflight, cluster, mirror, secrets, platform, images, application, database, cache, ready), puis `Total: <n> s.` en dernière ligne de durée (FR-015) ;
+- la taille du volume du miroir, `Mirror volume <nom>: <taille>.`.
 
 Comportements attendus :
 
@@ -65,7 +65,7 @@ Dit d'abord que le `task up` suivant demandera le réseau, puis supprime le volu
 | Commande | Contenu | Cluster | Contrôles |
 | --- | --- | --- | --- |
 | `task test` | tests unitaires de l'API et du front, tests de la décision du scan | non | U01 à U03 |
-| `task check` | contrôles statiques, rendus et parité, contrôles préalables simulés, inventaire, politique et exceptions du scan | non | S01 à S23, S25 à S28, P01 à P06 |
+| `task check` | contrôles statiques, rendus et parité, contrôles préalables simulés, inventaire, politique et exceptions du scan | non | S01 à S23, S25 à S28, S30, P01 à P06 |
 | `task test:e2e` | tests sur kind du profil courant | oui, créé et supprimé | E01 à E09, E11 à E24 selon le profil |
 | `task test:offline` | T2 du profil courant | oui | E10 |
 | `task test:images` | relevé des images en marche, SBOM des images construites, scan de l'inventaire du profil courant ; demande le réseau pour la base de vulnérabilités | oui, déjà démarré | E25 à E27 |
