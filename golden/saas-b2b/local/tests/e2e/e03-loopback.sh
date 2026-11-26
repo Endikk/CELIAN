@@ -17,20 +17,20 @@
 #   must get an HTTP answer other than 404, the answer of Envoy when no
 #   route matches: the HTTPRoutes match. Their Services arrive with step 9,
 #   and Gateway API wants a 500 meanwhile (research RS-02);
-# - the node pulled the image of the proxy through the mirror: the log of
-#   zot shows a GET in 200 of its manifest by digest, with ns=docker.io
-#   (tasks.md, gap 20; ADR-011, condition 1). The proxy runs from the first
-#   Gateway on: E03 expects a node that has not pulled it yet, as run.sh
-#   gives it.
 # - the namespace envoy-gateway-system enforces Pod Security (restricted or
 #   baseline) and Pod Security refused none of its pods;
 # - what a pod of the cluster reaches of the mirror, recorded and not judged
-#   (ADR-011, condition 2; R-34; tasks.md, gaps 21 and 34): from a pod of
-#   another namespace, on the Postgres image, which carries bash, E03 prints
-#   whether the name of the mirror resolves, and the status line of GET
-#   /v2/_catalog and of the start of a push, POST /v2/<name>/blobs/uploads/.
-#   It fails only when the pod cannot run. The read-only policy of zot is
-#   tried at step 10 (tasks.md, gap 29).
+#   (ADR-011, condition 2; R-34; tasks.md, gaps 21, 34 and 53): from a pod
+#   of another namespace, on the Postgres image, which carries bash, E03
+#   prints whether the name of the mirror resolves, and the status line of
+#   GET /v2/_catalog and of the start of a push, POST
+#   /v2/<name>/blobs/uploads/. It fails only when the pod cannot run. The
+#   read-only policy of zot is tried at step 10 (tasks.md, gap 29);
+# - the node pulled the images of the proxy and of Postgres through the
+#   mirror (tasks.md, gap 20; ADR-011, condition 1): the catalog of zot,
+#   read by the same pod, lists envoyproxy/envoy and library/postgres. The
+#   log of zot would not tell since step 8: each task up starts a new mirror
+#   container, and the proxy runs from the first task up on.
 set -uo pipefail
 # shellcheck disable=SC1091 # lib/e2e.sh is checked on its own
 . "$(dirname -- "${BASH_SOURCE[0]}")/lib/e2e.sh"
@@ -138,6 +138,7 @@ readonly ANSWER_SECONDS=60
 readonly ANSWER_PAUSE_SECONDS=2
 readonly READ_SECONDS=5
 readonly PROXY_REPOSITORY="envoyproxy/envoy"
+readonly POSTGRES_REPOSITORY="library/postgres"
 
 # task up applies the Gateway with local/k8s/lite (step 8, T070).
 if ! kube_e2e -n "$E2E_APP_NAMESPACE" get "gateway/$E2E_GATEWAY" >/dev/null 2>&1; then
@@ -201,31 +202,29 @@ for path in / /api/healthz; do
   esac
 done
 
-# The log of zot: one JSON line per request, with method, path and
-# statusCode (zot v2.1.23, pkg/api/session.go, lines 128 to 136).
-pulls="$(docker logs "$E2E_MIRROR" 2>&1 | grep -F '"method":"GET"' |
-  grep -F "\"path\":\"/v2/$PROXY_REPOSITORY/manifests/sha256:" | grep -F 'ns=docker.io' |
-  grep -F '"statusCode":200' || true)"
-if [ -z "$pulls" ]; then
-  fail "the log of the mirror shows no GET in 200 of a manifest of $PROXY_REPOSITORY with ns=docker.io: the node did not pull the proxy through the mirror"
-fi
-
 # What a pod reaches of the mirror, from a namespace of its own. The script
 # runs in the pod, $1 being the name of the mirror container; connect sends
-# one request ($1 in it) to the mirror ($0 in it), and prints the status line.
+# one request ($1 in it) to the mirror ($0 in it), and prints the answer
+# without its carriage returns: the status line first, the body last.
 readonly PROBE_NAMESPACE="e2e-e03-probe"
 # shellcheck disable=SC2016 # expanded by bash in the pod
-probe_script='connect="exec 3<>/dev/tcp/\$0/5000 && printf \"%s HTTP/1.0\\r\\nHost: %s\\r\\nContent-Length: 0\\r\\n\\r\\n\" \"\$1\" \"\$0\" >&3 && head -n 1 <&3 | tr -d \"\\r\""
+probe_script='connect="exec 3<>/dev/tcp/\$0/5000 && printf \"%s HTTP/1.0\\r\\nHost: %s\\r\\nContent-Length: 0\\r\\n\\r\\n\" \"\$1\" \"\$0\" >&3 && tr -d \"\\r\" <&3"
 if getent hosts "$1" >/dev/null; then echo "name $1: resolved"; else echo "name $1: not resolved"; fi
 for request in "GET /v2/_catalog" "POST /v2/e2e-probe/blobs/uploads/"; do
-  line="$(timeout 5 bash -c "$connect" "$1" "$request" 2>/dev/null)" || line="no answer"
-  echo "$request: ${line:-no answer}"
+  answer="$(timeout 5 bash -c "$connect" "$1" "$request" 2>/dev/null)" || answer=""
+  status="$(printf "%s\n" "$answer" | head -n 1)"
+  echo "$request: ${status:-no answer}"
+  case "$request" in
+    GET*) echo "catalog: $(printf "%s\n" "$answer" | tail -n 1)" ;;
+  esac
 done'
 trap 'remove_client_namespace "$PROBE_NAMESPACE"' EXIT
+probe=""
 if client_namespace "$PROBE_NAMESPACE"; then
   client_pod "$PROBE_NAMESPACE" mirror-probe "set -- $E2E_MIRROR; $probe_script"
   if [ "$STATUS" -eq 0 ]; then
-    printf '%s\n' "$OUTPUT" | sed 's/^/note: a pod of the cluster, towards the mirror: /'
+    probe="$OUTPUT"
+    printf '%s\n' "$probe" | grep -v '^catalog: ' | sed 's/^/note: a pod of the cluster, towards the mirror: /'
   else
     fail "the pod that probes the mirror did not run to its end"
     show_output
@@ -233,5 +232,18 @@ if client_namespace "$PROBE_NAMESPACE"; then
 else
   fail "could not create the namespace $PROBE_NAMESPACE of the probe of the mirror"
 fi
+
+# The node pulled the proxy and Postgres through the mirror (tasks.md, gap
+# 20; ADR-011, condition 1): zot syncs on demand, and its catalog lists the
+# repositories it holds, which only a pull through it puts there. The log of
+# zot would not tell: each task up starts a new mirror container, and the
+# proxy runs from the first task up on, since task up applies the Gateway.
+catalog="$(printf '%s\n' "$probe" | sed -n 's/^catalog: //p')"
+for repository in "$PROXY_REPOSITORY" "$POSTGRES_REPOSITORY"; do
+  case "$catalog" in
+    *"\"$repository\""*) printf 'note: the mirror holds %s: the node pulled it through the mirror.\n' "$repository" ;;
+    *) fail "the catalog of the mirror does not list $repository: the node did not pull it through the mirror (catalog: $catalog)" ;;
+  esac
+done
 
 e2e_finish
