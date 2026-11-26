@@ -25,7 +25,7 @@ includes:
   local:
     taskfile: ./local/tasks/local.yml
     internal: true
-  # gcp:validate, gcp:policy and gcp:scan: the checks of the OpenTofu root,
+  # gcp:validate, gcp:policy and gcp:scan: the checks of the two OpenTofu roots,
   # without any credential. `task check` runs them too.
   gcp:
     taskfile: ./gcp/tasks/gcp.yml

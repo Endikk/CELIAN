@@ -11,9 +11,10 @@
 # such workflow. Arguments, if given, replace the default list.
 #
 # T105 adds what a workflow calls: the Taskfiles, and the shell scripts of the
-# gcp layer, where the OpenTofu commands live. They get the rules of
-# principle X (no plan, apply or destroy, no Google credential, no published
-# plan); the rules on secrets, OIDC tokens and pins are for workflows only.
+# gcp layer and of its budget root (T110), where the OpenTofu commands live.
+# They get the rules of principle X (no plan, apply or destroy, no Google
+# credential, no published plan); the rules on secrets, OIDC tokens and pins
+# are for workflows only.
 #
 # The gcp layer gets a stricter rule, an allowlist, until GATE 2: in its
 # Taskfile and scripts, OpenTofu runs only fmt, init (with -backend=false),
@@ -47,7 +48,8 @@ if [ "$#" -eq 0 ]; then
     set -- "$@" "$celian_root/.github/workflows/golden-saas-b2b.yml"
   fi
   for file in "$root"/Taskfile.yml "$root"/local/tasks/*.yml "$root"/gcp/tasks/*.yml \
-    "$root"/gcp/tests/static/*.sh "$root"/gcp/scripts/*.sh; do
+    "$root"/gcp/tests/static/*.sh "$root"/gcp/scripts/*.sh \
+    "$root"/gcp/budget/*.sh "$root"/gcp/budget/*.yml; do
     if [ -f "$file" ]; then
       set -- "$@" "$file"
     fi
@@ -169,7 +171,7 @@ for file in "$@"; do
   forbid "$file" "tfplan|${word_start}(tofu|terraform)[[:space:]]+show${word_end}|[[:space:]]-out[=[:space:]]" \
     "OpenTofu plan file or plan output"
   case "$file" in
-    */gcp/tasks/* | */gcp/tests/static/* | */gcp/scripts/*)
+    */gcp/tasks/* | */gcp/tests/static/* | */gcp/scripts/* | */gcp/budget/*)
       check_gcp_layer "$file"
       ;;
   esac

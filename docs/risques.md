@@ -1,6 +1,6 @@
 # Registre des risques
 
-Tenu par le DSI. Mis à jour le 25/11/2026. Probabilité et impact sont notés
+Tenu par le DSI. Mis à jour le 26/11/2026. Probabilité et impact sont notés
 faible, moyen ou fort : ce sont des jugements, pas des mesures. Un risque se
 ferme quand sa mitigation est en place et vérifiée.
 
@@ -49,6 +49,7 @@ ferme quand sa mitigation est en place et vérifiée.
 | R-39 | API sur Cloud SQL avec les privilèges de `cloudsqlsuperuser` | Faible | Fort | OPS, SECU | Ouvert |
 | R-40 | Scanner de secrets du projet généré en maintenance | Forte | Moyen | SECU, DSI | Ouvert |
 | R-41 | Jeton de Memorystore sans ressource publiée dans le provider | Moyenne | Moyen | OPS, SECU | Ouvert |
+| R-42 | Droit sur les budgets accordé hors du dépôt | Faible | Moyen | SECU | Ouvert |
 
 ## Détail
 
@@ -247,6 +248,9 @@ Sources lues le 15/11/2026 par [FINOPS] :
 Mise à jour du 2026-11-25 : les étiquettes `owner`, `env` et `ttl` sont posées
 sur les ressources de la couche GCP, et S15 refuse une racine qui les omet ou
 les écrit hors format.
+
+Mise à jour du 2026-11-26 : l'alerte est écrite (T110, `golden/saas-b2b/gcp/budget/`).
+Le montant reste à fixer, en coût brut, avant la GATE 2.
 
 ### R-06. Catalogue qui se périme
 
@@ -1133,3 +1137,20 @@ cache sur GCP reste inutilisable, sans fuite ; le reste de la cible tient.
 Mitigation : condition 18 de l'ADR-015 ; question 2 de l'ADR-015 reposée à
 l'ouverture de la GATE 2 (déployer sans la partie cache, ou ouvrir plus tôt
 l'ADR de l'IAM) ; [OPS] relit les notes de version du provider à chaque montée.
+
+### R-42. Droit sur les budgets accordé hors du dépôt
+
+Ouvert le 2026-11-26 par décision du DSI, à la relecture [SECU] de T110. La
+politique `tofu_budget` (S15) refuse six rôles dans les fichiers `.tf` des deux
+racines GCP. Elle ne voit ni un rôle accordé hors du dépôt (console, `gcloud`,
+une autre IaC), ni un rôle personnalisé qui porte `billing.budgets.*` ou
+`billing.resourcebudgets.*`. Une identité qui l'obtient peut modifier ou
+supprimer le budget, donc l'alerte, sans que rien dans le dépôt le montre.
+
+Probabilité faible : il faut qu'un humain accorde le droit. Impact moyen : la
+dépense perd son alerte, sans fuite de données.
+
+Mitigation : aucune dans le code, par nature. Les rôles d'administration IAM et
+les rôles personnalisés se contrôlent dans une suite de S15 (écart 74 de
+`specs/001-golden-repo-saas-b2b/tasks.md`) ; pour le reste, [SECU] relit
+la liste des droits du compte de facturation avant la GATE 2.

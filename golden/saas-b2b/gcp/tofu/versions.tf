@@ -23,11 +23,16 @@ terraform {
     }
   }
 
-  # Partial configuration: the bucket and the prefix come at `tofu init`, by
+  # Partial configuration: the bucket comes at `tofu init`, by
   # -backend-config, from whoever runs the first apply with the agreement of
-  # Lucas. The bucket, the key below and their bootstrap stay with [OPS] and
-  # [SECU] (ADR-008, scope; R-19).
-  backend "gcs" {}
+  # Lucas. The bucket and its bootstrap stay with [OPS] and [SECU] (ADR-008,
+  # scope; R-19). The prefix is written here, so that S15 can show that it
+  # differs from the one of the budget root, gcp/budget/ (T110): the two
+  # states are two objects of the bucket. Never pass `prefix` to
+  # -backend-config: a command-line value overrides this one.
+  backend "gcs" {
+    prefix = "main"
+  }
 
   # ADR-008, condition 2: the state and the plans are encrypted by OpenTofu
   # with a Cloud KMS key, and refused unencrypted. Without that key, state and

@@ -1,0 +1,4 @@
+# Failing case of S17: an apply of the budget root (T110), which stays a manual act.
+# expect: OpenTofu plan, apply or destroy
+
+  sandboxed tofu -chdir=gcp/budget apply -auto-approve
