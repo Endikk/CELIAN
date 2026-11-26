@@ -202,7 +202,7 @@ Une ressource « note » : `POST /api/notes` écrit en base, `GET /api/notes/{id
 
 ### Secrets
 
-Quatre Secrets en profil lite : `db-auth`, commun aux deux cibles (ADR-012) ; `cache-auth`, commun, créé à l'étape 19 sur `local` et produit à l'étape 20 sur `gcp`, après l'ADR-015 ; `db-superuser`, propre à `local` ; `gateway-tls`, dont la fabrication locale reste à trancher. Chaque mot de passe naît de `/dev/urandom` ; chaque Secret passe par un tube vers `kubectl create -f -`, seulement s'il manque, dans une tâche silencieuse. Contrat : [contracts/secrets.md](contracts/secrets.md).
+Quatre Secrets en profil lite : `db-auth`, commun aux deux cibles (ADR-012) ; `cache-auth`, commun, créé à l'étape 19 sur `local` et produit à l'étape 20 sur `gcp`, après l'ADR-015 ; `db-superuser`, propre à `local` ; `gateway-tls`, dont la clé et le certificat naissent d'un `openssl req` sans fichier (research RS-10, 2026-11-26). Chaque mot de passe naît de `/dev/urandom` ; chaque Secret passe par un tube vers `kubectl create -f -`, seulement s'il manque, dans une tâche silencieuse. Contrat : [contracts/secrets.md](contracts/secrets.md).
 
 ### Données
 

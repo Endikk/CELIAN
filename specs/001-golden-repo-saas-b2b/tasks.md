@@ -190,13 +190,13 @@ description: "Tâches de la fonctionnalité 001 : golden repo SaaS B2B"
 
 - PR : `feat(golden): add the HTTPS listener` (proposé)
 - Dépend de : étape 8, pour la tâche des Secrets ; décision de RS-10
-- État : bloquée. Attend la décision de [SECU] et [DEV] sur la fabrication de `gateway-tls` sans fichier ni argument (T071)
+- État : débloquée le 2026-11-26. La fabrication de `gateway-tls` est tranchée (T071, research RS-10) ; reste à attendre la fusion des PR #75, #77 et #78 avant T072
 - Contrôles étendus : E03, E04, E05, S04, S06
 
-- [ ] T071 [US2] Trancher la fabrication de la clé et du certificat de `gateway-tls` sans fichier ni argument : outil, disponibilité sous macOS et Linux, syntaxe vérifiée et datée ; consigner au point RS-10 de `specs/001-golden-repo-saas-b2b/research.md`. Porteurs : [SECU] et [DEV]. Trace : FR-004 ; débloque T072 à T074.
-- [ ] T072 [US2] Bloquée jusqu'à T071 : étendre en rouge `golden/saas-b2b/local/tests/e2e/e04-secrets-fresh.sh` et `e05-secrets-kept.sh` à `gateway-tls` (`kubernetes.io/tls`, clés `tls.crt` et `tls.key`, gardé d'un démarrage à l'autre), `golden/saas-b2b/local/tests/static/s04-taskfile.sh` à sa création, et `golden/saas-b2b/local/tests/e2e/e03-loopback.sh` à l'écouteur HTTPS. Trace : FR-003, FR-004 ; E03, E04, E05, S04.
-- [ ] T073 [US2] Bloquée jusqu'à T071 : créer `gateway-tls` dans `golden/saas-b2b/local/scripts/secrets.sh` par la méthode de T071, seulement s'il manque. Dépend de T072. Trace : FR-004 ; E04, E05, S04.
-- [ ] T074 [US1] Bloquée jusqu'à T071 : ajouter l'écouteur HTTPS à la Gateway de `golden/saas-b2b/k8s/base/`, avec le certificat de `gateway-tls` ; S06 et E03 au vert. Dépend de T073. Trace : FR-002 ; E03, S06.
+- [X] T071 [US2] Trancher la fabrication de la clé et du certificat de `gateway-tls` sans fichier ni argument : outil, disponibilité sous macOS et Linux, syntaxe vérifiée et datée ; consigner au point RS-10 de `specs/001-golden-repo-saas-b2b/research.md`. Porteurs : [SECU] et [DEV]. Trace : FR-004 ; débloque T072 à T074.
+- [ ] T072 [US2] Étendre en rouge `golden/saas-b2b/local/tests/e2e/e04-secrets-fresh.sh` et `e05-secrets-kept.sh` à `gateway-tls` (`kubernetes.io/tls`, clés `tls.crt` et `tls.key`, gardé d'un démarrage à l'autre ; pour E04, clé et certificat différents d'un environnement à l'autre, sans la règle des 32 caractères), `golden/saas-b2b/local/tests/static/s04-taskfile.sh` à sa création, et `golden/saas-b2b/local/tests/e2e/e03-loopback.sh` à l'écouteur HTTPS : empreinte SHA-256 du certificat servi (`openssl s_client`) égale à celle du Secret, `x509 -checkend 0`, sans `-k` ni fichier (research RS-10). S04 refuse, dans `local/tasks/` et `local/scripts/` : `openssl req` sans `-keyout /dev/stdout`, ou `-keyout` et `-out` vers un autre chemin ; `kubectl create secret tls` et `create secret generic --from-file` ou `--from-literal` ; une redirection, `tee` ou `mktemp` sur la sortie d'`openssl` ; le PEM dans une variable ou en argument. Dépend de la fusion des PR #75, #77 et #78. Trace : FR-003, FR-004 ; E03, E04, E05, S04.
+- [ ] T073 [US2] Créer `gateway-tls` dans `golden/saas-b2b/local/scripts/secrets.sh` par la commande de research RS-10 (`openssl req -x509` sur la sortie standard, `awk`, tube vers `kubectl create -f -`), seulement s'il manque ; arrêt net si `openssl` ou `awk` manque ; relire les deux clés du Secret créé et le supprimer si l'une est vide. Dépend de T072. Trace : FR-004 ; E04, E05, S04.
+- [ ] T074 [US1] Ajouter l'écouteur HTTPS à la Gateway de `golden/saas-b2b/k8s/base/`, avec le certificat de `gateway-tls` ; S06 et E03 au vert. Dépend de T073. Trace : FR-002 ; E03, S06.
 
 ### Étape 19 : couche cache locale
 
@@ -656,6 +656,7 @@ Aucun ne demande de modifier spec.md ni plan.md avant de commencer. Chacun est r
 77. Relevé par la relecture [FINOPS] de T110 : vérifier si un seuil au-delà de 100 % est accepté par le provider et par l'API, et s'il apporte quelque chose.
 78. Relevé par la relecture [FINOPS] de T110 : un canal de notification Cloud Monitoring est reporté après le MVP, sauf si le premier apply montre que Lucas ne reçoit rien aux destinataires par défaut.
 79. Relevé par la relecture [FINOPS] de T110 : les quotas abaissés sont le seul plafond dur prévu par R-05, et aucune tâche de ce fichier ne les nomme (recherche du mot « quota », le 2026-11-26). Mécanisme à vérifier sur la documentation Cloud Quotas (R-05), puis à porter par une tâche avant la GATE 2. Décision du DSI du 2026-11-26 : [FINOPS] porte cette tâche avec [OPS], ajoutée à l'étape 14 au moment de son plan.
+80. Relevé par la décision de T071 (2026-11-26) : `openssl` et `awk` deviennent des prérequis de `task up` pour `gateway-tls`. Le contrôle préalable de l'étape 5 ne les cherche pas ; T073 les vérifie dans `secrets.sh` avec un message qui les nomme, avant de créer un Secret, et le README du golden repo les liste. Le LibreSSL 3.3.6 de macOS n'a pas `x509 -checkhost`, et `-nodes`, déprécié par OpenSSL 3.0, reste accepté par OpenSSL 4.1.0 : si une version d'OpenSSL le retire, l'essai de T073 échoue sur l'option. La fabrication sur `gcp` reste à T129.
 
 ## Notes
 

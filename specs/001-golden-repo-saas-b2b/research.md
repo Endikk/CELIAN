@@ -474,7 +474,85 @@ Décision : `db-auth`, `cache-auth`, `db-superuser` et `gateway-tls` en profil l
 
 Pourquoi : ADR-007, condition 1 ; ADR-012, conditions 3, 8 et 10.
 
-Non décidé : la fabrication de la clé et du certificat de `gateway-tls`. BENCH-004 écrivait la clé dans un fichier, ce que la condition 1 de l'ADR-007 interdit au projet généré. Piste : un outil qui écrit la clé et le certificat sur sa sortie standard, envoyée par un tube ; outil, disponibilité sur macOS et Linux et syntaxe à vérifier. Porteurs : [SECU] et [DEV]. Bloque l'écouteur HTTPS de l'étape 7 ; l'écouteur HTTP n'en dépend pas, ce que l'étape 7 vérifie.
+### Fabrication de `gateway-tls` (T071, décidée le 2026-11-26)
+
+Porteurs : [SECU] et [DEV]. Décision de [SECU], à valider par le DSI. BENCH-004 écrivait la clé dans un fichier, ce que la condition 1 de l'ADR-007 interdit au projet généré. La clé et le certificat naissent d'un seul `openssl req`, qui les écrit tous deux sur sa sortie standard ; `awk` étiquette les deux blocs PEM au fil du flux, et le manifeste passe par un tube à `kubectl create -f -`. Aucun fichier, aucune variable, aucun argument porteur de secret, aucun heredoc, aucun `base64`.
+
+Commande retenue, pour `create()` de `local/scripts/secrets.sh` (T073). Les noms de variables reprennent ceux du script existant :
+
+```bash
+{
+  printf 'apiVersion: v1\nkind: Secret\nmetadata:\n  name: gateway-tls\n  namespace: %s\ntype: kubernetes.io/tls\nstringData:\n' "$APP_NAMESPACE"
+  openssl req -x509 -newkey ec -pkeyopt ec_paramgen_curve:prime256v1 -nodes \
+    -keyout /dev/stdout -out /dev/stdout -days 365 -subj '/CN=localhost' \
+    -addext 'subjectAltName=DNS:localhost,IP:127.0.0.1' \
+    -addext 'basicConstraints=critical,CA:FALSE' \
+    -addext 'keyUsage=critical,digitalSignature' \
+    -addext 'extendedKeyUsage=serverAuth' 2>/dev/null |
+    awk '/^-----BEGIN [A-Z ]*PRIVATE KEY-----$/ { print "  tls.key: |" }
+         /^-----BEGIN CERTIFICATE-----$/ { print "  tls.crt: |" }
+         { print "    " $0 }'
+} | kube create -f - >/dev/null
+```
+
+Ce que chaque morceau décide :
+
+- Courbe P-256 (`prime256v1`) : clé de 256 bits, certificat court. `-nodes` laisse la clé sans phrase de passe ; `-noenc`, son remplaçant dans OpenSSL 3, est refusé par le LibreSSL 3.3.6 de macOS (essai du 2026-11-26), et `-nodes` reste accepté par OpenSSL 4.1.0. La documentation d'OpenSSL le dit « deprecated since OpenSSL 3.0 » : un retrait futur ferait échouer l'essai de T073 avec un message d'option inconnue.
+- `-keyout /dev/stdout -out /dev/stdout` est obligatoire. Sans `-keyout`, `req` écrit la clé dans le fichier de `default_keyfile` de la configuration : celle d'OpenSSL 4.1.0 installé par Homebrew sur ce poste porte `default_keyfile = privkey.pem` (ligne 155), donc un `privkey.pem` au dossier courant. La configuration de `/usr/bin/openssl` le garde en commentaire. La configuration d'Ubuntu n'a pas été lue : la règle ne dépend pas d'elle.
+- Sujet `CN=localhost` et SAN `DNS:localhost,IP:127.0.0.1` : l'écouteur de l'étape 7 répond sur `127.0.0.1` (E03 parle à `127.0.0.1`, `Host: 127.0.0.1`), et un client qui écrit `localhost` doit aussi s'y retrouver. Pas de `::1` : le port de la gateway n'est publié que sur `127.0.0.1` (E03).
+- `CA:FALSE`, `digitalSignature`, `serverAuth` : un certificat de serveur, pas une autorité. Sans ces trois `-addext`, `req -x509` ajoute `CA:TRUE` (relevé sur OpenSSL 4.1.0).
+- Durée 365 jours, choix de [SECU]. La clé ne vit que dans le cluster local, que `task down` supprime avec ses Secrets : un an borne l'exposition sans imposer de renouvellement à un usage normal.
+- `2>/dev/null` coupe deux bandeaux d'avancement (LibreSSL écrit « Generating a 2048 bit EC private key », trompeur : la clé fait 256 bits, relevé par `openssl pkey -text`). Une panne d'`openssl` est reprise par `pipefail` de `secrets.sh` ; si elle laisse un manifeste incomplet, l'API refuse le Secret `kubernetes.io/tls` auquel manque `tls.crt` ou `tls.key`. T073 relit ensuite les deux clés du Secret créé, comme `verify()` le fait pour les mots de passe, et supprime le Secret si l'une est vide.
+- `stringData` reçoit le PEM tel quel : pas de `base64`, donc pas de différence entre le `base64` de macOS et celui de GNU. L'ordre des blocs dans le flux n'a pas d'importance, `awk` étiquette ce qui passe. `create`, et non `apply`, pour ne pas recopier la clé dans l'annotation `last-applied-configuration` (ADR-007, condition 1).
+
+Pas de variable, parce que S04 refuse « valeur dans une variable » (plan, S04 ; contrat) et que `stringData` n'en a pas besoin. La première piste de T071 était des variables non exportées et du `base64`. Elle garde la clé en mémoire du shell, et S04 devrait alors faire une exception. La voie retenue n'en demande aucune.
+
+Outil absent : `secrets.sh` s'arrête avec une phrase qui nomme `openssl` et `awk` si `command -v` ne les trouve pas, avant de créer quoi que ce soit. macOS fournit les deux ; les runners d'`ubuntu-latest` fournissent OpenSSL. `awk` n'est cité par aucun README de runner-images, et n'a pas été essayé sous Linux : T073 le fait tourner en CI, E04 le prouve.
+
+Versions vérifiées le 2026-11-26. Sur le poste (macOS 27.2.1) : `/usr/bin/openssl`, LibreSSL 3.3.6, et `/opt/homebrew/bin/openssl`, OpenSSL 4.1.0 (23 oct. 2026), que `PATH` trouve en premier. La commande ci-dessus produit sur les deux un manifeste à deux blocs, `tls.key` puis `tls.crt`, contrôlé sans jamais afficher la clé ; le certificat, relu par `x509 -text`, porte `Subject: CN=localhost`, le SAN `DNS:localhost, IP Address:127.0.0.1`, `CA:FALSE`, `Digital Signature`, `TLS Web Server Authentication`, une clé de 256 bits, la signature `ecdsa-with-SHA256` et 365 jours de validité (du 2026-11-26 au 2027-11-26). Un nom de courbe inconnu fait sortir le groupe en erreur sous `pipefail` (bash 3.2.57). Aucun fichier écrit : ni clé, ni certificat, ni `privkey.pem` n'existent au dossier courant ni dans `/tmp` après les essais. `awk` du poste : version 20200816. Sur Linux, lecture seule : `ubuntu-latest` désigne Ubuntu 26.04 depuis novembre 2026 (README de runner-images), image 20261116.202.1, OpenSSL 3.5.5-1ubuntu3.7 ; le README de l'image 24.04 donne OpenSSL 3.0.13-0ubuntu3.16. La commande n'a pas été exécutée sous Linux : la CI de T073 est le premier essai, et E04 le prouve.
+
+Refus pour S04 (T072), sur tout fichier de `local/tasks/` et `local/scripts/` :
+
+- `openssl req` sans `-keyout /dev/stdout`, ou avec `-keyout` ou `-out` vers un autre chemin que `/dev/stdout` ; de même `openssl genpkey`, `genrsa`, `ecparam` ou `x509 -signkey` écrits vers un chemin ;
+- `kubectl create secret tls`, qui exige `--cert` et `--key` comme chemins de fichiers, et `kubectl create secret generic --from-file` ou `--from-literal` ;
+- une redirection `>` ou `>>`, `tee` ou `mktemp` sur la sortie d'`openssl` ;
+- le PEM ou sa copie `base64` rangés dans une variable (`k=$(openssl ...)`), ou passés à `export`, à `env` ou en argument de commande ;
+- `kubectl apply` d'un Secret, et un heredoc, déjà refusés par S04.
+
+Ce que devient le certificat :
+
+- Auto-signé, jamais installé dans le magasin de confiance du poste : aucune écriture système, aucun `sudo`, aucun trousseau. `mkcert` fait l'inverse : il installe une autorité locale dans le magasin système et écrit clé et certificat dans le dossier courant (README). Un navigateur affichera donc un avertissement sur l'écouteur HTTPS local ; le README du golden repo le dit.
+- E03 (T072) ne s'appuie ni sur `-k` ni sur un magasin. Il lit le certificat servi avec `openssl s_client -connect 127.0.0.1:PORT -servername localhost` (BENCH-014 emploie déjà `s_client` avec SNI sur `127.0.0.1`), lit le certificat du Secret par `kubectl get secret gateway-tls --output 'jsonpath={.data.tls\.crt}'` suivi de `base64 -d`, et compare les deux empreintes SHA-256 de `openssl x509 -noout -fingerprint -sha256`, par tubes seulement. `base64 -d` marche sur macOS 27.2.1 (usage `-D, -d, --decode`) et sous GNU (`-d, --decode`). E03 ajoute `x509 -checkend 0` pour l'expiration. Le LibreSSL 3.3.6 n'a ni `-checkhost` ni `-checkip` sous `x509` (essai du 2026-11-26) : le SAN se contrôle par `x509 -text`, ou ne se contrôle pas au poste. Le montage de `s_client` (entrée fermée par `</dev/null`, délai) n'a pas été essayé, faute de cluster : T072 le met au point.
+- Renouvellement : `task up` ne recrée `gateway-tls` que s'il manque (contrat). À l'expiration, l'écouteur sert un certificat périmé et les clients le refusent ; E03 échoue avec `-checkend`. Remède : supprimer le Secret, puis `task up`. Que la gateway recharge le nouveau certificat sans redémarrage n'a pas été vérifié : T074 l'essaie. Un avertissement de `task up` à moins de 30 jours de l'échéance est possible ; il est proposé au DSI, pas décidé.
+
+Écartées :
+
+| Option | Raison |
+| --- | --- |
+| `kubectl create secret tls` | Exige deux chemins de fichiers (`--cert`, `--key`) : la clé devrait toucher le disque |
+| Variables du shell et `base64` | Marche, mais la clé vit en mémoire du shell, S04 refuse la valeur en variable, et les options de `base64` diffèrent entre macOS et GNU |
+| Job dans le cluster qui crée le Secret | La clé ne passerait jamais par le poste, mais il faut une image d'`openssl` figée par condensat et scannée, un compte de service pouvant créer des Secrets, et une attente : plus de surface que le tube, pour un certificat de boucle locale. Non essayé |
+| cert-manager, émetteur auto-signé | Un opérateur et ses CRD sur un profil lite (seuil de 2048 Mio de mémoire déclarée) pour un seul certificat. Non mesuré, non lu dans sa documentation |
+| `mkcert` | Outil à installer, il écrit des fichiers et modifie le magasin de confiance du système (README du projet) |
+
+Pourquoi : ADR-007, condition 1 ; ADR-006, condition 2 (aucun secret en argument). Aucune condition d'un ADR ne change : pas de complément d'ADR.
+
+| Source | Lue le | Ce qu'on y prend |
+| --- | --- | --- |
+| <https://docs.openssl.org/master/man1/openssl-req/> | 2026-11-26 | `-keyout` : fichier de la clé ; sans `-keyout` ni `-key`, le `default_keyfile` de la configuration s'applique ; `-out` : sortie standard par défaut ; `-nodes` déprécié depuis OpenSSL 3.0, `-noenc` le remplace ; `-addext`, `-days`, `-subj`, `-pkeyopt` |
+| <https://docs.openssl.org/master/man1/openssl-x509/> | 2026-11-26 | `-fingerprint`, `-checkend`, `-checkhost`, `-checkip` |
+| <https://man.openbsd.org/openssl.1> | 2026-11-26 | Options `req` de LibreSSL : `-addext`, `-pkeyopt`, `-nodes`, `-keyout` (« If this option is not specified, the filename present in the configuration file is used »). Page de la version courante d'OpenBSD : la présence des options dans le 3.3.6 du poste vient de `openssl req -help` et de l'essai |
+| `/usr/bin/openssl version`, `openssl req -help`, `openssl x509 -help`, `/opt/homebrew/bin/openssl version` | 2026-11-26 | LibreSSL 3.3.6 : `-nodes` oui, `-noenc` non, `-addext` oui ; `x509` sans `-checkhost` ni `-checkip`. OpenSSL 4.1.0 : `-nodes` et `-noenc` oui |
+| `/opt/homebrew/etc/openssl@4/openssl.cnf`, `/etc/ssl/openssl.cnf` | 2026-11-26 | `default_keyfile = privkey.pem` actif dans le premier (ligne 155), en commentaire dans le second (ligne 4) |
+| <https://github.com/actions/runner-images/blob/main/README.md> | 2026-11-26 | `ubuntu-latest` désigne Ubuntu 26.04 |
+| <https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2604-Readme.md> | 2026-11-26 | Image 20261116.202.1, Ubuntu 26.04.1 LTS, OpenSSL 3.5.5-1ubuntu3.7 |
+| <https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md> | 2026-11-26 | Image 20261116.376.1, Ubuntu 24.04.5 LTS, OpenSSL 3.0.13-0ubuntu3.16 |
+| <https://kubernetes.io/docs/concepts/configuration/secret/> | 2026-11-26 | Type `kubernetes.io/tls` : `tls.key` et `tls.crt` dans `data` ou `stringData`, l'API vérifie la présence des clés, pas leurs valeurs ; `stringData` fusionné dans `data` |
+| <https://kubernetes.io/docs/reference/kubectl/generated/kubectl_create/kubectl_create_secret_tls/> | 2026-11-26 | `kubectl create secret tls NAME --cert=path/to/cert/file --key=path/to/key/file` : deux chemins de fichiers |
+| <https://man7.org/linux/man-pages/man1/base64.1.html> | 2026-11-26 | `-d, --decode` (GNU) |
+| <https://github.com/FiloSottile/mkcert> | 2026-11-26 | Autorité locale installée dans le magasin système ; clé et certificat écrits dans le dossier courant ; licence BSD-3-Clause |
+| `docs/benchmarks/BENCH-014-cache.md`, ligne 184 | 2026-11-26 | Précédent : réponse HTTPS lue par `openssl s_client` sur `127.0.0.1`, avec SNI |
+| Essais sur le poste, `t071-trial.sh` (hors dépôt) | 2026-11-26 | Structure du manifeste, certificat relu par `x509 -text`, sortie en erreur sous `pipefail`, aucun fichier écrit |
 
 ## RS-11. Cache
 
@@ -1481,7 +1559,6 @@ Sources : la documentation du provider `hashicorp/google` au tag `v8.12.0` (comm
 | Versions du front, des frameworks de test, de Task, conftest, kubeconform, cosign, provider `random`, Npgsql, client du cache | [DEV] | 1 à 19, chacun à son entrée |
 | Correspondance par préfixe de chemin dans le cœur de Gateway API et chez GKE | [DEV] | 7 |
 | Composants de Kustomize dans la version qu'embarque kubectl | [DEV] | 7 |
-| Fabrication de `gateway-tls` sans fichier | [SECU], [DEV] | 7 (HTTPS) |
 | TLS vers la base | [DEV], [SECU] | 8 |
 | Moteur du cache, local et Memorystore, et son authentification : BENCH-014 puis ADR-015 | [BENCH], [ARCHI] | 19 et 20, donc 9 et la suite du profil lite |
 | Mot de passe du cache sans argument ; TLS vers le cache ; RESP pour toutes les options de BENCH-014 | [DEV], [SECU], [BENCH] | 19 |
