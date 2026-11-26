@@ -8,8 +8,9 @@
 # - renovate_rules: the rules that follow golden/saas-b2b/platform.yaml,
 #   which the Renovate of CELIAN applies to the files of golden/ (research,
 #   RS-17): the postgres major (ADR-012, condition 5), the node image on the
-#   Kubernetes minor and kind with its node image (ADR-004, version rule,
-#   point 5), Envoy Gateway in one group (ADR-005, updates, point 2), and the
+#   Kubernetes minor, kubectl on the same minor, and kind with its node image
+#   (ADR-004, version rule, point 5), Envoy Gateway in one group (ADR-005,
+#   updates, point 2), and the
 #   custom managers of golden/saas-b2b/tests/tools/install.sh with the
 #   preflight checks, and of the images of the local layer. Both files are
 #   checked against the same platform.yaml, so they cannot drift apart.

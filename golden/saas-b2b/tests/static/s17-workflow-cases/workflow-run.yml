@@ -1,0 +1,21 @@
+# expect: trigger pull_request_target or workflow_run
+# Failing case of S17: a workflow started by another workflow runs with the
+# token and the secrets of the base repository.
+name: case
+
+on:
+  workflow_run:
+    workflows: [checks]
+    types: [completed]
+
+permissions:
+  contents: read
+
+jobs:
+  follow:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: task check

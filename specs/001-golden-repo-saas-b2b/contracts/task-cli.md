@@ -65,7 +65,7 @@ Dit d'abord que le `task up` suivant demandera le réseau, puis supprime le volu
 | Commande | Contenu | Cluster | Contrôles |
 | --- | --- | --- | --- |
 | `task test` | tests unitaires de l'API et du front, tests de la décision du scan | non | U01 à U03 |
-| `task check` | contrôles statiques, rendus et parité, contrôles préalables simulés, inventaire, politique et exceptions du scan | non | S01 à S23, S25 à S28, S30, P01 à P06 |
+| `task check` | contrôles statiques, rendus et parité, contrôles préalables simulés, inventaire, politique et exceptions du scan | non | S01 à S23, S25 à S28, S30, S32, P01 à P06 |
 | `task test:e2e` | tests sur kind du profil courant | oui, créé et supprimé | E01 à E09, E11 à E24 selon le profil |
 | `task test:offline` | T2 du profil courant | oui | E10 |
 | `task test:images` | relevé des images en marche, SBOM des images construites, scan de l'inventaire du profil courant ; demande le réseau pour la base de vulnérabilités | oui, déjà démarré | E25 à E27 |

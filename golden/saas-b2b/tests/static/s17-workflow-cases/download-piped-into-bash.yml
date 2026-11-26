@@ -1,0 +1,22 @@
+# expect: output piped into a shell or an interpreter
+# Failing case of S17: wget to standard output, piped into bash on the next
+# line of a multi-line command.
+name: case
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install a tool
+        run: |
+          wget -qO- https://example.invalid/install.sh \
+            | sudo bash -s -- --yes

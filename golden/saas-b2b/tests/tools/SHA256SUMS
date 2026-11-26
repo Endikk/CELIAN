@@ -14,3 +14,5 @@ bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  aquasecurity/t
 ab9d51f86e6a5fb936f605faff6b593ac51bc378fff4d3e8b9d58358b9c367c3  aquasecurity/trivy/v0.76.2/trivy_0.76.2_Linux-ARM64.tar.gz
 e08bb9ea449ecf66c6bfb03cbb8697c503ff33d35fc585c9747e3eaeb7ed4c7b  aquasecurity/trivy/v0.76.2/trivy_0.76.2_macOS-64bit.tar.gz
 ae7ea358326960406b703c77b2ac490190797d80b306b5b50c2a27221da0a5b8  aquasecurity/trivy/v0.76.2/trivy_0.76.2_macOS-ARM64.tar.gz
+aee6151561422756b764a4ae28e7f44cda5af5a9eead3cc9985112b1de8d8e0d  kubernetes-sigs/kind/v0.33.0/kind-linux-amd64
+29818b6729dc9262b692307470d0558d027725e738be5dd47c760261868a2634  kubernetes/kubernetes/v1.36.6/kubectl-linux-amd64

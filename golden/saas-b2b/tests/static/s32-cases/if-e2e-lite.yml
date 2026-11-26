@@ -1,0 +1,46 @@
+# expect: job e2e-lite: has a job-level if
+# Failing case of S32: e2e-lite that a condition turns off, so that it runs on
+# no pull request. The rest is a valid CI.
+name: case
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash tests/tools/install.sh "$RUNNER_TEMP/tools" task conftest tofu trivy kubectl
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: task test
+  e2e-lite:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: ${{ false }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash tests/tools/install.sh "$RUNNER_TEMP/tools" task kind kubectl
+      - env:
+          PROFILE: lite
+        run: task test:e2e
+  scan-images:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash tests/tools/install.sh "$RUNNER_TEMP/tools" trivy conftest kubectl
+      - run: bash tests/scan/e27-pulled-images.sh

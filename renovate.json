@@ -86,6 +86,12 @@
       "allowedVersions": "/^9\\.1\\.[0-9]+-alpine$/"
     },
     {
+      "description": "ADR-004, version rule, point 5, for the files of golden/ and the workflow that runs it: kubectl stays on the Kubernetes minor of golden/saas-b2b/platform.yaml, like the node image. The minor changes by hand, with kubernetes_minor. A leading v is accepted: the releases carry it, and the KUBECTL_VERSION of the workflow too. Same entry as golden/saas-b2b/renovate.json; scripts/renovate/check-renovate.sh checks both against platform.yaml.",
+      "matchDatasources": ["github-releases"],
+      "matchPackageNames": ["kubernetes/kubernetes"],
+      "allowedVersions": "/^v?1\\.36\\./"
+    },
+    {
       "description": "ADR-004, version rule, point 5, for the files of golden/: kind and its node image move in one PR. Renovate cannot refuse a PR that holds only one of them: complete it by hand before merging.",
       "matchPackageNames": ["kubernetes-sigs/kind", "/^(docker\\.io/)?kindest/node$/"],
       "groupName": "kind and its node image"

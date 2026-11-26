@@ -1,0 +1,25 @@
+# expect: permission set to write or write-all
+# Failing case of S17: a job added to a workflow, with a write permission of
+# its own. The top of the workflow stays at contents: read.
+name: case
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: task check
+  label:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - run: echo labelled

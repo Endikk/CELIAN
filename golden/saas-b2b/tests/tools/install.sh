@@ -5,10 +5,18 @@
 # opened. No third-party GitHub Action is involved (spec 001, T011), and never
 # the actions of Trivy (S26).
 #
-# Usage: tests/tools/install.sh <directory> [task|conftest|tofu|trivy ...]
-# Without a tool name, all four are installed. A job that needs fewer names
-# them, so that it downloads and runs nothing else.
+# Usage: tests/tools/install.sh <directory> [task|conftest|tofu|trivy|kind|kubectl ...]
+# Without a tool name, the first four are installed. A job that needs fewer
+# names them, so that it downloads and runs nothing else. kind and kubectl are
+# for the CI only (spec 001, tasks.md, gaps 26 and 40): they install on request,
+# on Linux amd64, the runner, and never by default.
 # Then put <directory> on PATH. Linux and macOS, amd64 and arm64.
+#
+# kind: the version is KIND_VERSION of local/scripts/lib/preflight-checks.sh,
+# the one that task up compares with the kind of the machine. kubectl: the
+# constant below, on the Kubernetes minor of platform.yaml (S32). Both sums are
+# in SHA256SUMS, from the files that the releases publish (kind-linux-amd64.sha256sum
+# of the kind release, kubectl.sha256 of dl.k8s.io), read on 2026-11-26.
 #
 # Versions and sums: research RS-09 (Task) and RS-18 (conftest), read on
 # 2026-11-23, RS-16 (OpenTofu) and RS-22 (Trivy), read on 2026-11-25, from
@@ -17,6 +25,8 @@
 # first checks the sigstore signature of the checksum file with cosign
 # (research RS-22), then copies the sums.
 #
+# kubectl stays on the Kubernetes minor of platform.yaml: a rule of
+# renovate.json (allowedVersions, checked by S23) refuses another minor.
 # Renovate proposes the new versions: a custom manager of renovate.json (in
 # CELIAN, the one at the root) reads the "# renovate:" comment above each
 # constant, under the delay of 7 days. It changes the constant only, and no
@@ -33,16 +43,19 @@ CONFTEST_VERSION="0.71.1"
 TOFU_VERSION="1.13.9"
 # renovate: datasource=github-releases depName=aquasecurity/trivy
 TRIVY_VERSION="0.76.2"
+# renovate: datasource=github-releases depName=kubernetes/kubernetes
+KUBECTL_VERSION="1.36.6"
 
 here="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 sums_file="$here/SHA256SUMS"
+preflight_checks="$here/../../local/scripts/lib/preflight-checks.sh"
 
 die() {
   echo "install.sh: $1" >&2
   exit 1
 }
 
-[ "$#" -ge 1 ] || die "usage: tests/tools/install.sh <directory> [task|conftest|tofu|trivy ...]"
+[ "$#" -ge 1 ] || die "usage: tests/tools/install.sh <directory> [task|conftest|tofu|trivy|kind|kubectl ...]"
 dest="$1"
 shift
 tools=" $* "
@@ -51,8 +64,8 @@ if [ "$#" -eq 0 ]; then
 fi
 for name in "$@"; do
   case "$name" in
-    task | conftest | tofu | trivy) ;;
-    *) die "unknown tool $name: task, conftest, tofu or trivy." ;;
+    task | conftest | tofu | trivy | kind | kubectl) ;;
+    *) die "unknown tool $name: task, conftest, tofu, trivy, kind or kubectl." ;;
   esac
 done
 
@@ -74,6 +87,13 @@ case "$(uname -m)" in
   arm64 | aarch64) arch="arm64" ;;
   *) die "unsupported processor $(uname -m): amd64 and arm64 only." ;;
 esac
+
+# Before anything is created: on another system, the call fails without
+# leaving a directory behind.
+if wanted kind || wanted kubectl; then
+  [ "$os" = linux ] && [ "$arch" = amd64 ] ||
+    die "kind and kubectl install on Linux amd64 only, the runner of the CI; found $os $arch."
+fi
 
 sha256_of() {
   if command -v sha256sum >/dev/null 2>&1; then
@@ -121,6 +141,34 @@ install_binary() {
   echo "Installed $binary from $file, SHA-256 checked."
 }
 
+# Downloads the single binary at URL $3, checks it against the sum of key $1
+# in SHA256SUMS, and installs it as $2. For kind and kubectl, which release a
+# bare executable and no archive.
+install_plain() {
+  local key="$1" binary="$2" url="$3" file expected actual
+  wanted "$binary" || return 0
+  expected="$(expected_sum "$key")" || die "no SHA-256 for $key in $sums_file."
+  file="$workdir/$binary.download"
+  curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+    --retry 3 --output "$file" "$url"
+  actual="$(sha256_of "$file")"
+  if [ "$actual" != "$expected" ]; then
+    die "SHA-256 mismatch for $binary from $url: expected $expected, got $actual. Nothing installed."
+  fi
+  install -m 0755 "$file" "$dest/$binary"
+  echo "Installed $binary from $url, SHA-256 checked."
+}
+
+if wanted kind; then
+  [ -f "$preflight_checks" ] || die "$preflight_checks is missing: it holds KIND_VERSION."
+  kind_version="$(awk -F'"' '/^KIND_VERSION=/ { print $2; exit }' "$preflight_checks")"
+  [[ $kind_version =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "no KIND_VERSION in $preflight_checks."
+  install_plain "kubernetes-sigs/kind/v$kind_version/kind-linux-amd64" kind \
+    "https://github.com/kubernetes-sigs/kind/releases/download/v$kind_version/kind-linux-amd64"
+fi
+install_plain "kubernetes/kubernetes/v$KUBECTL_VERSION/kubectl-linux-amd64" kubectl \
+  "https://dl.k8s.io/release/v$KUBECTL_VERSION/bin/linux/amd64/kubectl"
+
 install_binary "go-task/task/v$TASK_VERSION/task_${os}_${arch}.tar.gz" task
 
 case "$os" in
@@ -153,3 +201,5 @@ if wanted task; then "$dest/task" --version; fi
 if wanted conftest; then "$dest/conftest" --version; fi
 if wanted tofu; then "$dest/tofu" version; fi
 if wanted trivy; then "$dest/trivy" --version; fi
+if wanted kind; then "$dest/kind" version; fi
+if wanted kubectl; then "$dest/kubectl" version --client; fi

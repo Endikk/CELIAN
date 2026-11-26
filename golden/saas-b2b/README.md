@@ -220,7 +220,7 @@ Le Secret `gateway-tls` porte la clé et le certificat auto-signé de l'écouteu
 
 ### Recherche de secrets et scan
 
-gitleaks tourne en pre-commit et dans `secrets.yml` sur tout l'historique Git, avec `detect-private-key`. Trivy scanne le HCL (`task gcp:scan`). Dans CELIAN, le job `scan-images` scanne les images du profil lite au seuil HIGH. Les images construites par le projet et celles de `gcp` bloquent ; les images tierces du cluster local sont signalées dans le résumé du job sans le faire échouer. La classe de chaque image est dans `security/scan-policy.yaml`, les exceptions datées dans `security/scan-exceptions.yaml`.
+gitleaks tourne en pre-commit et dans `secrets.yml` sur tout l'historique Git, avec `detect-private-key`. Trivy scanne le HCL (`task gcp:scan`). Le job `scan-images`, dans CELIAN et dans ce projet, scanne les images du profil lite au seuil HIGH. Les images construites par le projet et celles de `gcp` bloquent ; les images tierces du cluster local sont signalées dans le résumé du job sans le faire échouer. La classe de chaque image est dans `security/scan-policy.yaml`, les exceptions datées dans `security/scan-exceptions.yaml`.
 
 À venir (étape 18) : le SBOM de chaque image construite, lisible par machine, gardé comme artefact de la CI.
 
@@ -234,14 +234,17 @@ Les workflows du projet généré sont dans `.github/workflows/`.
 
 | Workflow | Rôle |
 | --- | --- |
-| `checks.yml` | `task check` et `task test`, sur chaque PR et sur `main` |
+| `checks.yml` | les jobs `check` (`task check`) et `unit` (`task test`), sur chaque PR et sur `main` |
+| `e2e.yml` | les jobs `e2e-lite` (`PROFILE=lite task test:e2e` sur kind, 45 minutes au plus) et `scan-images` (E27 sur les images tirées), sur chaque PR et sur `main` |
 | `ci.yml` | tous les hooks pre-commit sur tous les fichiers, le validateur de configuration de Renovate, commitlint sur le titre de la PR |
 | `secrets.yml` | gitleaks sur tout l'historique |
 | `release-please.yml` | versions et `CHANGELOG.md`, sur `main` |
 
 Le dépôt porte ses propres conventions Git : Conventional Commits vérifiés par commitlint, hooks pre-commit, Renovate, release-please. Dans une copie autonome du dossier, `pre-commit install` pose les hooks ; dans CELIAN, ce sont ceux de CELIAN qui s'appliquent, et le contrôle X01 exerce ceux-ci dans une copie.
 
-Dans CELIAN, le workflow `golden-saas-b2b.yml` lance en plus `e2e-lite`, qui joue `task test:e2e` sur un runner, `scan-images`, `envoy-render` et `export`. Les workflows du projet généré ne les lancent pas encore : ils n'installent ni kind avec une somme vérifiée ni le scan. Sur un projet privé, un job qui crée un cluster le crée à froid et consomme des minutes de CI.
+Les quatre jobs `check`, `unit`, `e2e-lite` et `scan-images` ne portent ni `if:` ni `continue-on-error` : chacun tourne à chaque PR et la fait échouer s'il échoue, et le contrôle S32 le vérifie. kind, kubectl, Task, conftest et Trivy viennent de `tests/tools/install.sh`, chacun vérifié contre sa somme SHA-256 de `tests/tools/SHA256SUMS`, sans action tierce ; kind et kubectl ne s'installent que sous Linux amd64, le runner. Aucun workflow ne s'exécute avec `pull_request_target` ni `workflow_run`, aucun ne lance un téléchargement par un tube vers un shell, et seul `release-please.yml` écrit, avec ses trois droits (S17).
+
+Dans CELIAN, le workflow `golden-saas-b2b.yml` lance en plus `envoy-render` et `export`, et ses propres `unit`, `e2e-lite` et `scan-images`, qui installent kind par le catalogue de CELIAN. Sur un projet privé, `e2e-lite` crée un cluster à froid à chaque PR et à chaque `push` sur `main`, et consomme des minutes de CI ; ce coût n'est pas encore chiffré.
 
 ## Démonter l'environnement local
 
