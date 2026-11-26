@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # control: S15
-# carries: FR-011, FR-012; ADR-008, conditions 1 to 6 and 8, question 1; ADR-007, condition 2; ADR-010; R-32; R-05, R-17, R-18
+# carries: FR-011, FR-012; ADR-008, conditions 1 to 6 and 8, question 1; ADR-007, condition 2; ADR-010; R-32; R-05, R-17, R-18; research RS-16 (registry of the providers)
 #
 # Two parts, both on the HCL of the two roots, gcp/tofu/ and the budget root
 # gcp/budget/ (T110), without any credential:
@@ -34,6 +34,9 @@ policies="gcp/policy"
 packages="tofu_adr008 tofu_secret_sync tofu_config_sync tofu_finops"
 # Run on the two roots together, so it is not in the list above.
 budget_package="tofu_budget"
+# Run on each root alone, the budget root included: the registry of the
+# providers is written in both (research RS-16).
+registry_package="tofu_registry"
 problems=0
 
 # The closed list of Trivy ignore comments: "<comment line>|<resource>". A
@@ -119,7 +122,7 @@ run_policy() {
   # One package per run: conftest says nothing about a package it does not
   # find (research RS-18), and tests/run-static.sh refuses a policy that no
   # control script names.
-  for package in $packages $budget_package; do
+  for package in $packages $budget_package $registry_package; do
     conftest verify --no-color --policy "$policies" --namespace "$package" || problems=$((problems + 1))
   done
   check_cases
@@ -132,6 +135,14 @@ run_policy() {
       conftest test --no-color --combine --policy "$policies" --namespace "$package" "$dir"/*.tf platform.yaml ||
         problems=$((problems + 1))
     done
+  fi
+  if [ "$main_present" -eq 1 ]; then
+    conftest test --no-color --combine --policy "$policies" --namespace "$registry_package" \
+      "$dir"/*.tf || problems=$((problems + 1))
+  fi
+  if [ "$budget_present" -eq 1 ]; then
+    conftest test --no-color --combine --policy "$policies" --namespace "$registry_package" \
+      "$budget_dir"/*.tf || problems=$((problems + 1))
   fi
   # The budget policy reads both roots: the alert, and the identity of the
   # main root, which must not hold a role that writes budgets.
