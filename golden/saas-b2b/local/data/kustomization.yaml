@@ -1,0 +1,16 @@
+# Postgres of the local layer (ADR-012), in the namespace of the
+# application (condition 9). The component of the local target,
+# local/k8s/component/, takes it in; the generated ConfigMap gets the
+# namespace from here, since it lives outside the base (research RS-01).
+# The script keeps the hash suffix: a new script gives a new name, and the
+# StatefulSet follows it.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: saas-b2b
+resources:
+  - statefulset.yaml
+  - service.yaml
+configMapGenerator:
+  - name: postgres-init
+    files:
+      - init/10-app-role.sh

@@ -7,11 +7,17 @@
 # references.
 #
 # The commands and options are those of research RS-02, "Relevé du
-# 2026-11-25: Gateway API et Envoy Gateway vendorés":
+# 2026-11-25: Gateway API et Envoy Gateway vendorés", with the watch of the
+# controller of its "Relevé du 2026-11-25 : périmètre du contrôleur
+# d'Envoy Gateway" (ADR-005, complement of 2026-11-25):
 #   helm template eg-crds <crds chart> \
 #     --set crds.envoyGateway.enabled=true --set crds.gatewayAPI.enabled=false
 #   helm template eg <chart> -n envoy-gateway-system --set crds.enabled=false \
-#     --set global.images.envoyGateway.image=<controller image by digest>
+#     --set global.images.envoyGateway.image=<controller image by digest> \
+#     --set config.envoyGateway.provider.kubernetes.watch.type=Namespaces \
+#     --set 'config.envoyGateway.provider.kubernetes.watch.namespaces={envoy-gateway-system,<application>}'
+# <application> is the namespace of the application, the name of
+# k8s/base/namespace.yaml of the golden repo.
 # Each chart is pulled by digest, so what Helm renders is the artifact that
 # the reference names. Helm runs with its cache, config and data in a
 # temporary folder, without any registry login.
@@ -28,6 +34,9 @@ root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 golden="${1:-$root/golden/saas-b2b}"
 tasks_file="$golden/local/tasks/local.yml"
 vendor="$golden/local/vendor/envoy-gateway"
+namespace_file="$golden/k8s/base/namespace.yaml"
+# The namespace of the controller, which the watch always names.
+readonly CONTROLLER_NAMESPACE="envoy-gateway-system"
 
 die() {
   echo "check-envoy-gateway-render.sh: $1" >&2
@@ -61,6 +70,13 @@ controller_ref="$(checked_ref ENVOY_GATEWAY_IMAGE gateway)"
 chart_ref="$(checked_ref ENVOY_GATEWAY_HELM_IMAGE gateway-helm)"
 crds_ref="$(checked_ref ENVOY_GATEWAY_CRDS_HELM_IMAGE gateway-crds-helm)"
 
+# The namespace of the application, which the controller watches with its
+# own: the first name: of k8s/base/namespace.yaml, metadata.name.
+[ -f "$namespace_file" ] || die "$namespace_file is missing: it names the namespace of the application, which the controller watches."
+app_namespace="$(awk '$1 == "name:" { print $2; exit }' "$namespace_file")"
+[[ $app_namespace =~ ^[a-z0-9]([-a-z0-9]*[a-z0-9])?$ ]] ||
+  die "the name of $namespace_file is \"$app_namespace\": a namespace name is expected."
+
 workdir="$(mktemp -d)"
 trap 'rm -rf "$workdir"' EXIT
 export HELM_CACHE_HOME="$workdir/helm-cache"
@@ -90,8 +106,10 @@ helm template eg-crds "$crds_archive" \
   >"$workdir/render/gateway-crds-helm.yaml" || die "helm template of the CRD chart failed."
 
 chart_archive="$(pull_chart "$chart_ref" "$workdir/pull/chart")"
-helm template eg "$chart_archive" -n envoy-gateway-system --set crds.enabled=false \
+helm template eg "$chart_archive" -n "$CONTROLLER_NAMESPACE" --set crds.enabled=false \
   --set "global.images.envoyGateway.image=$controller_ref" \
+  --set config.envoyGateway.provider.kubernetes.watch.type=Namespaces \
+  --set "config.envoyGateway.provider.kubernetes.watch.namespaces={$CONTROLLER_NAMESPACE,$app_namespace}" \
   >"$workdir/render/gateway-helm.yaml" || die "helm template of the controller chart failed."
 
 failures=0

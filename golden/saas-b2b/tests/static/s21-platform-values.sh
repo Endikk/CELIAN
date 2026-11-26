@@ -5,16 +5,17 @@
 # The Kubernetes minor and the Postgres major have one value each, in
 # platform.yaml, and every file that repeats them agrees with it. Runs the
 # tests of policy package platform_values, then the policy on the real files.
-# Step 1 gave it platform.yaml alone; step 6 (T041) adds the kind
-# configuration; T065 and T105 add the Postgres manifests and the OpenTofu
-# layer to "inputs". The OpenTofu files join when the gcp layer is there: a
-# project rendered for the local target alone has no gcp/ folder.
+# Step 1 gave it platform.yaml alone; step 6 (T041) added the kind
+# configuration, step 8 (T065) the Postgres image of local/data/, and step
+# 13 (T105) the OpenTofu layer. The OpenTofu files join when the gcp layer
+# is there: a project rendered for the local target alone has no gcp/
+# folder.
 set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 CDPATH='' cd -- "$root"
 
-inputs="platform.yaml local/kind/cluster.yaml"
+inputs="platform.yaml local/kind/cluster.yaml local/data/statefulset.yaml"
 
 if [ -d gcp ]; then
   set -- gcp/tofu/*.tf

@@ -1,0 +1,10 @@
+# The lite profile of the local target (contracts/layers.md, "Composition
+# Kustomize"; research RS-01): the local environment of the common layer,
+# with the component of the local target on top. task up applies it with
+# kubectl apply -k (local/scripts/app.sh).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../../k8s/overlays/local
+components:
+  - ../component

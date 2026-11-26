@@ -100,6 +100,12 @@ La spec ne nomme ni Envoy Gateway ni le contrôleur de GKE : ils vivent dans les
 
 Restent hors de cette décision : les certificats réels du projet (cert-manager ou équivalent, avec [SECU]) ; la classe GKE, une adresse IP statique et le dimensionnement sur `gcp` ([OPS], [FINOPS]) ; les ports de l'hôte, fixés en phase 3 sous la condition 1 de l'ADR-004 ; la solution de R-25 ([OPS], BENCH-005) ; le maillage de services ; Windows (Q5).
 
+### Complément du 2026-11-25 : le contrôleur ne surveille que les namespaces du projet
+
+Décidé par le DSI sur la relecture [SECU] de l'étape 7 du golden repo (écart 43 de [specs/001-golden-repo-saas-b2b/tasks.md](../../specs/001-golden-repo-saas-b2b/tasks.md)). Rendu avec les seuls réglages de la section « Versions et condensats », le chart `gateway-helm` donne au contrôleur un ClusterRole qui lit les Secrets de tout le cluster et peut modifier tous ses pods. La couche `local` ajoute donc un troisième réglage : `config.envoyGateway.provider.kubernetes.watch`, de type `Namespaces`, avec pour liste le namespace du contrôleur et celui de l'application (`envoy-gateway-system` et `saas-b2b` dans le golden repo). Le chart rend alors un Role et un RoleBinding dans chacun des deux, et le ClusterRole ne garde que les nœuds, les namespaces, les GatewayClass et les `ServiceImport`. Le namespace du contrôleur est dans la liste parce que l'EnvoyProxy de la GatewayClass y vit, et que le contrôleur ne lit l'EnvoyProxy que dans les namespaces surveillés. Le type `NamespaceSelector` est écarté : le chart garde alors le ClusterRole complet.
+
+Il reste au contrôleur, dans le namespace de l'application, la lecture des Secrets, dont la Gateway a besoin pour le certificat de l'écouteur HTTPS, et la modification des pods, par la règle de l'injecteur de topologie. Contrôle : S22 refuse un rendu sans ce réglage, avec une autre liste, ou dont un ClusterRole donne un droit sur les Secrets ou sur les pods. Les faits, la commande de rendu et l'essai sur kind du 2026-11-25 sont au point RS-02 de [research.md](../../specs/001-golden-repo-saas-b2b/research.md). Le blueprint reprend le réglage en phase 3, la liste suivant le nom du projet.
+
 ## Conséquences
 
 ### Positives
@@ -229,3 +235,4 @@ Ce que BENCH-004 établit se cite par lui ; ses propres sources sont dans sa sec
 | [docs/benchmarks/TEMPLATE.md](../benchmarks/TEMPLATE.md), section 5.6 | 2026-11-19 | Règle d'empreinte et seuils de BENCH-003 ; le gabarit ne fixe ni le périmètre ni l'architecture du volume |
 | `.claude/settings.json` | 2026-11-19 | Aucune règle sur `kubectl` |
 | Décisions du DSI du 2026-11-19, reprises dans `docs/risques.md` (R-04, R-25) et BENCH-004 (section 4.1) | 2026-11-19 | R-04 et R-25 en probabilité forte, confirmés à la GATE 1 ; règle provisoire de la plate-forme de base |
+| Chart et code d'Envoy Gateway v1.10.0, rendu par condensat et essai sur kind, au point RS-02 de [research.md](../../specs/001-golden-repo-saas-b2b/research.md) | 2026-11-25 | Complément du 2026-11-25 : réglage `watch` du contrôleur, droits qui restent |

@@ -1,0 +1,17 @@
+# The Service of Postgres on the local layer (ADR-012), the name that the
+# application reaches through DATABASE_HOST of app-config (step 9), and that
+# task up uses for its authenticated SELECT 1 (condition 6). It also governs
+# the StatefulSet (serviceName).
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  labels:
+    app.kubernetes.io/name: postgres
+spec:
+  selector:
+    app.kubernetes.io/name: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres

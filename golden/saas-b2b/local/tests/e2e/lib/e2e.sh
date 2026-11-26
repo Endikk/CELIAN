@@ -30,6 +30,20 @@ E2E_GATEWAY_HTTP_PORT=18080
 E2E_GATEWAY_HTTPS_PORT=18443
 E2E_APP_NAMESPACE="saas-b2b"
 E2E_GATEWAY="saas-b2b"
+# The Secrets of the database and their keys (contracts/secrets.md), and the
+# user name of db-auth.
+E2E_SECRETS="db-auth db-superuser"
+E2E_SECRET_KEYS="password username"
+E2E_SECRET_TYPE="kubernetes.io/basic-auth"
+E2E_APP_USER="app"
+# The volume of the database: the PVC of the StatefulSet postgres.
+E2E_DATA_VOLUME="data-postgres-0"
+# A password is 32 characters at least, and none of the known values of
+# ADR-007, condition 1, of ADR-012, condition 10 (mysecretpassword) and of
+# ADR-015, condition 19 (foobared, password123); the empty value is
+# refused by the length.
+E2E_MIN_PASSWORD_LENGTH=32
+E2E_KNOWN_VALUES="root admin postgres password changeme mysecretpassword foobared password123"
 
 E2E_FAILURES=0
 OUTPUT=""
@@ -88,6 +102,15 @@ sha256_of() {
   fi
 }
 
+# sha256_stdin: the SHA-256 of the standard input.
+sha256_stdin() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum | awk '{ print $1 }'
+  else
+    shasum -a 256 | awk '{ print $1 }'
+  fi
+}
+
 container_exists() {
   docker container inspect --format '{{.Name}}' "$1" >/dev/null 2>&1
 }
@@ -110,6 +133,78 @@ kube_e2e() {
 # of E22 use it, so that no other image is pulled.
 mirror_image() {
   awk '$1 == "MIRROR_IMAGE:" { print $2; exit }' "$E2E_ROOT/local/tasks/local.yml"
+}
+
+# The Postgres image of local/data/statefulset.yaml, by tag and digest: the
+# client pods of E03 and E12 run it, since the node already holds it and it
+# carries bash and psql.
+postgres_image() {
+  awk '$1 == "image:" && $2 ~ /\/postgres:/ { print $2; exit }' "$E2E_ROOT/local/data/statefulset.yaml"
+}
+
+# How long a client pod gets to end, and the pause between two looks.
+E2E_CLIENT_WAIT_SECONDS=120
+E2E_CLIENT_PAUSE_SECONDS=2
+
+# client_pod NAMESPACE NAME SCRIPT: runs SCRIPT with bash in a pod NAME of
+# NAMESPACE, which the test creates first, on the Postgres image, under the
+# restricted profile (UID 999, no privilege escalation, no capability,
+# seccomp RuntimeDefault, no service account token); waits until it ends,
+# then removes it. Sets OUTPUT to its log, and STATUS to 0 when it
+# succeeded, 1 otherwise. SCRIPT is an argument of the pod: it never holds a
+# secret.
+client_pod() {
+  local namespace="$1" name="$2" script="$3" image overrides phase="" waited=0
+  image="$(postgres_image)"
+  overrides='{"apiVersion":"v1","spec":{"automountServiceAccountToken":false,"securityContext":{"runAsNonRoot":true,"runAsUser":999,"runAsGroup":999,"seccompProfile":{"type":"RuntimeDefault"}},"containers":[{"name":"'"$name"'","securityContext":{"allowPrivilegeEscalation":false,"capabilities":{"drop":["ALL"]}}}]}}'
+  STATUS=1
+  if ! OUTPUT="$(kube_e2e --namespace "$namespace" run "$name" --image="$image" --restart=Never \
+    --override-type=strategic --overrides="$overrides" --command -- bash -c "$script" 2>&1)"; then
+    return 0
+  fi
+  while :; do
+    phase="$(kube_e2e --namespace "$namespace" get pod "$name" --output 'jsonpath={.status.phase}' 2>/dev/null)" || phase=""
+    case "$phase" in
+      Succeeded | Failed) break ;;
+    esac
+    [ "$waited" -lt "$E2E_CLIENT_WAIT_SECONDS" ] || break
+    sleep "$E2E_CLIENT_PAUSE_SECONDS"
+    waited=$((waited + E2E_CLIENT_PAUSE_SECONDS))
+  done
+  OUTPUT="$(kube_e2e --namespace "$namespace" logs "$name" 2>&1)" || :
+  [ "$phase" = Succeeded ] && STATUS=0
+  kube_e2e --namespace "$namespace" delete pod "$name" --ignore-not-found --wait=false >/dev/null 2>&1 || :
+}
+
+# client_namespace NAME: creates the namespace NAME of a client pod, under
+# the restricted profile.
+client_namespace() {
+  kube_e2e create namespace "$1" >/dev/null &&
+    kube_e2e label namespace "$1" pod-security.kubernetes.io/enforce=restricted >/dev/null
+}
+
+# remove_client_namespace NAME: removes it, and does not wait.
+remove_client_namespace() {
+  kube_e2e delete namespace "$1" --ignore-not-found --wait=false >/dev/null 2>&1 || :
+}
+
+# db_query SECRET DATABASE SQL: runs SQL with psql in the container of
+# Postgres, as the user of the Secret SECRET (db-auth or db-superuser), on
+# DATABASE, through the Service, in unaligned rows. The password goes from
+# the file of the Secret, mounted in the pod, to the environment of psql
+# there; it never reaches this machine. Prints the rows; fails as psql does.
+db_query() {
+  # shellcheck disable=SC2016 # expanded by bash in the pod
+  kube_e2e --namespace "$E2E_APP_NAMESPACE" exec postgres-0 --container postgres -- \
+    bash -c 'PGPASSWORD="$(cat "/run/secrets/$1/password")" exec psql --host=postgres --port=5432 --username="$(cat "/run/secrets/$1/username")" --dbname="$2" --no-password --no-psqlrc --tuples-only --no-align --field-separator="|" --set=ON_ERROR_STOP=1 --command="$3"' \
+    db-query "$1" "$2" "$3"
+}
+
+# secret_value SECRET KEY: the decoded value of KEY in the Secret SECRET of
+# the namespace of the application. The tests keep it in memory and never
+# print it.
+secret_value() {
+  kube_e2e --namespace "$E2E_APP_NAMESPACE" get secret "$1" --output "go-template={{index .data \"$2\" | base64decode}}"
 }
 
 e2e_finish() {

@@ -35,16 +35,21 @@ vars:
 
 tasks:
   # Preflight checks first, before anything is created (contracts/task-cli.md),
-  # with the host ports of the gateway; then the cluster, the mirror and the
-  # platform (plan, "Ce que fait task up", points 2 to 4). PROFILE forces
-  # the profile, given either way: PROFILE=lite task up, or task up
-  # PROFILE=lite. Task does not export a command-line variable to the
-  # commands, hence env; a PROFILE already in the environment wins over it
-  # (research RS-08). The secrets, the data and the application arrive with
-  # steps 8 and 9. The checks of the mirror and of the vendored platform come
-  # before the cluster is created: a foreign container or volume, or a
-  # vendored file that differs from its SHA-256, stops task up at once; only
-  # the network kind, which kind creates, is checked after (mirror.sh up).
+  # with the host ports of the gateway; then the cluster, the mirror, the
+  # namespace of the application with the Secrets, the platform, and the
+  # application layer with Postgres (plan, "Ce que fait task up", points 2
+  # to 8). PROFILE forces the profile, given either way: PROFILE=lite task
+  # up, or task up PROFILE=lite. Task does not export a command-line
+  # variable to the commands, hence env; a PROFILE already in the
+  # environment wins over it (research RS-08). The API and the front arrive
+  # with step 9. The checks of the mirror, of the vendored platform and of
+  # the files of the application come before the cluster is created: a
+  # foreign container or volume, or a vendored file that differs from its
+  # SHA-256, stops task up at once; only the network kind, which kind
+  # creates, is checked after (mirror.sh up). The Secrets come before the
+  # platform: the controller of Envoy Gateway watches the namespace of the
+  # application, and its Role there needs the namespace (ADR-005, complement
+  # of 2026-11-25; tasks.md, gap 92).
   up:
     silent: true
     env:
@@ -53,10 +58,22 @@ tasks:
       - bash local/scripts/preflight.sh '{{.GATEWAY_HTTP_PORT}}' '{{.GATEWAY_HTTPS_PORT}}'
       - bash local/scripts/mirror.sh check '{{.MIRROR_IMAGE}}'
       - bash local/scripts/platform.sh check '{{.ENVOY_GATEWAY_IMAGE}}'
+      - bash local/scripts/app.sh check
       - bash local/scripts/cluster.sh up
       - bash local/scripts/mirror.sh up '{{.MIRROR_IMAGE}}'
+      - task: secrets
       - bash local/scripts/platform.sh up '{{.ENVOY_GATEWAY_IMAGE}}'
-      - echo 'task up stops after the platform. The secrets, the data and the application arrive with steps 8 and 9 of spec 001.'
+      - bash local/scripts/app.sh up
+      - echo 'task up stops after the database. The API and the front arrive with step 9 of spec 001.'
+
+  # The namespace of the application, then the Secrets of the database, each
+  # only when it is missing (contracts/secrets.md; ADR-007, condition 1).
+  # Silent, as every task that handles a secret (S04): Task would print the
+  # command before it runs it.
+  secrets:
+    silent: true
+    cmds:
+      - bash local/scripts/secrets.sh up
 
   # The mirror container first, so that nothing stays on the network kind
   # when the cluster goes (ADR-011), then the cluster; the mirror volume

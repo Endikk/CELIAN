@@ -30,9 +30,13 @@ root="$(CDPATH='' cd -- "$here/../../.." && pwd)"
 . "$here/lib/guard.sh"
 e2e_guard || exit 1
 
-# The order matters: E24 starts the environment with a decoy kubeconfig set,
-# E08 ends with task down and task mirror:purge.
-tests="e24-decoy-kubeconfig.sh e19-kubeconfig.sh e03-loopback.sh e22-foreign-container.sh e08-down.sh"
+# The order matters: E24 starts the environment with a decoy kubeconfig set;
+# E05, E12 and E06 work on that environment; E21 breaks it and ends with
+# task down; E04 starts two new environments; E08 ends with task down and
+# task mirror:purge.
+tests="e24-decoy-kubeconfig.sh e19-kubeconfig.sh e03-loopback.sh e05-secrets-kept.sh e12-postgres.sh"
+tests="$tests e06-secrets-not-in-repo.sh e21-volume-without-secrets.sh e04-secrets-fresh.sh"
+tests="$tests e22-foreign-container.sh e08-down.sh"
 
 export DOCKER_CONFIG="${DOCKER_CONFIG:-${HOME:?}/.docker}"
 sandbox_home="$(mktemp -d)" || exit 2

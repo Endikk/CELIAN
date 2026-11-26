@@ -39,3 +39,6 @@ scan_policy:
       # Envoy Gateway: the controller, and its proxy (local/security/unlisted-images).
       - docker.io/envoyproxy/gateway
       - docker.io/envoyproxy/envoy
+      # Postgres of the local layer (local/data/): a third-party image, on the
+      # cluster of the machine only; gcp uses Cloud SQL (ADR-012; tasks.md, gap 91).
+      - docker.io/library/postgres

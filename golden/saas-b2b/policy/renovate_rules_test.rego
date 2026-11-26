@@ -82,11 +82,11 @@ local_expression := `# renovate: datasource=(?<datasource>docker) depName=(?<dep
 golden_local_manager := {
 	"customType": "regex",
 	"description": "Images of the local layer.",
-	"managerFilePatterns": ["/^local/kind/cluster\\.yaml$/", "/^local/tasks/.+\\.ya?ml$/"],
+	"managerFilePatterns": ["/^local/kind/cluster\\.yaml$/", "/^local/tasks/.+\\.ya?ml$/", "/^local/data/.+\\.ya?ml$/"],
 	"matchStrings": [local_expression],
 }
 
-celian_local_manager := with_value(golden_local_manager, "managerFilePatterns", ["/^golden/saas-b2b/local/kind/cluster\\.yaml$/", "/^golden/saas-b2b/local/tasks/.+\\.ya?ml$/"])
+celian_local_manager := with_value(golden_local_manager, "managerFilePatterns", ["/^golden/saas-b2b/local/kind/cluster\\.yaml$/", "/^golden/saas-b2b/local/tasks/.+\\.ya?ml$/", "/^golden/saas-b2b/local/data/.+\\.ya?ml$/"])
 
 config_for(package_rules, managers) := {
 	"extends": celian_presets,
@@ -571,7 +571,7 @@ test_s23_rejects_a_tools_manager_with_a_datasource_template if {
 test_s23_names_the_three_known_managers_in_the_message if {
 	manager := with_value(image_manager, "datasourceTemplate", "github-tags")
 	renovate := config_for(valid_rules, [manager, golden_tools_manager])
-	denied_with(checked(renovate, valid_platform), "the _IMAGE variables of the workflows, tests/tools/install.sh with local/scripts/lib/preflight-checks.sh, and the images of local/kind/cluster.yaml and local/tasks/")
+	denied_with(checked(renovate, valid_platform), "the _IMAGE variables of the workflows, tests/tools/install.sh with local/scripts/lib/preflight-checks.sh, and the images of local/kind/cluster.yaml, local/tasks/ and local/data/")
 }
 
 test_s23_rejects_custom_managers_that_is_not_a_list if {
@@ -594,7 +594,7 @@ test_s23_names_its_requirements_in_each_message if {
 
 test_s23_rejects_a_config_without_the_local_manager if {
 	renovate := config_for(valid_rules, [image_manager, golden_tools_manager])
-	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of the images of local/kind/cluster.yaml and local/tasks/")
+	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of the images of local/kind/cluster.yaml, local/tasks/ and local/data/")
 }
 
 test_s23_rejects_the_local_manager_of_celian_in_the_golden_repo if {
