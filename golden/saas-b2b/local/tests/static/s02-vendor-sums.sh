@@ -197,6 +197,24 @@ else
     *) fail "the refusal of a remote resource does not name resources[0]: $remote_out" ;;
   esac
 fi
+# A failing case: a key outside the closed list (a chart pulled from a URL),
+# in a kustomization.yml, which must be named with its key.
+mkdir -p "$samples/key/k8s/overlays/bad"
+printf '%s\n' \
+  'apiVersion: kustomize.config.k8s.io/v1beta1' \
+  'kind: Kustomization' \
+  'helmCharts:' \
+  '  - name: chart' \
+  '    repo: https://example.invalid/charts' >"$samples/key/k8s/overlays/bad/kustomization.yml"
+if key_out="$(conftest test --no-color --combine --policy policy --namespace kustomize_sources \
+  "$samples/key/k8s/overlays/bad/kustomization.yml" 2>&1)"; then
+  fail "a kustomization.yml with a helmCharts key passed policy/kustomize_sources.rego."
+else
+  case "$key_out" in
+    *'key "helmCharts"'*kustomization.yml* | *kustomization.yml*'key "helmCharts"'*) ;;
+    *) fail "the refusal of a key outside the list does not name the file and \"helmCharts\": $key_out" ;;
+  esac
+fi
 
 # --- The sums are checked before kubectl is called ---------------------------------
 
