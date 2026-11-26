@@ -40,5 +40,5 @@ scan_policy:
       - docker.io/envoyproxy/gateway
       - docker.io/envoyproxy/envoy
       # Postgres of the local layer (local/data/): a third-party image, on the
-      # cluster of the machine only; gcp uses Cloud SQL (ADR-012; tasks.md, gap 71).
+      # cluster of the machine only; gcp uses Cloud SQL (ADR-012; tasks.md, gap 91).
       - docker.io/library/postgres

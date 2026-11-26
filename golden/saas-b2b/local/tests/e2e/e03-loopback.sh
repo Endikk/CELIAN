@@ -20,7 +20,7 @@
 # - the namespace envoy-gateway-system enforces Pod Security (restricted or
 #   baseline) and Pod Security refused none of its pods;
 # - what a pod of the cluster reaches of the mirror, recorded and not judged
-#   (ADR-011, condition 2; R-34; tasks.md, gaps 21, 34 and 78): from a pod
+#   (ADR-011, condition 2; R-34; tasks.md, gaps 21, 34 and 98): from a pod
 #   of another namespace, on the Postgres image, which carries bash, E03
 #   prints whether the name of the mirror resolves, and the status line of
 #   GET /v2/_catalog and of the start of a push, POST
