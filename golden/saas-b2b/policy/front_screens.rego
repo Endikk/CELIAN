@@ -12,7 +12,12 @@
 #   `html_entries` (HTML files of src/front/), `calls` (every literal
 #   "<METHOD> /api..." of the sources), `stray_api` (lines with a string that
 #   starts with /api outside such a literal) and `forbidden` (lines that use
-#   a channel or a setting the front must not have).
+#   a channel or a setting the front must not have) and `imports` (one
+#   "<specifier> <file>:<line>" per bare import: package names only, relative
+#   and absolute paths stay out), which must all be in `allowed_imports`.
+#
+# The network barrier of the front is the CSP of src/front/nginx.conf. This
+# policy checks the contract and catches mistakes, it does not replace it.
 package front_screens
 
 label := "S20 (FR-009)"
@@ -22,6 +27,10 @@ expected_screens := {"NotesScreen.tsx"}
 expected_html_entries := {"index.html"}
 
 expected_dependencies := {"react", "react-dom"}
+
+# The bare imports of src/front/src/: what main.tsx and the screen import,
+# and the automatic JSX runtime of React that the build adds.
+allowed_imports := {"react", "react/jsx-runtime", "react-dom/client"}
 
 # What the front needs from the contract: the list on load, the add form,
 # and the read that tells where a note came from (contracts/http-api.md).
@@ -102,6 +111,19 @@ deny contains msg if {
 	count(package_files) == 1
 	dependencies != expected_dependencies
 	msg := sprintf("%s: src/front/package.json depends at run time on %v; the front needs %v only", [label, sort_set(dependencies), sort_set(expected_dependencies)])
+}
+
+# A bare import (a package name, not a path) of the sources must be in this
+# closed list. The check of `dependencies` above reads package.json only: a
+# devDependency imported from src/ would be bundled into the page without
+# showing there.
+deny contains msg if {
+	some entry in fact("imports")
+	parts := split(entry, " ")
+	location := parts[count(parts) - 1]
+	specifier := concat(" ", array.slice(parts, 0, count(parts) - 1))
+	not specifier in allowed_imports
+	msg := sprintf("%s: %s imports %s, which is not in the closed list %v", [label, location, specifier, sort_set(allowed_imports)])
 }
 
 sort_set(values) := sort([value | some value in values])
