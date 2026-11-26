@@ -11,7 +11,7 @@
 # - job e2e-lite runs `task test:e2e` with PROFILE=lite, in 45 minutes at most
 #   like the job of CELIAN, with kind and kubectl from tests/tools/install.sh
 #   (gap 26);
-# - job scan-images runs the scan of the pulled images (E27);
+# - job scan-images runs the scan of the images (E27), with --sbom-dir, and keeps the SBOM 90 days;
 # - each of these jobs checks out with persist-credentials: false and sets no
 #   permissions of its own, so that it keeps the contents: read of the
 #   workflow;
@@ -188,6 +188,10 @@ check_workflows() {
   # Scan of the pulled images.
   require_line scan-images 'tests/scan/e27-pulled-images\.sh' "does not run tests/scan/e27-pulled-images.sh (E27)."
   installs_with scan-images trivy
+  # The scan refuses to run without a directory for the SBOM, and the SBOM is
+  # kept as an artifact for 90 days (FR-020; decision of the DSI, 2026-11-26).
+  require_line scan-images '--sbom-dir' "does not pass --sbom-dir to the scan: it refuses to run without a directory for the SBOM (FR-020)."
+  require_line scan-images '^[[:space:]]+retention-days:[[:space:]]*90[[:space:]]*$' "does not keep the SBOM 90 days (retention-days: 90)."
 
   # The project stands alone: nothing that only CELIAN has.
   for file in ${workflow_files[@]+"${workflow_files[@]}"}; do
