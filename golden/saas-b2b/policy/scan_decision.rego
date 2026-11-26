@@ -5,6 +5,19 @@
 # vulnerability at or above the threshold without one, naming both (story 7,
 # scenario 3).
 #
+# Scope (decision of the DSI of 2026-11-25, reversible, to be confirmed by Lucas
+# at GATE 2; spec 001, FR-021 and FR-022): the scan blocks what goes to
+# production, and reports the third-party images that run on the local
+# cluster only. data.scan_policy.image_classes holds two lists of
+# repositories:
+# - reported: closed list, exact repositories; a finding at or above the
+#   threshold is listed in a summary line and does not block;
+# - blocking: a repository, or a registry that covers what sits under it
+#   (saas-b2b.invalid, the images that the project builds); it wins over
+#   reported when an image is in both.
+# An image in neither list is unclassified and blocks (closed on failure),
+# and so does every image when the policy holds no classes.
+#
 # Input: the files given to `conftest test --combine`, a list of objects with
 # a `path` and the parsed `contents`: the reports of Trivy 0.76.2 (schema 2,
 # research RS-23) and the exception files. Data: data.scan_policy
@@ -16,6 +29,8 @@
 #   listed (research RS-23, to be confirmed by [SECU]); a missing severity
 #   reads UNKNOWN, as in Trivy; a severity outside the list blocks, since
 #   nothing ranks it;
+# - the class of an image decides whether its findings block: blocking and
+#   unclassified images block, reported images do not (see the scope above);
 # - the image of a finding is the repository of the scanned reference,
 #   without tag or digest, as the exceptions name it;
 # - warnings list the findings that an exception covers, the exceptions
@@ -98,19 +113,55 @@ covering(finding) := entry if {
 	entry.vulnerability == finding.id
 }
 
+blocking_entries := entries if {
+	entries := data.scan_policy.image_classes.blocking
+} else := []
+
+reported_entries := entries if {
+	entries := data.scan_policy.image_classes.reported
+} else := []
+
+in_blocking(image) if {
+	some entry in blocking_entries
+	image == entry
+}
+
+in_blocking(image) if {
+	some entry in blocking_entries
+	startswith(image, concat("", [entry, "/"]))
+}
+
+in_reported(image) if {
+	some entry in reported_entries
+	image == entry
+}
+
+class(image) := "blocking" if {
+	in_blocking(image)
+} else := "reported" if {
+	in_reported(image)
+} else := "unclassified"
+
+class_text("blocking") := "class blocking"
+
+class_text("reported") := "class reported"
+
+class_text("unclassified") := "unclassified image, blocking by default"
+
 fix_text(fixed) := "no fixed version" if fixed == ""
 
 fix_text(fixed) := sprintf("fixed in %s", [fixed]) if fixed != ""
 
-describe(finding) := sprintf("%s: %s (%s) in %s %s, %s; target %s", [
+describe(finding) := sprintf("%s: %s (%s) in %s %s, %s; target %s; %s", [
 	finding.image, finding.id, finding.severity, finding.package,
-	finding.installed, fix_text(finding.fixed), finding.target,
+	finding.installed, fix_text(finding.fixed), finding.target, class_text(class(finding.image)),
 ])
 
 refused contains finding if {
 	some finding in findings
 	blocks(finding.severity)
 	not covering(finding)
+	class(finding.image) != "reported"
 }
 
 deny contains msg if {
@@ -182,6 +233,7 @@ matched(entry) if {
 warn contains msg if {
 	some file in reports
 	image := repository(file.contents.ArtifactName)
+	class(image) != "reported"
 	counts := [n |
 		some level in ["CRITICAL", "HIGH", "MEDIUM", "LOW", "UNKNOWN"]
 		n := count({finding | some finding in findings; finding.image == image; finding.severity == level})
@@ -190,4 +242,31 @@ warn contains msg if {
 	msg := sprintf("%s: %d CRITICAL, %d HIGH, %d MEDIUM, %d LOW, %d UNKNOWN; %d at or above %s without a valid exception", [
 		image, counts[0], counts[1], counts[2], counts[3], counts[4], blocked, threshold,
 	])
+}
+
+# The summary of a reported image, read by tests/scan/scan-images.sh for the
+# table of the job summary: distinct identifiers at or above the threshold,
+# by level, and how many of them carry a fixed version in every row where
+# they appear. Written for every reported image, with zeros when it is clean.
+warn contains msg if {
+	some file in reports
+	image := repository(file.contents.ArtifactName)
+	class(image) == "reported"
+	at_threshold := {finding | some finding in findings; finding.image == image; blocks(finding.severity)}
+	ids := {finding.id | some finding in at_threshold}
+	critical := {finding.id | some finding in at_threshold; finding.severity == "CRITICAL"}
+	high := {finding.id | some finding in at_threshold; finding.severity == "HIGH"}
+	fixed := {id |
+		some id in ids
+		not unfixed(at_threshold, id)
+	}
+	msg := sprintf("reported: %s: %d CRITICAL, %d HIGH, %d distinct at or above %s, %d with a fixed version; does not block (class reported)", [
+		image, count(critical), count(high), count(ids), threshold, count(fixed),
+	])
+}
+
+unfixed(at_threshold, id) if {
+	some finding in at_threshold
+	finding.id == id
+	finding.fixed == ""
 }

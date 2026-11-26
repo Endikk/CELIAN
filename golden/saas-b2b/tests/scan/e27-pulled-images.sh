@@ -8,8 +8,9 @@
 #    registry, the scan must fail and say that the database could not be
 #    downloaded; it must never pass (spec 001, edge case; research RS-22);
 # 2. the scan of the inventory, with the database downloaded in this run:
-#    it fails naming each image and vulnerability at or above the threshold
-#    without a valid exception (story 7, scenario 3).
+#    it passes when only reported images carry findings, and fails naming
+#    each image and vulnerability at or above the threshold
+#    without a valid exception, on the images that block (story 7, scenario 3).
 # The second PR of step 18 moves the scan into e2e-lite, built images
 # included (T122, T123). Needs the network. Called by the job scan-images of
 # .github/workflows/golden-saas-b2b.yml.

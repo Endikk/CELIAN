@@ -12,3 +12,30 @@ scan_policy:
   # proposed in research RS-23, to be confirmed by [SECU]. S27 refuses a
   # longer one.
   max_exception_days: 90
+  # Class of each image (decision of the DSI of 2026-11-25, reversible, to be
+  # confirmed by Lucas at GATE 2; spec 001, FR-021 and FR-022). The scan
+  # blocks what goes to production and reports the rest:
+  # - blocking: the images that the project builds (the API and the front,
+  #   under saas-b2b.invalid; they enter the scan with the second PR of step
+  #   18) and every image deployed on the gcp target. An entry is a repository
+  #   or a registry that covers what sits under it.
+  # - reported: third-party images that run on the cluster of the machine
+  #   only. A finding at or above the threshold is listed in the summary of the
+  #   job and does not block; [SECU] reads that table at the monthly review of
+  #   the advisories. A closed list of full repositories, no tag, no digest.
+  # An image in neither list blocks (closed on failure): a new image of the
+  # inventory is classified here, in the PR that adds it. S25 refuses a
+  # reported entry that the inventory of lite no longer holds, and S26 refuses
+  # any other class, an image in both lists, and a reported image that a render
+  # of gcp/k8s/ deploys.
+  image_classes:
+    blocking:
+      - saas-b2b.invalid
+    reported:
+      # The node image of kind (local/kind/cluster.yaml): a tool of the machine.
+      - docker.io/kindest/node
+      # The mirror of registries (MIRROR_IMAGE of local/tasks/local.yml).
+      - ghcr.io/project-zot/zot
+      # Envoy Gateway: the controller, and its proxy (local/security/unlisted-images).
+      - docker.io/envoyproxy/gateway
+      - docker.io/envoyproxy/envoy

@@ -15,7 +15,12 @@
 # - conftest runs policy/scan_decision.rego on the reports, the two
 #   exception files, the policy of security/scan-policy.yaml and the date of
 #   the day in UTC. It refuses each image and vulnerability at or above the
-#   threshold without a valid exception, naming both.
+#   threshold without a valid exception, naming both, on the images that go to
+#   production or that no class holds (blocking and unclassified, decision of
+#   the DSI of 2026-11-25). The reported images, third-party images of the
+#   local cluster, do not block: a table of them (image, CRITICAL, HIGH,
+#   distinct identifiers, with a fix) goes to the output and to
+#   $GITHUB_STEP_SUMMARY when it is set.
 # Fails when Trivy fails, saying so when the database could not be
 # downloaded (spec 001, edge case): the scan never passes without it.
 #
@@ -36,7 +41,7 @@ platform="linux/amd64"
 # Trivy stops at 5m0s by default (research RS-22); the node image is the
 # heaviest of the inventory.
 trivy_timeout="10m"
-pass_line="none carries a vulnerability at or above the threshold without a valid exception"
+pass_line="no blocking image carries a vulnerability at or above the threshold without a valid exception"
 
 usage="usage: tests/scan/scan-images.sh [--db-repository <repository under .invalid>] lite"
 
@@ -122,9 +127,44 @@ done < <(printf '%s\n' "$refs")
 [ "$scanned" -gt 0 ] || fail "the inventory of the $profile profile holds no pulled image."
 
 printf '{"scan_today": "%s"}\n' "$(date -u +%Y-%m-%d)" >"$work/today.json"
+decision=0
 # shellcheck disable=SC2086 # $exception_files is a list of paths without spaces
-if ! conftest test --no-color --combine --policy policy --namespace scan_decision \
-  --data "$policy_file" --data "$work/today.json" "$work"/reports/*.json $exception_files; then
-  fail "the scan refuses the images above: each vulnerability at or above the threshold of $policy_file needs a fix or a valid exception written by [SECU] (FR-022)."
+conftest test --no-color --combine --policy policy --namespace scan_decision \
+  --data "$policy_file" --data "$work/today.json" "$work"/reports/*.json $exception_files >"$work/decision.txt" 2>&1 || decision=$?
+cat "$work/decision.txt"
+
+# The reported images, third-party images of the local cluster that do not
+# block (decision of the DSI, 2026-11-25): one row each, from the "reported:"
+# lines of the decision, in the output and in the summary of the job.
+awk '
+  BEGIN {
+    print "| Image | CRITICAL | HIGH | Distinct identifiers | With a fix |"
+    print "| --- | --- | --- | --- | --- |"
+  }
+  / reported: [^ ]+: [0-9]+ CRITICAL, / {
+    line = $0
+    sub(/^.* reported: /, "", line)
+    image = line
+    sub(/: [0-9]+ CRITICAL, .*$/, "", image)
+    rest = line
+    sub(/^[^ ]+: /, "", rest)
+    split(rest, p, /[ ,;]+/)
+    # p: 1 and 3 count CRITICAL and HIGH, 5 the distinct identifiers, 11 those with a fix
+    print "| " image " | " p[1] " | " p[3] " | " p[5] " | " p[11] " |"
+  }
+' "$work/decision.txt" >"$work/table.md"
+printf '\nE27: reported images (not blocking; [SECU] reads them at the monthly review of the advisories):\n'
+cat "$work/table.md"
+if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+  {
+    printf '### Image scan: reported images\n\n'
+    printf 'Third-party images that run on the local cluster only. Their findings at or above the threshold do not block; [SECU] reads this table.\n\n'
+    cat "$work/table.md"
+    printf '\n'
+  } >>"$GITHUB_STEP_SUMMARY"
+fi
+
+if [ "$decision" -ne 0 ]; then
+  fail "the scan refuses the images above: each vulnerability at or above the threshold of $policy_file, on an image that goes to production or that no class holds, needs a fix or a valid exception written by [SECU] (FR-022)."
 fi
 printf 'E27: %s pulled images scanned; %s.\n' "$scanned" "$pass_line"

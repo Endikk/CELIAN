@@ -17,7 +17,10 @@
 # ones of the closed list below, which never run. Checked by S25
 # (local/tests/static/s25-inventory.sh); read by tests/scan/scan-images.sh.
 #
-# Usage: local/scripts/image-inventory.sh lite
+# The gcp profile lists instead the images of the renders of gcp/k8s/, as written
+# (no digest required); see the block of the profile below.
+#
+# Usage: local/scripts/image-inventory.sh lite|gcp
 set -euo pipefail
 
 root="$(CDPATH='' cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -42,9 +45,9 @@ die() {
 
 profile="${1:-}"
 case "$profile" in
-  lite) ;;
+  lite | gcp) ;;
   standard) die "the standard profile arrives with step 12 of spec 001: its inventory is not delivered yet." ;;
-  *) die "usage: local/scripts/image-inventory.sh lite" ;;
+  *) die "usage: local/scripts/image-inventory.sh lite|gcp" ;;
 esac
 
 # Writes reference $1 in full, as distribution/reference v0.6.0 reads it
@@ -110,6 +113,28 @@ work="$(mktemp -d)"
 trap 'rm -rf "${work:?}"' EXIT
 found="$work/found"
 : >"$found"
+
+# The gcp profile lists the images of the renders of gcp/k8s/<composition>/, the
+# compositions of the gcp layer (a Component does not render on its own), as
+# written and without a digest requirement: the images built for gcp get theirs
+# when pushed. A tree without gcp/k8s lists nothing. S26 reads this list to
+# refuse a reported image deployed on gcp (decision of the DSI, 2026-11-25).
+if [ "$profile" = gcp ]; then
+  while IFS= read -r file; do
+    grep -q -E '^kind:[ \t]*Kustomization[ \t]*$' "$file" || continue
+    if ! command -v kubectl >/dev/null 2>&1; then
+      die "kubectl is not on PATH: it renders ${file%/kustomization.yaml}, whose images belong to the gcp inventory."
+    fi
+    if ! kubectl kustomize "${file%/kustomization.yaml}" >"$work/render.yaml" 2>"$work/render.err"; then
+      die "kubectl kustomize ${file%/kustomization.yaml} fails: $(cat "$work/render.err")"
+    fi
+    image_fields "$work/render.yaml" "render of ${file%/kustomization.yaml}" >>"$found"
+  done < <(find gcp/k8s -mindepth 2 -maxdepth 2 -name kustomization.yaml 2>/dev/null | LC_ALL=C sort)
+  while IFS='|' read -r _ ref; do
+    full_reference "$ref"
+  done <"$found" | LC_ALL=C sort -u
+  exit 0
+fi
 
 [ -f "$kind_config" ] || die "$kind_config is missing: it names the node image (spec 001, T046)."
 image_fields "$kind_config" >>"$found"
