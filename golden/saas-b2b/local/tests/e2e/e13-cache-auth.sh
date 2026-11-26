@@ -130,7 +130,10 @@ out="$(client_cli ping | tr -d '\r')"
 for command in "CONFIG GET maxmemory" "CONFIG SET maxmemory 1mb" "DEBUG SLEEP 0" "SAVE" "BGSAVE" \
   "ACL LIST" "ACL WHOAMI" "ACL CAT" "MODULE LIST" "SLOWLOG GET" "CLIENT LIST" "SWAPDB 0 1" \
   "MOVE e13:key 1" "MIGRATE 127.0.0.1 1 e13:key 0 100" "XSETID e13:stream 0-1" "LASTSAVE" \
-  "EVAL return 0" "FUNCTION LIST"; do
+  "EVAL return 0" "FUNCTION LIST" \
+  "REPLICAOF 127.0.0.1 1" "SLAVEOF 127.0.0.1 1" "SHUTDOWN NOSAVE" "SYNC" "PSYNC e13 -1" "FAILOVER" \
+  "BGREWRITEAOF" "CLIENT PAUSE 1" "CLIENT NO-EVICT on" "PFDEBUG GETREG e13:hll" \
+  "MODULE LOAD /nonexistent.so" "SLOWLOG LEN"; do
   # shellcheck disable=SC2086 # the command splits into its words on purpose
   out="$(client_cli $command)"
   case "$out" in

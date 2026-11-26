@@ -15,8 +15,8 @@
 #   and the HTTPRoutes with local/k8s/lite (T070; tasks.md, gap 36). Once
 #   the Gateway is Programmed, GET / and GET /api/healthz on the HTTP port
 #   must get an HTTP answer other than 404, the answer of Envoy when no
-#   route matches: the HTTPRoutes match. Their Services arrive with step 9,
-#   and Gateway API wants a 500 meanwhile (research RS-02);
+#   route matches: the HTTPRoutes match, under the Host that they name
+#   (localhost, tasks.md, gap 141);
 # - the HTTPS listener serves the certificate of the Secret gateway-tls:
 #   the SHA-256 fingerprint of the certificate that openssl s_client reads
 #   on 127.0.0.1 equals that of tls.crt, and x509 -checkend 0 finds it
@@ -185,7 +185,7 @@ http_status() {
   local line
   line="$(
     exec 3<>"/dev/tcp/127.0.0.1/$1" || exit 1
-    printf 'GET %s HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n' "$2" >&3
+    printf 'GET %s HTTP/1.1\r\nHost: %s\r\nConnection: close\r\n\r\n' "$2" "$E2E_HOST" >&3
     IFS= read -r -t "$READ_SECONDS" first <&3 || exit 1
     printf '%s' "$first"
   )" 2>/dev/null || return 1
