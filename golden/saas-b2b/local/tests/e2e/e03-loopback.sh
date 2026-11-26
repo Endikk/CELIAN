@@ -212,6 +212,9 @@ done
 # runs in the pod, $1 being the name of the mirror container; connect sends
 # one request ($1 in it) to the mirror ($0 in it), and prints the answer
 # without its carriage returns: the status line first, the body last.
+# A refusal can close the connection while the body of a PUT still arrives:
+# the client then sees a reset and no answer (it happened once in the CI,
+# on the PUT of a manifest). Each request is asked up to three times.
 readonly PROBE_NAMESPACE="e2e-e03-probe"
 # shellcheck disable=SC2016 # expanded by bash in the pod
 probe_script='connect="exec 3<>/dev/tcp/\$0/5000 && printf \"%s HTTP/1.0\\r\\nHost: %s\\r\\nContent-Type: application/vnd.oci.image.manifest.v1+json\\r\\nContent-Length: %s\\r\\n\\r\\n%s\" \"\$1\" \"\$0\" \"\${#2}\" \"\$2\" >&3 && tr -d \"\\r\" <&3"
@@ -220,7 +223,11 @@ if getent hosts "$1" >/dev/null; then echo "name $1: resolved"; else echo "name 
 for request in "GET /v2/_catalog" "POST /v2/e2e-probe/blobs/uploads/" "PUT /v2/e2e-probe/manifests/e2e-probe" "DELETE /v2/e2e-probe/manifests/e2e-probe"; do
   body=""
   case "$request" in PUT*) body="$manifest" ;; esac
-  answer="$(timeout 5 bash -c "$connect" "$1" "$request" "$body" 2>/dev/null)" || answer=""
+  answer=""
+  for try in 1 2 3; do
+    answer="$(timeout 5 bash -c "$connect" "$1" "$request" "$body" 2>/dev/null || true)"
+    [ -n "$answer" ] && break
+  done
   status="$(printf "%s\n" "$answer" | head -n 1)"
   echo "$request: ${status:-no answer}"
   case "$request" in
