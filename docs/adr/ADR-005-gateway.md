@@ -106,6 +106,12 @@ Décidé par le DSI sur la relecture [SECU] de l'étape 7 du golden repo (écart
 
 Il reste au contrôleur, dans le namespace de l'application, la lecture des Secrets, dont la Gateway a besoin pour le certificat de l'écouteur HTTPS, et la modification des pods, par la règle de l'injecteur de topologie. Contrôle : S22 refuse un rendu sans ce réglage, avec une autre liste, ou dont un ClusterRole donne un droit sur les Secrets ou sur les pods. Les faits, la commande de rendu et l'essai sur kind du 2026-11-25 sont au point RS-02 de [research.md](../../specs/001-golden-repo-saas-b2b/research.md). Le blueprint reprend le réglage en phase 3, la liste suivant le nom du projet.
 
+### Complément du 2026-11-26 : l'image du proxy est fixée dans l'EnvoyProxy
+
+Décidé par le DSI sur la raison de [SECU] (écarts 78, 90 et 91 de [specs/001-golden-repo-saas-b2b/tasks.md](../../specs/001-golden-repo-saas-b2b/tasks.md)). Le tableau de la section « Versions et condensats » donne le proxy comme la valeur par défaut compilée dans le binaire 1.10.0. Cette valeur porte déjà son condensat (`DefaultEnvoyProxyImage`, `shared_types.go` au tag v1.10.0), et le proxy n'était donc pas tiré par tag. La couche `local` l'écrit malgré tout dans l'`EnvoyProxy`, au champ `spec.provider.kubernetes.envoyDeployment.container.image`, par tag et condensat de l'index : le dépôt nomme l'image qui tourne, l'inventaire du scan la lit dans ce fichier, et Renovate en suit le condensat. Le tag, qu'il ne sait pas ordonner, change à la main avec chaque version d'Envoy Gateway, dans la PR du contrôleur et des charts.
+
+Le fichier ne fixe que cette image : S05 refuse un autre champ sous `envoyDeployment`, un autre champ du conteneur, une image sans condensat ou hors de `docker.io/envoyproxy/envoy`. E03 relit l'`EnvoyProxy` du cluster et l'image du pod du proxy. La condition de mise à jour 2 s'étend : le tag de cette image se déplace avec le contrôleur. Les lectures du code d'Envoy Gateway et de Renovate sont au point RS-02 de [research.md](../../specs/001-golden-repo-saas-b2b/research.md).
+
 ## Conséquences
 
 ### Positives
