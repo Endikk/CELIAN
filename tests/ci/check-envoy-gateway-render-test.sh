@@ -18,6 +18,7 @@ controller_sum="sha256:c2243d43518bed91d3ed8c2db849a4b7a14ac9b96eb019f2ab104bb1c
 chart_sum="sha256:dcb82a14c04b426615a71d97222c7edf9f5ff58b800d241e71ac5784ae6dc7b7"
 crds_sum="sha256:475c39aad3a05e3974a29fb80cfefe882b743e45e2ec0f751790ff0cb83bfa5d"
 controller_ref="docker.io/envoyproxy/gateway:v1.10.0@$controller_sum"
+proxy_ref="docker.io/envoyproxy/envoy:distroless-v1.40.2@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded"
 
 failures=0
 
@@ -27,7 +28,8 @@ failures=0
 # (ADR-005, complement of 2026-11-25).
 new_golden() {
   local dir="$1"
-  mkdir -p "$dir/local/tasks" "$dir/local/vendor/envoy-gateway" "$dir/k8s/base"
+  mkdir -p "$dir/local/tasks" "$dir/local/vendor/envoy-gateway" "$dir/local/platform" "$dir/k8s/base"
+  printf "spec:\n  provider:\n    kubernetes:\n      envoyDeployment:\n        container:\n          image: %s\n" "$proxy_ref" >"$dir/local/platform/envoy-proxy.yaml"
   printf 'apiVersion: v1\nkind: Namespace\nmetadata:\n  name: shop\n' >"$dir/k8s/base/namespace.yaml"
   {
     printf 'vars:\n'
@@ -45,7 +47,13 @@ new_golden() {
 # output in $workdir/out, status in $status.
 run_script() {
   status=0
+  # The shared_types.go of the controller tag, as the script would fetch it
+  # (api/v1alpha1/shared_types.go): the comment line carries no "=", the
+  # constant does.
+  printf 'const (\n\t// DefaultEnvoyProxyImage is the default image used by envoyproxy\n\tDefaultEnvoyProxyImage = "%s"\n)\n' \
+    "${DEFAULT_PROXY_IMAGE:-$proxy_ref}" >"$workdir/shared_types.go"
   PATH="$here/fakes:$PATH" HELM_VERSION="${HELM_VERSION:-v4.3.2}" \
+    ENVOY_SHARED_TYPES_FILE="${SHARED_TYPES_FILE:-$workdir/shared_types.go}" \
     bash "$script" "$1" >"$workdir/out" 2>&1 || status=$?
 }
 
@@ -113,6 +121,39 @@ expect_fail "a namespace that is not a name is refused" "$workdir/bad-namespace"
 new_golden "$workdir/other-namespace"
 printf 'apiVersion: v1\nkind: Namespace\nmetadata:\n  name: other\n' >"$workdir/other-namespace/k8s/base/namespace.yaml"
 expect_fail "a render that watches another namespace is refused" "$workdir/other-namespace" "gateway-helm.yaml"
+
+# The image of the proxy that local/platform/envoy-proxy.yaml pins takes
+# precedence over the default compiled in the controller (ADR-005, complement
+# of 2026-11-26). A controller moved without the proxy would keep the old
+# Envoy, and nothing else shows it: the reference of the file must be the
+# DefaultEnvoyProxyImage of shared_types.go at the tag of the controller.
+new_golden "$workdir/old-proxy"
+newer="docker.io/envoyproxy/envoy:distroless-v1.41.0@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+DEFAULT_PROXY_IMAGE="$newer"
+expect_fail "a proxy older than the default of the controller is refused" "$workdir/old-proxy" "$proxy_ref"
+expect_fail "the message names the default of the controller too" "$workdir/old-proxy" "$newer"
+expect_fail "the message names DefaultEnvoyProxyImage" "$workdir/old-proxy" "DefaultEnvoyProxyImage"
+unset DEFAULT_PROXY_IMAGE
+
+new_golden "$workdir/same-tag-other-digest"
+sed 's#@sha256:09ca[0-9a-f]*#@sha256:2222222222222222222222222222222222222222222222222222222222222222#' \
+  "$workdir/same-tag-other-digest/local/platform/envoy-proxy.yaml" >"$workdir/proxy.new"
+mv "$workdir/proxy.new" "$workdir/same-tag-other-digest/local/platform/envoy-proxy.yaml"
+expect_fail "the same tag with another digest is refused" "$workdir/same-tag-other-digest" "DefaultEnvoyProxyImage"
+
+new_golden "$workdir/no-proxy-file"
+rm "$workdir/no-proxy-file/local/platform/envoy-proxy.yaml"
+expect_fail "a golden repo without envoy-proxy.yaml is refused" "$workdir/no-proxy-file" "envoy-proxy.yaml"
+
+new_golden "$workdir/no-proxy-image"
+printf 'spec:\n  provider:\n    type: Kubernetes\n' >"$workdir/no-proxy-image/local/platform/envoy-proxy.yaml"
+expect_fail "an EnvoyProxy without image is refused" "$workdir/no-proxy-image" "pins no proxy image"
+
+new_golden "$workdir/no-constant"
+printf 'package v1alpha1\n' >"$workdir/empty_types.go"
+SHARED_TYPES_FILE="$workdir/empty_types.go"
+expect_fail "a shared_types.go without the constant is refused" "$workdir/no-constant" "DefaultEnvoyProxyImage"
+unset SHARED_TYPES_FILE
 
 old_version="${HELM_VERSION:-}"
 HELM_VERSION="v4.0.0"
