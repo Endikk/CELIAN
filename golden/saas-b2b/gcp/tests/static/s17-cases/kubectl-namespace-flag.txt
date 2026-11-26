@@ -1,0 +1,4 @@
+# Failing case of S17: a namespace flag.
+# expect: kubectl in the gcp layer, other than a render of files
+
+kubectl -n a apply -f x.yaml

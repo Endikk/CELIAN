@@ -1,0 +1,4 @@
+# Failing case of S17: apply -k.
+# expect: kubectl in the gcp layer, other than a render of files
+
+kubectl apply -k gcp/k8s/prod

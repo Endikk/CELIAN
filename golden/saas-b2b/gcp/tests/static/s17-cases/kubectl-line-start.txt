@@ -1,0 +1,4 @@
+# Failing case of S17: kubectl at the very start of a line.
+# expect: kubectl in the gcp layer, other than a render of files
+
+kubectl get nodes

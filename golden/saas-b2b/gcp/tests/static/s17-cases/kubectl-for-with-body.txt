@@ -1,0 +1,4 @@
+# Failing case of S17: a loop that runs the tool.
+# expect: kubectl in the gcp layer, other than a render of files
+
+for tool in conftest kubectl; do kubectl apply -f x.yaml; done

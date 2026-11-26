@@ -31,7 +31,7 @@ part="${1:-both}"
 dir="gcp/tofu"
 budget_dir="gcp/budget"
 policies="gcp/policy"
-packages="tofu_adr008 tofu_secret_sync tofu_config_sync tofu_finops tofu_memorystore"
+packages="tofu_adr008 tofu_secret_sync tofu_config_sync tofu_finops tofu_memorystore tofu_sql_tls"
 # Run on the two roots together, so it is not in the list above.
 budget_package="tofu_budget"
 # Run on each root alone, the budget root included: the registry of the

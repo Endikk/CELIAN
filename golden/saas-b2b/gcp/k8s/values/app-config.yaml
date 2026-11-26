@@ -1,0 +1,42 @@
+# app-config of the gcp target (contracts/layers.md, "app-config"): the same
+# name and the same keys as on every target, none of them a secret. The user
+# and the password of the database come from the mounted files of db-auth, the
+# password of the cache from cache-auth.
+#
+# A plain ConfigMap, without the hash suffix of a generator: the common layer
+# names it app-config, and S07 compares that name on every target.
+#
+# What to write after the first apply, from the outputs of OpenTofu
+# (research RS-16):
+# - DATABASE_HOST: `tofu output -raw database_private_ip`;
+# - CACHE_HOST: the address of the endpoint of Memorystore, with the second
+#   pull request of step 20 (tasks.md, gap 87 of main).
+# They stay under .invalid until then, a name that never resolves: the API
+# does not start with a placeholder, and does not talk to a wrong server.
+#
+# TLS: VerifyCA for the database, with the CA of the instance alone, which
+# Cloud SQL gives by default and the root writes out (server_ca_mode,
+# tasks.md, gap 178). VerifyFull cannot hold: the certificate of a private IP
+# instance has no host name to verify, and the page of Google says that a
+# per-instance CA makes the check of the CA enough. Require is refused, it
+# encrypts without checking the server (decision of the DSI, 2026-11-26). The
+# cache takes VerifyCA as well, its mode written by the instance (research
+# RS-11, ADR-015 condition 7); the choice stays open to step 20 (tasks.md,
+# gap 183).
+#
+# CACHE_TLS_CA_FILE is where the common Deployment of the API mounts app-ca
+# (tasks.md, gap 179).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: saas-b2b
+data:
+  DATABASE_HOST: database.invalid
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: app
+  DATABASE_SSL_MODE: VerifyCA
+  CACHE_HOST: cache.invalid
+  CACHE_PORT: "6379"
+  CACHE_TLS_MODE: VerifyCA
+  CACHE_TLS_CA_FILE: /run/config/ca/cache-ca.pem

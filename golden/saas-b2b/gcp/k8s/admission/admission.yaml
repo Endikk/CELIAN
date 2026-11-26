@@ -1,0 +1,56 @@
+# The rule that refuses a pod without requests (ADR-008, condition 9; S16).
+# Without requests, Autopilot bills a pod for its default, 0.5 vCPU and 2 GiB,
+# 23.4 USD a month at the example prices of us-central1 that [FINOPS] read.
+# The manifests of the application set requests on every container (S16), and
+# this ValidatingAdmissionPolicy refuses the pod that has none, whoever creates
+# it: a Job, a pod by hand, a controller of tomorrow.
+#
+# ValidatingAdmissionPolicy is stable in admissionregistration.k8s.io/v1 since
+# Kubernetes 1.30 (kubernetes.io/docs/reference/access-authn-authz/
+# validating-admission-policy/, read on 2026-11-26). On Autopilot, GKE
+# excludes its managed namespaces from the policy, and refuses a policy that
+# targets nodes, persistent volumes, certificate signing requests or token
+# reviews (page of GKE on the security measures of Autopilot, read on
+# 2026-11-26): this one targets pods, and the binding limits it to the
+# namespace of the application.
+#
+# The expression is CEL, checked by the API server at the first apply, not here:
+# no tool of the repo compiles it offline (tasks.md, gap 189; E16 and the test
+# of ADR-008 on GKE). It asks for requests.cpu and requests.memory on every
+# container and on every init container.
+#
+# failurePolicy Fail: a rule that fails open would let the pod through. The
+# names are the ones that the ClusterRole of gcp/k8s/bootstrap/rbac.yaml may
+# change.
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicy
+metadata:
+  name: saas-b2b-require-requests
+spec:
+  failurePolicy: Fail
+  matchConstraints:
+    resourceRules:
+      - apiGroups: [""]
+        apiVersions: ["v1"]
+        operations: ["CREATE"]
+        resources: ["pods"]
+  validations:
+    - expression: >-
+        object.spec.containers.all(c, has(c.resources) && has(c.resources.requests) &&
+        'cpu' in c.resources.requests && 'memory' in c.resources.requests) &&
+        (!has(object.spec.initContainers) || object.spec.initContainers.all(c,
+        has(c.resources) && has(c.resources.requests) &&
+        'cpu' in c.resources.requests && 'memory' in c.resources.requests))
+      message: every container and init container sets requests.cpu and requests.memory, or Autopilot bills the default of 0.5 vCPU and 2 GiB
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingAdmissionPolicyBinding
+metadata:
+  name: saas-b2b-require-requests
+spec:
+  policyName: saas-b2b-require-requests
+  validationActions: ["Deny"]
+  matchResources:
+    namespaceSelector:
+      matchLabels:
+        kubernetes.io/metadata.name: saas-b2b

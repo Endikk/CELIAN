@@ -1,0 +1,13 @@
+# The admission rule that refuses a pod without requests (S16), in a folder of
+# its own: the component of the gcp target and the bootstrap both list it.
+# Kustomize loads a file only from below the folder of its kustomization, and a
+# folder from anywhere, so a file shared by two kustomizations is a folder.
+#
+# Why both. Config Sync syncs the rule with the rest of the render, but the
+# ClusterRole of its RootSync has no create verb (S10): it updates the policy
+# and its binding by name and cannot create them. The user applies them first,
+# with the bootstrap, and S07 checks that the two renders hold the same objects.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - admission.yaml

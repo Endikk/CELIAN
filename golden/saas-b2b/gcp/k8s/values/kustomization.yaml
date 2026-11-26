@@ -1,0 +1,26 @@
+# The manifests that the user writes after the first apply (research RS-16,
+# "Hôte et CA des services managés"; tasks.md, gap 177). Everything else of the
+# gcp layer is the same for every project. These three files hold the values
+# that exist only once OpenTofu has created the resources: the host and the CA
+# of Cloud SQL, the host of the cache and its CA, the project of Secret
+# Manager.
+#
+# They ship as placeholders that fail closed: a host under .invalid never
+# resolves, an empty CA bundle stops the API at start, a project named
+# PROJECT_ID reads no secret. S31 accepts the placeholders and the real values
+# and refuses the dangerous ones (TLS modes, loopback hosts, a private key in
+# a CA bundle, a version that is not a number).
+#
+# A change here is meant to go through a pull request that [SECU] and the owner
+# read. What exists: .github/CODEOWNERS names the owner of /gcp/k8s/values/ on
+# its own line. What does not exist in this repository: the setting that makes
+# the review of the owners mandatory (branch protection, "Require review from
+# Code Owners"). It belongs to the generated project and is set by the person
+# who installs it (tasks.md, gap 202). The API reads app-config and the CA
+# bundles at start: a new value reaches the pods at their next start.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - app-config.yaml
+  - app-ca.yaml
+  - secret-provider-class.yaml

@@ -1,0 +1,9 @@
+# The production environment, neutral towards the tool and the provider
+# (contracts/layers.md; ADR-010, condition 1): its settings join here when an
+# environment needs its own. The gcp target layer composes this overlay with
+# its component in gcp/k8s/prod/, and Config Sync renders that folder
+# (gcp/k8s/bootstrap/root-sync.yaml).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - ../../base

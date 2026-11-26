@@ -16,7 +16,7 @@
 #   all ordinary files (no symbolic link, no Git mode but 100644 and 100755),
 #   none above MAX_VENDOR_FILE_BYTES of platform.sh; platform.sh refuses the
 #   others too, sums right or not;
-# - no kustomization.yaml under k8s/ and local/ takes a key outside the closed list,
+# - no kustomization.yaml under k8s/, local/ and gcp/k8s/ takes a key outside the closed list,
 #   nor a resource, a component,
 #   a base or a patch file from a URL (policy/kustomize_sources.rego);
 # - no command of the tasks and of the scripts applies, creates or replaces
@@ -174,7 +174,7 @@ fi
 kustomizations=()
 while IFS= read -r file; do
   kustomizations+=("$file")
-done < <(find k8s local \( -name 'kustomization.y*ml' -o -name Kustomization \) -type f | LC_ALL=C sort)
+done < <(find k8s local gcp/k8s \( -name 'kustomization.y*ml' -o -name Kustomization \) -type f 2>/dev/null | LC_ALL=C sort)
 if [ "${#kustomizations[@]}" -eq 0 ]; then
   fail "no kustomization.yaml under k8s/ and local/: the common layer is not written yet (spec 001, T060)."
 else

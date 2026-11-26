@@ -127,6 +127,7 @@ config_map_refs(doc) := {name |
 } | {name |
 	spec := pod_spec(doc)
 	some volume in object.get(spec, "volumes", [])
+	not volume.configMap.optional == true
 	name := volume.configMap.name
 }
 

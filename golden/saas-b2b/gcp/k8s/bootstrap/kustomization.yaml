@@ -1,0 +1,26 @@
+# What the user applies once, by hand, before Config Sync can read anything:
+# the namespace of the application, the roles that the reconciler of the
+# RootSync gets, the admission rule on requests (../admission, which Config
+# Sync then only updates: it has no right to create it), and the RootSync itself (ADR-010, "Répartition par couche";
+# contracts/layers.md, "Objets appliqués hors de cette composition"). Config
+# Sync never applies it: it cannot give itself its own rights, and the RootSync
+# is what tells it what to read.
+#
+# Never applied in phase 2 and never by an agent: the cluster does not exist
+# before the first apply that Lucas allows, with a budget that [FINOPS]
+# validated (principle X). S10 reads the render, S07 compares its namespace
+# with the common one, S08 validates it against the schemas. Written
+# in this order of dependency, which kubectl apply -k respects as it sorts
+# the kinds: Namespace, Role, ClusterRole, RootSync.
+#
+# The Secret git-creds that the RootSync names (spec.git.secretRef) is not
+# here and never in the repository: the user creates it from a deploy key that
+# gives read access to this repository alone, with the known_hosts of the Git
+# host (ADR-010, condition 4; tasks.md, gap 181).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - ../admission
+  - root-sync.yaml

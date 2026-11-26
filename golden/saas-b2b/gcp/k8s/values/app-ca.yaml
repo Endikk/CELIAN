@@ -1,0 +1,28 @@
+# The CA bundles of the two managed services, public by nature, so a ConfigMap
+# and no Secret (ADR-015, condition 7). The common Deployment of the API mounts
+# this ConfigMap, optional, at /run/config/ca (tasks.md, gap 179): the bundle of
+# the database is read through the variable PGSSLROOTCERT of Npgsql (research
+# RS-12), the one of the cache through CACHE_TLS_CA_FILE of app-config.
+#
+# Empty until the first apply. A client that checks the CA (VerifyCA) fails at
+# start on an empty bundle, with a message that names the file: it fails closed.
+# After the apply, from the outputs of OpenTofu:
+# - database-ca.pem: `tofu output -raw database_server_ca_cert`, one
+#   certificate;
+# - cache-ca.pem: the certificates of `managed_server_ca` of the Memorystore
+#   instance, with the second pull request of step 20 (tasks.md, gap 87 of
+#   main), one to four, a second one during a rotation.
+# Each is a CA. S31 refuses text that is not X.509, a server certificate where
+# a CA is expected, and a private key. The pull request names the SHA-256 of
+# each certificate, which the reviewer compares with the output.
+#
+# A new bundle reaches the API at its next start: the API reads it once
+# (tasks.md, gap 131).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: app-ca
+  namespace: saas-b2b
+data:
+  database-ca.pem: ""
+  cache-ca.pem: ""

@@ -21,9 +21,9 @@ Le test de parité, qui rend les deux cibles, n'a de sens que si les deux sont p
 | `k8s/base/` | commune | namespace, Deployments et Services de l'API et du front, Gateway et HTTPRoute ; références à `app-config` et aux Secrets du [contrat](secrets.md) |
 | `k8s/overlays/{local,staging,prod}/` | commune | réglages par environnement, neutres vis-à-vis de l'outil et du fournisseur (ADR-010, condition 1) |
 | composant de cible `local` | `local` | `gatewayClassName` d'Envoy Gateway, `app-config` local, Postgres, et le cache après l'ADR-015 |
-| composant de cible `gcp` | `gcp` | `gatewayClassName` de GKE, `app-config` de GCP, `SecretProviderClass` et `SecretSync`, règle d'admission sur les `requests` |
+| composant de cible `gcp` | `gcp` | `gatewayClassName` de GKE (`gke-l7-global-external-managed`), `app-config` et `app-ca` de GCP (`gcp/k8s/values/`, valeurs écrites après le premier apply, research RS-16), `ServiceAccount`, `SecretProviderClass` et `SecretSync` de `db-auth`, règle d'admission sur les `requests` |
 | `local/k8s/lite/`, `local/k8s/standard/` | `local` | overlay `local` et composant de cible local ; en standard, les couches entrées (Keycloak, Mailpit) |
-| `gcp/k8s/prod/` | `gcp` | overlay `prod` et composant de cible `gcp` |
+| `gcp/k8s/prod/` | `gcp` | overlay `prod` et composant de cible `gcp` ; le dossier que lit Config Sync |
 
 Le mécanisme proposé pour les composants de cible est celui des composants de Kustomize, à vérifier sur sa documentation et dans la version embarquée par kubectl (research RS-01). À défaut, une composition par ressources, qui garde le même découpage.
 
@@ -31,7 +31,7 @@ Objets appliqués hors de cette composition :
 
 - la plate-forme locale (CRD Gateway API, Envoy Gateway, EnvoyProxy, GatewayClass), par fichiers vendorés vérifiés, avant l'application ;
 - Flux et ses objets de liaison en profil standard (`local/gitops/`), liaison suspendue tant que Lucas n'a pas tranché ce que lit Flux (décision du 2026-11-21) ;
-- le `RootSync` de Config Sync (`gcp/k8s/`), jamais appliqué en phase 2.
+- le `RootSync` de Config Sync, avec le namespace de l'application et les rôles de son réconciliateur (`gcp/k8s/bootstrap/`), appliqués une fois par l'utilisateur, jamais en phase 2 ni par Config Sync lui-même.
 
 ## Fichiers du scan des images
 
@@ -49,7 +49,7 @@ Une exception qui vise une image de la couche `local` vit dans la couche `local`
 
 Rendus comparés : la couche commune seule (overlay d'un environnement), puis ce même overlay avec le composant de cible `local`, puis avec le composant de cible `gcp`.
 
-1. Chaque objet de la couche commune se retrouve à l'identique dans les deux rendus de cible, à deux champs près, que chaque cible fixe : `spec.gatewayClassName` de la Gateway et `spec.hostnames` des HTTPRoute (écart 141). La couche commune ne nomme aucun hôte ; la couche `local` nomme `localhost`.
+1. Chaque objet de la couche commune se retrouve à l'identique dans les deux rendus de cible, à deux champs près, que chaque cible fixe : `spec.gatewayClassName` de la Gateway et `spec.hostnames` des HTTPRoute (écart 177). La couche commune ne nomme aucun hôte ; la couche `local` nomme `localhost`.
 2. Un objet présent dans un rendu de cible et absent de la couche commune vient d'un fichier de la couche de cette cible.
 3. Une seule Gateway par rendu (ADR-005, condition 5).
 4. Les références aux Secrets et à `app-config` (nom, clés, lecture par fichier ou par variable) sont identiques dans les deux rendus (ADR-007, condition 5).
@@ -83,4 +83,4 @@ Clés fixées à l'étape 3 (T021) et à l'étape 19 (T080), gardées par U01 :
 | `CACHE_HOST` | nom d'hôte du cache | à l'étape 19 |
 | `CACHE_PORT` | port du cache | à l'étape 19 |
 | `CACHE_TLS_MODE` | `Disable`, `VerifyCA` ou `VerifyFull`, sans égard à la casse : `Disable` sur `local` ; sur `gcp`, l'un des deux autres, choisi à l'étape 20 (research RS-11) | à l'étape 19 |
-| `CACHE_TLS_CA_FILE` | chemin du paquet PEM de la CA du cache, monté par la couche de cible ; lu sous `VerifyCA` et `VerifyFull` seulement, vide sur `local` (ADR-015, condition 17 ; research RS-11) | à l'étape 19 |
+| `CACHE_TLS_CA_FILE` | chemin du paquet PEM de la CA du cache, monté par le Deployment commun depuis le ConfigMap `app-ca`, que la couche de cible fournit (volume optionnel sur `/run/config/ca`, `/run/config/ca/cache-ca.pem` sur `gcp`, écart 179) ; lu sous `VerifyCA` et `VerifyFull` seulement, vide sur `local` (ADR-015, condition 17 ; research RS-11) | à l'étape 19 |

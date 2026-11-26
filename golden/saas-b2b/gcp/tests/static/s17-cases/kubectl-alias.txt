@@ -1,0 +1,5 @@
+# Failing case of S17: kubectl behind an alias.
+# expect: kubectl in the gcp layer, other than a render of files
+
+alias k=kubectl
+k apply -f x.yaml

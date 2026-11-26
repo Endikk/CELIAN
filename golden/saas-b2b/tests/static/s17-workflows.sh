@@ -18,7 +18,8 @@
 #
 # The gcp layer gets a stricter rule, an allowlist, until GATE 2: in its
 # Taskfile and scripts, OpenTofu runs only fmt, init (with -backend=false),
-# validate, version and providers; gcloud and kubectl do not appear. A list of
+# validate, version and providers; gcloud does not appear, and kubectl only as
+# `kubectl kustomize`, a render that calls no cluster (step 14). A list of
 # what is refused would miss import, state, console or taint. The failing
 # cases are in gcp/tests/static/s17-cases/, run through this script alone.
 set -euo pipefail
@@ -140,11 +141,36 @@ gcp_tofu_findings() {
   ' || true
 }
 
+# kubectl in the gcp layer, until GATE 2 (principle X; step 14). Every code
+# line that holds the word kubectl is refused, as it was before step 14: a
+# call to a GKE context would create billed resources outside the state of
+# OpenTofu, a load balancer for a Gateway for instance (ADR-005, CLAUDE.md,
+# "Garde-fous"). Three forms of a whole line are let through, and the match is
+# anchored on the line, so that one more word, a semicolon, a pipe, an
+# ampersand, a substitution or a backslash loses it:
+# - a render of files, `kubectl kustomize <path>`, with at most two
+#   redirections to a file. The path does not start with a dash (no option, no
+#   --context, no --enable-exec) and holds no colon (no URL). The checks of the
+#   Kubernetes layer render with it: it reads files and calls no cluster;
+# - `command -v kubectl`, a presence test;
+# - `for tool in conftest kubectl; do`, a list of names, no command.
+# A word is a word wherever it stands: the verb in quotes, a path in front of
+# kubectl, a variable that holds it, an alias, env and xargs are all refused,
+# since the line holds the word. A message that names the tool is written
+# without it ("the render tool"), as the OpenTofu allowlist asks.
+# The cases are in gcp/tests/static/s17-cases/ (SECU review of the PR 87).
+# shellcheck disable=SC2016 # a regular expression: the backtick and $ stay as written
+kubectl_path='([A-Za-z0-9_./][A-Za-z0-9_./-]*|"[^-"\\;|&(`][^"\\;|&(`]*")'
+kubectl_redirect="[[:space:]]+[0-9]?>[[:space:]]*${kubectl_path}"
+kubectl_allowed="^[[:space:]]*(-[[:space:]]+)?(kubectl[[:space:]]+kustomize[[:space:]]+${kubectl_path}(${kubectl_redirect}){0,2}|command[[:space:]]+-v[[:space:]]+kubectl|for[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+in([[:space:]]+[A-Za-z0-9_-]+)*[[:space:]]+kubectl([[:space:]]+[A-Za-z0-9_-]+)*;[[:space:]]+do)[[:space:]]*\$"
+
 # The rules of the gcp layer, for its Taskfile and its scripts.
 check_gcp_layer() {
   local file="$1" number rule text
-  forbid "$file" "${word_start}(gcloud|kubectl)${word_end}" \
-    "gcloud or kubectl in the gcp layer, before GATE 2"
+  forbid "$file" "gcloud" \
+    "gcloud in the gcp layer, before GATE 2"
+  forbid "$file" "kubectl" \
+    "kubectl in the gcp layer, other than a render of files (kubectl kustomize)" "$kubectl_allowed"
   while IFS='|' read -r number rule text; do
     [ -n "$number" ] || continue
     report "$file" "$number" "$rule: ${text#"${text%%[![:space:]]*}"}"
