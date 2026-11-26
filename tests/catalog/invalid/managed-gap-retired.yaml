@@ -1,0 +1,50 @@
+# Must fail: managed_gap on a cloud option. The field is retired: no component
+# has to justify the absence of a managed service any more (constitution 2.0.0,
+# principle III; ADR-009, complement of 2026-11-26).
+# Based on tests/catalog/valid/oss-on-gcp.yaml, with managed_gap added.
+# Expected error, and only this one:
+#   path: targets/gcp   validator: additionalProperties
+#   message: Additional properties are not allowed ('managed_gap' was unexpected)
+schema_version: 1
+id: minimal
+summary: Brique fictive avec un composant libre seul sur gcp.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-01"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+  gcp:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-01"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+    choose_when: Choisir le composant libre quand la portabilité compte plus que l'exploitation.
+    validation: covered
+    offered: true
+    managed_gap: Aucun service managé ne couvre le besoin.

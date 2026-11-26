@@ -16,7 +16,8 @@ def test_valid_folder_exits_zero_and_prints_a_summary(
 
     out = capsys.readouterr().out
     assert code == 0
-    assert out.splitlines()[-1] == "1 catalog file checked: 0 errors, 1 warning"
+    # One standards warning per example: none of them shares a standard.
+    assert out.splitlines()[-1] == "3 catalog files checked: 0 errors, 3 warnings"
 
 
 def test_error_exits_one_and_names_file_path_and_rule(

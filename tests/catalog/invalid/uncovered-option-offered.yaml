@@ -1,0 +1,67 @@
+# Must fail: an option the validation matrix does not cover, marked as offered
+# to the interview. An uncovered option is never proposed (principles I and
+# III).
+# Based on tests/catalog/valid/gcp-options.yaml, with offered set to true on the
+# self-hosted option, whose validation is not-covered.
+# Expected error, and only this one:
+#   path: targets/gcp/1/offered   validator: const
+#   message: False was expected
+schema_version: 1
+id: minimal
+summary: Brique fictive avec une option managée et une option auto-hébergée sur gcp.
+declared_by: spec
+targets:
+  local:
+    type: oss
+    service: Example OSS
+    version: "1.0.0"
+    license: Apache-2.0
+    governance:
+      model: foundation
+      body: Example Foundation
+    status: active
+    last_release_on: "2026-11-01"
+    verified_on: "2026-11-19"
+    standards: []
+    decisions:
+      adr: [ADR-009]
+    sources:
+      - url: https://example.invalid/oss
+        read_on: "2026-11-19"
+  gcp:
+    - type: managed
+      service: Example Managed
+      provider: google
+      governance:
+        model: single-vendor
+        body: Example Provider
+      status: active
+      verified_on: "2026-11-19"
+      standards: []
+      decisions:
+        adr: [ADR-009]
+      sources:
+        - url: https://example.invalid/managed
+          read_on: "2026-11-19"
+      choose_when: Choisir le service managé quand l'équipe ne veut pas exploiter la brique.
+      validation: covered
+      offered: true
+    - type: oss
+      service: Example OSS
+      version: "1.0.0"
+      license: Apache-2.0
+      governance:
+        model: foundation
+        body: Example Foundation
+      status: active
+      last_release_on: "2026-11-01"
+      verified_on: "2026-11-19"
+      standards: []
+      decisions:
+        adr: [ADR-009]
+      sources:
+        - url: https://example.invalid/oss
+          read_on: "2026-11-19"
+      choose_when: Choisir le composant libre quand la portabilité compte plus que l'exploitation.
+      validation: not-covered
+      offered: true
