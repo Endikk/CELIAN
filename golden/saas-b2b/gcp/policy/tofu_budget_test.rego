@@ -101,6 +101,10 @@ test_s15_budget_rejects_a_literal_units_number if {
 	denied_with(in_budget(set(concat("", [b, "/amount/0/specified_amount/0/units"]), 100)), "units is a literal")
 }
 
+test_s15_budget_rejects_an_amount_without_units if {
+	denied_with(in_budget(drop(concat("", [b, "/amount/0/specified_amount/0/units"]))), "specified_amount.units is not written")
+}
+
 test_s15_budget_rejects_a_literal_nanos if {
 	denied_with(in_budget(set(concat("", [b, "/amount/0/specified_amount/0/nanos"]), 500000000)), "nanos is a literal")
 }
@@ -306,13 +310,13 @@ test_s15_budget_rejects_editor_in_the_main_root if {
 }
 
 test_s15_budget_rejects_the_legacy_writer_and_admin_roles if {
-	denied_with(in_main(set("/resource/google_project_iam_binding/w", [{"role": "roles/writer", "members": ["serviceAccount:x"]}])), "grants roles/writer")
-	denied_with(in_main(set("/resource/google_project_iam_binding/a", [{"role": "roles/admin", "members": ["serviceAccount:x"]}])), "grants roles/admin")
+	denied_with(in_main(set("/resource/google_project_iam_binding", {"w": [{"role": "roles/writer", "members": ["serviceAccount:x"]}]})), "grants roles/writer")
+	denied_with(in_main(set("/resource/google_project_iam_binding", {"a": [{"role": "roles/admin", "members": ["serviceAccount:x"]}]})), "grants roles/admin")
 }
 
 test_s15_budget_rejects_the_billing_roles_that_write_budgets if {
-	denied_with(in_main(set("/resource/google_billing_account_iam_member/c", [{"role": "roles/billing.costsManager", "member": "serviceAccount:x"}])), "grants roles/billing.costsManager")
-	denied_with(in_main(set("/resource/google_billing_account_iam_member/a", [{"role": "roles/billing.admin", "member": "serviceAccount:x"}])), "grants roles/billing.admin")
+	denied_with(in_main(set("/resource/google_billing_account_iam_member", {"c": [{"role": "roles/billing.costsManager", "member": "serviceAccount:x"}]})), "grants roles/billing.costsManager")
+	denied_with(in_main(set("/resource/google_billing_account_iam_member", {"a": [{"role": "roles/billing.admin", "member": "serviceAccount:x"}]})), "grants roles/billing.admin")
 }
 
 test_s15_budget_rejects_a_base_role_in_a_policy_binding if {
@@ -326,5 +330,5 @@ test_s15_budget_rejects_a_role_that_is_not_a_literal if {
 
 test_s15_budget_rejects_a_base_role_in_the_budget_root_too if {
 	grant := {"role": "roles/owner", "member": "serviceAccount:x"}
-	denied_with(in_budget(set("/resource/google_project_iam_member/x", [grant])), "grants roles/owner")
+	denied_with(in_budget(set("/resource/google_project_iam_member", {"x": [grant]})), "grants roles/owner")
 }

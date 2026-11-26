@@ -13,16 +13,16 @@ version: '3'
 
 tasks:
   validate:
-    desc: Check the format of the OpenTofu root, init it against its lock and validate it, without backend or credential (S14).
+    desc: Check the format of the two OpenTofu roots, gcp/tofu/ and the budget root gcp/budget/, init each against its lock and validate it, without backend or credential (S14).
     cmds:
       - bash gcp/tests/static/s14-tofu-validate.sh
 
   policy:
-    desc: Run the conftest policies of the gcp layer, their failing cases, then the policies on the OpenTofu root (S15).
+    desc: Run the conftest policies of the gcp layer, their failing cases, then the policies on the two OpenTofu roots (S15).
     cmds:
       - bash gcp/tests/static/s15-tofu-policy.sh policy
 
   scan:
-    desc: Scan the OpenTofu root with Trivy; each finding is fixed or justified next to its resource (S15).
+    desc: Scan the two OpenTofu roots with Trivy; each finding is fixed or justified next to its resource (S15).
     cmds:
       - bash gcp/tests/static/s15-tofu-policy.sh scan
