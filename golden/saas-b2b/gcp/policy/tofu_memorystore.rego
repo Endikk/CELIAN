@@ -161,6 +161,45 @@ deny contains msg if {
 	msg := sprintf("%s: %s: a rule is not a literal; a computed rule could hide a password", [label("ADR-015, condition 7"), where(acl)])
 }
 
+# `nopass` opens an account without any token. If Memorystore honors it under
+# TOKEN_AUTH, any pod of the VPC would connect. Valkey reads the flag without
+# regard to case.
+deny contains msg if {
+	some acl in blocks_of("google_memorystore_acl_policy")
+	some rule in object.get(acl.body, "rules", [])
+	contains(lower(object.get(rule, "rule", "")), "nopass")
+	msg := sprintf("%s: %s: a rule holds 'nopass', an account without a token", [label("ADR-015, condition 7"), where(acl)])
+}
+
+# Resource types that start a second endpoint or another cache service, which
+# the demo profile does not budget (conditions 7 and 13).
+refused_types := {
+	"google_memorystore_instance_desired_user_created_endpoints",
+	"google_redis_cluster",
+}
+
+deny contains msg if {
+	some type in refused_types
+	some block in blocks_of(type)
+	msg := sprintf("%s: %s: this resource type is not part of the layer; the cache is reached through the endpoint of the network of GKE, and Memorystore for Valkey is the only cache service", [label("ADR-015, conditions 7 and 13"), where(block)])
+}
+
+# What hides a drift or a block: ignore_changes would hide a change of
+# authorization_mode, which the service lets anyone with the role make; a
+# dynamic block escapes the lists above.
+deny contains msg if {
+	some instance in instances
+	some lifecycle in object.get(instance.body, "lifecycle", [])
+	"ignore_changes" in object.keys(lifecycle)
+	msg := sprintf("%s: %s: lifecycle.ignore_changes is written; it would hide a drift of authorization_mode", [label("ADR-015, condition 7"), where(instance)])
+}
+
+deny contains msg if {
+	some instance in instances
+	some name, _ in object.get(instance.body, "dynamic", {})
+	msg := sprintf("%s: %s: dynamic \"%s\" is written; a dynamic block hides what the instance says", [label("ADR-015, condition 13"), where(instance), name])
+}
+
 # Private Service Connect: a policy for Memorystore, on the subnet of GKE and
 # the network of GKE only, with a bounded number of connections (condition 7).
 # The policy has no port setting: the ports are not written here.
@@ -246,7 +285,12 @@ valid_limit(limit) if {
 
 token_type := "google_memorystore_auth_token"
 
-token_reference := `google_memorystore_auth_token\.[A-Za-z0-9_-]+\.token`
+# Any mention of the type: `.<name>.token`, the whole object, `["a"].token` with
+# for_each, `values(...)`.
+token_reference := `google_memorystore_auth_token`
+
+# A bare dependency on the resource carries no value.
+token_dependency := `^(\$\{)?google_memorystore_auth_token\.[A-Za-z0-9_-]+(\})?$`
 
 deny contains msg if {
 	some file in tf_files
@@ -273,6 +317,21 @@ deny contains msg if {
 token_use_allowed(block, path) if {
 	block.type == "google_secret_manager_secret_version"
 	path == ["secret_data_wo"]
+}
+
+token_use_allowed(_, path) if {
+	path[0] == "depends_on"
+	count(path) == 2
+}
+
+deny contains msg if {
+	some file in tf_files
+	some name, bodies in object.get(file.contents, "module", {})
+	some body in bodies
+	walk(body, [_, value])
+	is_string(value)
+	regex.match(token_reference, value)
+	msg := sprintf("%s: %s: module.%s reads the token; only secret_data_wo of a secret version may", [label("ADR-015, condition 18"), file.path, name])
 }
 
 # Every string of every resource, at any depth, with the path that leads to it.

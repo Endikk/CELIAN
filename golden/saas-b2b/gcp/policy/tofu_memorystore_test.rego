@@ -342,7 +342,7 @@ test_s15_accepts_an_indexed_token_in_secret_data_wo if {
 }
 
 test_s15_accepts_a_dependency_on_the_token_resource if {
-	version := {"secret_data_wo": token, "secret_data_wo_version": 1, "depends_on": ["google_memorystore_auth_token.cache"]}
+	version := {"secret_data_wo": token, "secret_data_wo_version": 1, "depends_on": ["${google_memorystore_auth_token.cache}"]}
 	accepted(patched(set("/resource/google_secret_manager_secret_version", {"cache": [version]})))
 }
 
