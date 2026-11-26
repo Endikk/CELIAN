@@ -444,7 +444,7 @@ class_refused class-none "image_classes"
 copy_scan_tree() {
   local dir="$1"
   mkdir -p "$dir"
-  cp -R policy security tests "$dir/"
+  cp -R k8s policy security tests "$dir/"
   cp -R local "$dir/"
   rm -rf "${dir:?}/local/tests"
 }
