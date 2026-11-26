@@ -8,6 +8,17 @@
 # S05 checks that each nodePort below is the containerPort of an
 # extraPortMappings. Only the local layer names gateway.envoyproxy.io
 # (ADR-005, condition 2; S06).
+#
+# The proxy image is pinned here, by tag and digest of the index, in the field
+# envoyDeployment.container.image (ADR-005, complement of 2026-11-26). It is
+# the value that Envoy Gateway 1.10.0 compiles as its default
+# (DefaultEnvoyProxyImage), written down so that the repository names the
+# image that runs: the scan inventory reads it (S25), Renovate follows its
+# digest, and S05 refuses any other form. A new release of Envoy Gateway
+# changes its default: the tag moves here by hand, in the same PR as the
+# controller, the charts and the render (the tag is not a version that
+# Renovate can order). The mirror serves it read-only (S13, E03), so a pod
+# cannot swap what the next cluster pulls.
 apiVersion: gateway.envoyproxy.io/v1alpha1
 kind: EnvoyProxy
 metadata:
@@ -26,3 +37,7 @@ spec:
               ports:
                 - port: 80
                   nodePort: 30080
+      envoyDeployment:
+        container:
+          # renovate: datasource=docker depName=docker.io/envoyproxy/envoy
+          image: docker.io/envoyproxy/envoy:distroless-v1.40.2@sha256:09ca6f2140a61ad8df11779a4a30d52b48433d444466328494f9188c9c35eded

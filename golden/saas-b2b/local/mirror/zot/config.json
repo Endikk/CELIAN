@@ -10,7 +10,16 @@
         "port": "5000",
         "compat": [
             "docker2s2"
-        ]
+        ],
+        "accessControl": {
+            "repositories": {
+                "**": {
+                    "anonymousPolicy": [
+                        "read"
+                    ]
+                }
+            }
+        }
     },
     "log": {
         "level": "info"
