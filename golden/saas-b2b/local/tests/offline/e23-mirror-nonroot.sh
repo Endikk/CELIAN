@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # control: E23
-# carries: FR-016; ADR-011, conditions 1, 2, 6 and 13, complement of 2026-11-26; tasks.md, gaps 29, 92 and 95
+# carries: FR-016; ADR-011, conditions 1, 2, 6 and 13, complement of 2026-11-26; tasks.md, gaps 29, 112 and 115
 #
 # The trial of condition 6 of ADR-011 (spec 001, T125), for [SECU]: the mirror
 # runs under a UID that is not root, with no capability and no privilege
@@ -19,7 +19,7 @@
 # - from a pod, the read stays open (GET /v2/_catalog answers 200) and every
 #   write is refused with 401: the start of a push, a push by chunks (PATCH),
 #   the mount of a blob from another repository (POST ?mount=), the PUT and
-#   the DELETE of a manifest, the DELETE of a blob (gap 95). The anonymous
+#   the DELETE of a manifest, the DELETE of a blob (gap 115). The anonymous
 #   read-only policy decides before any file is touched, so the UID changes
 #   none of them: that is what the test shows.
 # The result is printed as a block for [SECU]. A failure of the trial is a
@@ -107,7 +107,7 @@ code="$(probe_code "GET /v2/_catalog")"
 for request in "$BLOB_UPLOAD" "$BLOB_MOUNT" "$BLOB_CHUNK" "$MANIFEST_PUT" "$MANIFEST_DELETE" "$BLOB_DELETE"; do
   code="$(probe_code "$request")"
   case "$code" in
-    401) printf 'result: the mirror refuses %s from a pod with %s.\n' "${request%%\?*}" "$code" ;;
+    401) printf 'result: the mirror refuses %s from a pod with %s.\n' "$request" "$code" ;;
     *) fail "a pod of the cluster gets \"${code:-no answer}\" for $request; 401 expected: a write is not refused (R-34)" ;;
   esac
 done

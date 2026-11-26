@@ -83,7 +83,10 @@ offline_cut() {
   mkdir -p "$certs/_default"
   printf '# Cut: no registry other than the mirror answers.\nserver = "%s"\n' "$OFFLINE_DEAD_END" >"$certs/_default/hosts.toml"
   config="$E2E_ROOT/local/mirror/zot/config.json"
-  sed 's|"https://[^"]*"|"'"$OFFLINE_DEAD_END"'"|' "$config" >"$config.new" && mv "$config.new" "$config"
+  # Written in place, not replaced: the zot container of the next task up mounts
+  # this file, and one run on OrbStack saw zot fail to open a file that mv had
+  # replaced ("no such file or directory", tasks.md, gap 164).
+  sed 's|"https://[^"]*"|"'"$OFFLINE_DEAD_END"'"|' "$config" >"$config.new" && cat "$config.new" >"$config" && rm -f "$config.new"
   grep -q "\"$OFFLINE_DEAD_END\"" "$config" || return 1
   if grep -q 'index.docker.io' "$config"; then
     return 1
@@ -256,10 +259,12 @@ mirror_logged_gets() {
 # image_repositories: the repository, in the form of the catalog of zot, of
 # every image of a container that runs in the cluster and comes from a
 # registry of local/mirror/registries (library/postgres for the official
-# image), one per line, sorted.
+# image), one per line, sorted. The namespaces of kind itself are left out:
+# kube-system and local-path-storage run images that the node image already
+# holds, which no pull brings through the mirror (tasks.md, gap 169).
 image_repositories() {
   local registry rest image path
-  kube_e2e get pods --all-namespaces \
+  kube_e2e get pods --all-namespaces --field-selector 'metadata.namespace!=kube-system,metadata.namespace!=local-path-storage' \
     --output 'jsonpath={range .items[*]}{range .spec.initContainers[*]}{.image}{"\n"}{end}{range .spec.containers[*]}{.image}{"\n"}{end}{end}' |
     sort -u |
     while read -r image; do

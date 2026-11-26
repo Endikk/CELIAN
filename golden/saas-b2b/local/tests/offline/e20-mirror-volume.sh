@@ -22,7 +22,7 @@ set -uo pipefail
 
 readonly PROBE_NAMESPACE="e2e-e20-probe"
 readonly TAGS_NAMESPACE="e2e-e20-tags"
-readonly STORAGE_IN_CONTAINER="/var/lib/registry"
+readonly STORAGE_IN_CONTAINER="/home/nonroot"
 
 # 1. The first start, with the network: the volume exists and sits outside
 # the tree.

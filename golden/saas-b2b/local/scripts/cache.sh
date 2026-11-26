@@ -24,6 +24,8 @@ case "$here" in
 esac
 # shellcheck disable=SC1091 # lib/local-env.sh is checked on its own
 . "$here/lib/local-env.sh"
+# shellcheck disable=SC1091 # lib/pull-wait.sh is checked on its own
+. "$here/lib/pull-wait.sh"
 root="$(CDPATH='' cd -- "$here/../.." && pwd)"
 
 # The namespace of the application and of its data (k8s/base/namespace.yaml;
@@ -33,7 +35,7 @@ readonly PROBE_FILE="$root/local/data/cache/probe/job.yaml"
 readonly PROBE_JOB="cache-probe"
 # The Deployment pulls its image through the mirror at the first start;
 # BENCH-014 measured a median of 5.5 s to "ready" (M1, ADR-015).
-readonly ROLLOUT_WAIT="180s"
+readonly ROLLOUT_WAIT_SECONDS=180
 # Longer than activeDeadlineSeconds of the Job (150 s), so that the Job
 # states its own failure first.
 readonly PROBE_SECONDS=170
@@ -55,8 +57,8 @@ remove_probe() {
 wait_ready() {
   local status deadline
   [ -f "$PROBE_FILE" ] || die "local/data/cache/probe/job.yaml is missing. Restore it from the repository."
-  kube_ns rollout status deployment/cache --timeout="$ROLLOUT_WAIT" >/dev/null ||
-    die "the Deployment cache is not available within $ROLLOUT_WAIT; the messages of kubectl are above. Run task down, then task up."
+  wait_rollout "$CACHE_NAMESPACE" deployment/cache "$ROLLOUT_WAIT_SECONDS" ||
+    die "the Deployment cache is not available within $ROLLOUT_WAIT_SECONDS s; the messages of kubectl are above. Run task down, then task up."
   remove_probe || die "the previous probe Job could not be removed; the messages of kubectl are above."
   kube create -f "$PROBE_FILE" >/dev/null || die "the probe Job was not created; the messages of kubectl are above."
   deadline=$((SECONDS + PROBE_SECONDS))

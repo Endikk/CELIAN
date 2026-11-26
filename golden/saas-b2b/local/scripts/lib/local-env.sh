@@ -34,6 +34,12 @@
   # Repository of the zot image; its tag and digest live in
   # local/tasks/local.yml, where Renovate reads them (ADR-016).
   readonly MIRROR_REPOSITORY="ghcr.io/project-zot/zot"
+  # The user of the mirror container: the nonroot user of the distroless images,
+  # UID 65532 (common/variables.bzl of GoogleContainerTools/distroless, read on
+  # 2026-11-26), and its group. The image of zot runs as root by default; the
+  # trial of E23 asked whether zot writes its volume under another user
+  # (ADR-011, condition 6).
+  readonly MIRROR_USER="65532:65532"
   # The kubeconfig of the project, outside the repository, readable by its
   # owner alone (research RS-21; ADR-004, condition 9). Every kubectl call
   # names it with the context above (S19).

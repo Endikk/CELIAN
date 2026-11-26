@@ -54,6 +54,8 @@ case "$here" in
 esac
 # shellcheck disable=SC1091 # lib/local-env.sh is checked on its own
 . "$here/lib/local-env.sh"
+# shellcheck disable=SC1091 # lib/pull-wait.sh is checked on its own
+. "$here/lib/pull-wait.sh"
 root="$(CDPATH='' cd -- "$here/../.." && pwd -P)"
 
 # The one profile delivered until step 12 (tasks.md, gap 14).
@@ -67,7 +69,7 @@ readonly DATABASE_NAME="app"
 # the mirror, from Docker Hub on a new mirror volume (168.5 MB in amd64,
 # ADR-012), then initializes the volume; Postgres was ready in 8.9 s with
 # the image in cache in BENCH-011 (ADR-012).
-readonly ROLLOUT_WAIT="300s"
+readonly ROLLOUT_WAIT_SECONDS=300
 # Then how long the authenticated SELECT 1 may keep failing, and the pause
 # between two tries.
 readonly QUERY_SECONDS=60
@@ -91,7 +93,10 @@ readonly TAG_LENGTH=12
 # gets to answer after that.
 readonly API_DEPLOYMENT="api"
 readonly FRONT_DEPLOYMENT="front"
-readonly APP_ROLLOUT_WAIT="240s"
+readonly APP_ROLLOUT_WAIT_SECONDS=240
+# The namespace of the proxy that the controller of Envoy Gateway starts for the
+# Gateway, whose image the node pulls through the mirror too.
+readonly PROXY_NAMESPACE="envoy-gateway-system"
 readonly GATEWAY_SECONDS=120
 readonly GATEWAY_PAUSE_SECONDS=2
 readonly GATEWAY_READ_SECONDS=5
@@ -203,9 +208,8 @@ select_one() {
 
 database() {
   local answer waited=0
-  if ! kube --namespace "$APP_NAMESPACE" rollout status "statefulset/$DATABASE_STATEFULSET" \
-    --timeout="$ROLLOUT_WAIT" >/dev/null; then
-    die "the database is not ready within $ROLLOUT_WAIT. Look at its pod: kubectl --kubeconfig $KUBECONFIG_FILE --context $KUBE_CONTEXT --namespace $APP_NAMESPACE describe pod $DATABASE_POD."
+  if ! wait_rollout "$APP_NAMESPACE" "statefulset/$DATABASE_STATEFULSET" "$ROLLOUT_WAIT_SECONDS"; then
+    die "the database is not ready within $ROLLOUT_WAIT_SECONDS s. Look at its pod: kubectl --kubeconfig $KUBECONFIG_FILE --context $KUBE_CONTEXT --namespace $APP_NAMESPACE describe pod $DATABASE_POD."
   fi
   while :; do
     answer="$(select_one)" || answer=""
@@ -235,12 +239,16 @@ http_status() {
 
 # wait_status PORT PATH: until the gateway answers 200 for PATH.
 wait_status() {
-  local waited=0 code=""
+  local waited=0 code="" proxy_pull
   while :; do
     code="$(http_status "$1" "$2")" || code=""
     [ "$code" = 200 ] && return 0
-    [ "$waited" -lt "$GATEWAY_SECONDS" ] ||
+    if [ "$waited" -ge "$GATEWAY_SECONDS" ]; then
+      # The proxy of the Gateway may be waiting for its image (T127).
+      proxy_pull="$(pull_errors "$PROXY_NAMESPACE" | head -n 1)"
+      [ -z "$proxy_pull" ] || pull_failure "$GATEWAY_SECONDS" "$proxy_pull"
       die "the gateway does not answer 200 for $2 on 127.0.0.1:$1 within $GATEWAY_SECONDS s (last answer: ${code:-none}). Look at the pods: kubectl --kubeconfig $KUBECONFIG_FILE --context $KUBE_CONTEXT --namespace $APP_NAMESPACE get pods."
+    fi
     sleep "$GATEWAY_PAUSE_SECONDS"
     waited=$((waited + GATEWAY_PAUSE_SECONDS))
   done
@@ -250,8 +258,8 @@ ready() {
   local port="${1:-}" deployment
   [[ $port =~ ^[0-9]+$ ]] || die "usage: bash local/scripts/app.sh ready PORT"
   for deployment in "$API_DEPLOYMENT" "$FRONT_DEPLOYMENT"; do
-    kube --namespace "$APP_NAMESPACE" rollout status "deployment/$deployment" --timeout="$APP_ROLLOUT_WAIT" >/dev/null ||
-      die "the Deployment $deployment is not available within $APP_ROLLOUT_WAIT. Look at its pods: kubectl --kubeconfig $KUBECONFIG_FILE --context $KUBE_CONTEXT --namespace $APP_NAMESPACE describe pods --selector app.kubernetes.io/name=$deployment."
+    wait_rollout "$APP_NAMESPACE" "deployment/$deployment" "$APP_ROLLOUT_WAIT_SECONDS" ||
+      die "the Deployment $deployment is not available within $APP_ROLLOUT_WAIT_SECONDS s. Look at its pods: kubectl --kubeconfig $KUBECONFIG_FILE --context $KUBE_CONTEXT --namespace $APP_NAMESPACE describe pods --selector app.kubernetes.io/name=$deployment."
   done
   wait_status "$port" /api/healthz
   wait_status "$port" /

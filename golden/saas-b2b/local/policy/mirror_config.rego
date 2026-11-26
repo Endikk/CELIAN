@@ -24,7 +24,7 @@ label := "S13 (FR-008, FR-016; ADR-011, conditions 1, 5, 7, 10 and 13)"
 
 # Where the mirror keeps its images: the target of the named volume that
 # local/scripts/mirror.sh mounts.
-storage_root := "/var/lib/registry"
+storage_root := "/home/nonroot"
 
 # Where the node reads its registry hosts, and the folder mounted there.
 certs_dir := "/etc/containerd/certs.d"

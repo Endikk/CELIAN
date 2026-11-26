@@ -43,8 +43,14 @@ root="$(CDPATH='' cd -- "$here/../.." && pwd)"
 readonly CONFIG_FILE="$root/local/mirror/zot/config.json"
 readonly CONFIG_IN_CONTAINER="/etc/zot/config.json"
 # storage.rootDirectory of the configuration: the volume goes there, out of
-# the project tree (ADR-011, condition 9).
-readonly STORAGE_IN_CONTAINER="/var/lib/registry"
+# the project tree (ADR-011, condition 9). It is the home folder of the
+# nonroot user of the image (the distroless base owns it for UID 65532): a new
+# named volume takes the content and the owner of the folder it covers, so
+# zot, which runs as MIRROR_USER of lib/local-env.sh, can write it. A volume
+# mounted on a folder that the image does not have is created owned by root,
+# and zot then fails every write with "permission denied" (E23, tasks.md,
+# gap 166).
+readonly STORAGE_IN_CONTAINER="/home/nonroot"
 # How long the mirror gets to reach the state running, then how long it must
 # keep it. BENCH-010 did not measure its start (ADR-011); zot started in
 # less than a second on the measurement machine (research RS-13).
@@ -52,6 +58,8 @@ readonly START_SECONDS=30
 readonly SETTLE_SECONDS=2
 # Log lines shown when the mirror stops.
 readonly LOG_LINES=20
+# Log lines read to look for a write error: zot logs it within its first lines.
+readonly LOG_LINES_CHECKED=200
 readonly KIND_CONFIG="$root/local/kind/cluster.yaml"
 
 die() {
@@ -148,6 +156,24 @@ wait_ready() {
     show_logs
     die "the mirror $MIRROR_CONTAINER stopped right after its start, now $status; its last log lines are above."
   fi
+  check_writable
+}
+
+# check_writable: zot runs as a user that is not root and keeps running when
+# it cannot write its volume: it answers every pull with an error, and the
+# node then falls back to the public registry, so a mirror that stays empty
+# goes unseen until the network is cut. A volume that an earlier task up made
+# for root, or a folder of the image that another user owns, shows at the
+# start of zot as "permission denied" in its log (E23, tasks.md, gap 167).
+check_writable() {
+  local lines
+  lines="$(docker logs --tail "$LOG_LINES_CHECKED" "$MIRROR_CONTAINER" 2>&1)" || lines=""
+  case "$lines" in
+    *"permission denied"*)
+      show_logs
+      die "the mirror $MIRROR_CONTAINER cannot write its volume $MIRROR_VOLUME (permission denied, in its log above): the volume was made for another user, by an earlier task up. Run task down, then task mirror:purge, then task up again: the next task up needs the network."
+      ;;
+  esac
 }
 
 # check IMAGE: everything that can be checked before the cluster exists, so that
@@ -186,7 +212,7 @@ up() {
     --network "$KIND_NETWORK" \
     --mount "type=bind,src=$CONFIG_FILE,dst=$CONFIG_IN_CONTAINER,readonly" \
     --mount "type=volume,src=$MIRROR_VOLUME,dst=$STORAGE_IN_CONTAINER" \
-    --cap-drop ALL --security-opt no-new-privileges=true --read-only \
+    --user "$MIRROR_USER" --cap-drop ALL --security-opt no-new-privileges=true --read-only \
     "$image" serve "$CONFIG_IN_CONTAINER" >/dev/null
   wait_ready
   printf 'Mirror: container %s runs on the network %s, no published port, volume %s.\n' \

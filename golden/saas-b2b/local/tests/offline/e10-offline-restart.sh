@@ -9,18 +9,20 @@
 # one of BENCH-010 (lib/offline.sh), on a copy of the golden repo; nothing of
 # the machine's network changes.
 # - the first task up and task down succeed, the volume of the mirror stays;
-# - the cut is real: two witness pods, on a docker.io image and on a quay.io
-#   image that no cache holds, fail their pull, and the error names the dead
-#   end 127.0.0.1:9;
 # - the second task up succeeds within the limit, and shows its steps and its
 #   total: the cluster is new, so every image of the stack came through the
 #   mirror;
+# - no container of the cluster waits on a pull;
+# - the mirror logged GET requests for the manifest and the blobs of
+#   library/postgres and of envoyproxy/gateway with a 200 (it served them);
 # - a pod in imagePullPolicy: Always on the Postgres image of the stack, by
 #   digest (postgres:18.7-trixie), starts: the kubelet asks the registry again
 #   and the mirror answers by itself, with the capability pull alone;
-# - the mirror logged GET requests for the manifest and the blobs of
-#   library/postgres and of envoyproxy/gateway with a 200 (it served them);
-# - no pod of the cluster waits on a pull.
+# - the cut is real: two witness pods, on a docker.io image and on a quay.io
+#   image that no cache holds, fail their pull. The quay.io one names the dead
+#   end 127.0.0.1:9. The docker.io one asks the mirror first, which cannot reach
+#   its own upstream and answers 503: containerd keeps that answer, so the
+#   error names the mirror and the 503 (tasks.md, gap 165).
 # The result of a failure reopens ADR-011 (condition 1) and goes up to the DSI.
 set -uo pipefail
 # shellcheck disable=SC1091 # lib/offline.sh is checked on its own
@@ -67,17 +69,19 @@ for step in $STEPS; do
 done
 expect_output "Ready: the API and the front answer through the gateway."
 
-# 3. The cut is real: the witness pods cannot pull.
-kube_e2e create namespace "$OFFLINE_WITNESS_NAMESPACE" >/dev/null 2>&1
-for witness in "w-docker-io $OFFLINE_WITNESS_DOCKER" "w-quay-io $OFFLINE_WITNESS_QUAY"; do
-  name="${witness%% *}"
-  message="$(witness_pull "$name" "${witness#* }")"
-  case "$message" in
-    *127.0.0.1:9*) printf 'note: %s fails its pull at the dead end, as expected.\n' "$name" ;;
-    *) fail "the witness pod $name did not fail at the dead end 127.0.0.1:9: the cut leaks (got: $message)" ;;
-  esac
+# 3. Nothing waits on a pull, and the mirror served what the node pulled.
+waiting="$(kube_e2e get pods --all-namespaces \
+  --output 'jsonpath={range .items[*]}{range .status.initContainerStatuses[*]}{.state.waiting.reason}{" "}{.image}{"\n"}{end}{range .status.containerStatuses[*]}{.state.waiting.reason}{" "}{.image}{"\n"}{end}{end}' |
+  grep -E '^(ErrImagePull|ImagePullBackOff) ' || true)"
+[ -z "$waiting" ] || fail "a container of the cluster waits on a pull: $waiting"
+for repository in library/postgres envoyproxy/gateway; do
+  served="$(mirror_logged_gets "$repository")"
+  if [ "${served:-0}" -gt 0 ]; then
+    printf 'note: the mirror served %s requests for %s with a 200.\n' "$served" "$repository"
+  else
+    fail "the log of the mirror shows no GET of $repository answered 200: the node did not pull it through the mirror"
+  fi
 done
-kube_e2e delete namespace "$OFFLINE_WITNESS_NAMESPACE" --ignore-not-found --wait=false >/dev/null 2>&1 || :
 
 # 4. imagePullPolicy: Always on the image of Postgres, mirror in pull alone.
 if client_namespace "$ALWAYS_NAMESPACE"; then
@@ -94,20 +98,18 @@ else
   fail "could not create the namespace $ALWAYS_NAMESPACE"
 fi
 
-# 5. The mirror served, from its own storage.
-for repository in library/postgres envoyproxy/gateway; do
-  served="$(mirror_logged_gets "$repository")"
-  if [ "${served:-0}" -gt 0 ]; then
-    printf 'note: the mirror served %s requests for %s with a 200.\n' "$served" "$repository"
-  else
-    fail "the log of the mirror shows no GET of $repository answered 200: the node did not pull it through the mirror"
-  fi
-done
-
-# 6. Nothing waits on a pull.
-waiting="$(kube_e2e get pods --all-namespaces \
-  --output 'jsonpath={range .items[*]}{range .status.containerStatuses[*]}{.state.waiting.reason}{" "}{.image}{"\n"}{end}{end}' |
-  grep -E '^(ErrImagePull|ImagePullBackOff) ' || true)"
-[ -z "$waiting" ] || fail "a container of the cluster waits on a pull: $waiting"
+# 5. The cut is real: the witness pods cannot pull.
+kube_e2e create namespace "$OFFLINE_WITNESS_NAMESPACE" >/dev/null 2>&1
+message="$(witness_pull w-docker-io "$OFFLINE_WITNESS_DOCKER")"
+case "$message" in
+  *"http://$E2E_MIRROR:5000/"*"503 Service Unavailable"*) printf 'note: w-docker-io fails its pull: the mirror, cut from its upstream, answers 503.\n' ;;
+  *) fail "the witness pod w-docker-io did not fail with the 503 of the mirror: the cut leaks (got: $message)" ;;
+esac
+message="$(witness_pull w-quay-io "$OFFLINE_WITNESS_QUAY")"
+case "$message" in
+  *127.0.0.1:9*) printf 'note: w-quay-io fails its pull at the dead end, as expected.\n' ;;
+  *) fail "the witness pod w-quay-io did not fail at the dead end 127.0.0.1:9: the cut leaks (got: $message)" ;;
+esac
+kube_e2e delete namespace "$OFFLINE_WITNESS_NAMESPACE" --ignore-not-found --wait=false >/dev/null 2>&1 || :
 
 e2e_finish
