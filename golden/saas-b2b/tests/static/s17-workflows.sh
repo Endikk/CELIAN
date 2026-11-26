@@ -151,6 +151,16 @@ check_gcp_layer() {
   done < <(gcp_tofu_findings "$file")
 }
 
+# The write permissions of release-please.yml ($2 is their pattern): exactly
+# three lines, so that a job added to this file cannot ask for more.
+check_release_please_writes() {
+  local file="$1" pattern="$2" count
+  count="$(code_lines "$file" | grep -c -E -e "^[0-9]+:${pattern#^}" || true)"
+  if [ "$count" != "3" ]; then
+    report "$file" 0 "release-please.yml must hold the three write permissions once (contents, issues, pull-requests), found $count"
+  fi
+}
+
 for file in "$@"; do
   if [ ! -f "$file" ]; then
     report "$file" 0 "workflow not found"
@@ -176,23 +186,48 @@ for file in "$@"; do
       ;;
   esac
   case "$file" in
-    */.github/workflows/*)
+    */.github/workflows/* | */tests/static/s17-workflow-cases/*.yml)
       # In a workflow, no secret but the workflow token, and no OIDC token
       # for an identity federation.
       forbid "$file" 'secrets\.' "secret other than GITHUB_TOKEN" 'secrets\.GITHUB_TOKEN([^[:alnum:]_]|$)'
       forbid "$file" 'id-token:[[:space:]]*write' "OIDC token requested (id-token: write)"
+      # The workflows run on pull requests with the code of the pull request,
+      # under a read-only token. The two triggers that run with the secrets
+      # and a writable token of the base repository are refused, as is any
+      # permission set to write, at the top or in any job, even one added later.
+      forbid "$file" "${word_start}(pull_request_target|workflow_run)${word_end}" \
+        "trigger pull_request_target or workflow_run (runs with the token and secrets of the base repository)"
+      # One workflow needs to write: release-please.yml opens the release PR.
+      # It may set exactly contents, issues and pull-requests to write, once.
+      write_allowed=''
+      case "$file" in
+        */.github/workflows/release-please.yml)
+          write_allowed='^[[:space:]]+(contents|issues|pull-requests):[[:space:]]*write[[:space:]]*$'
+          check_release_please_writes "$file" "$write_allowed"
+          ;;
+      esac
+      forbid "$file" "[a-z-]+[[:space:]]*:[[:space:]]*[\"']?write(-all)?[\"']?[[:space:]]*(,|}|\$)" \
+        "permission set to write or write-all" "$write_allowed"
+      # A download that runs as it arrives: nothing checks what is executed.
+      # The tools come from tests/tools/install.sh, checked against SHA256SUMS.
+      forbid "$file" "(^|[^|])\\|[[:space:]]*((sudo|env|exec)[[:space:]]+)?([^|[:space:]]*/)?(sh|bash|zsh|dash|ksh|python[0-9.]*|perl|ruby|node)${word_end}" \
+        "output piped into a shell or an interpreter (curl | sh)"
+      forbid "$file" "${word_start}(sh|bash|zsh|dash|ksh|source|eval)${word_end}.*(<\\(|\\\$\\()[[:space:]]*(curl|wget)${word_end}" \
+        "download run by a shell as it arrives (bash <(curl ...))"
       check_pins "$file"
       ;;
   esac
 done
 
-# Each failing case of the gcp layer, in gcp/tests/static/s17-cases/, is run
+# Each failing case, in gcp/tests/static/s17-cases/ (the gcp layer) and in
+# tests/static/s17-workflow-cases/ (the workflows), is run
 # through this script alone: it must fail, and its output must hold the text
 # of the case's "# expect:" line. Without that folder (a project rendered for
 # the local target alone), there is nothing to run.
 check_cases() {
+  local dir="$1" extension="$2"
   local case_file expect out found=0
-  for case_file in "$root"/gcp/tests/static/s17-cases/*.txt; do
+  for case_file in "$dir"/*."$extension"; do
     [ -f "$case_file" ] || continue
     found=$((found + 1))
     expect="$(awk -v key='# expect: ' 'NR > 10 { exit } index($0, key) == 1 { print substr($0, length(key) + 1); exit }' "$case_file")"
@@ -205,12 +240,15 @@ check_cases() {
     fi
   done
   if [ "$found" -eq 0 ]; then
-    report "$root/gcp/tests/static/s17-cases" 0 "holds no failing case"
+    report "$dir" 0 "holds no failing case"
   fi
 }
 
-if [ "$default_run" -eq 1 ] && [ -d "$root/gcp/tests/static/s17-cases" ]; then
-  check_cases
+if [ "$default_run" -eq 1 ]; then
+  if [ -d "$root/gcp/tests/static/s17-cases" ]; then
+    check_cases "$root/gcp/tests/static/s17-cases" txt
+  fi
+  check_cases "$root/tests/static/s17-workflow-cases" yml
 fi
 
 if [ "$problems" -gt 0 ]; then
