@@ -9,3 +9,9 @@ kubernetes_minor: "1.36"
 
 # Postgres major, the same on both targets (ADR-012, condition 5).
 postgres_major: "18"
+
+# Line of the cache engine, the same on both targets (ADR-015, condition
+# 16): the line that the managed cache of GCP serves by default. The image
+# tag of the local layer follows it, and the engine version of the gcp layer
+# will (step 20). A neutral name, since this file is common (condition 17).
+cache_engine_line: "9.1"

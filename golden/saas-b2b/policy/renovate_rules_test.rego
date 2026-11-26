@@ -29,6 +29,16 @@ envoy_group := {
 
 valid_rules := [postgres_rule, node_rule, kind_group, envoy_group]
 
+# ADR-015, conditions 2 and 16: the cache image on the patches of the
+# cache_engine_line of platform.yaml, Alpine variant alone. config_for adds
+# it at the end of packageRules, so that the indexes of the entries above
+# do not move.
+cache_rule := {
+	"matchDatasources": ["docker"],
+	"matchPackageNames": ["/^(docker\\.io/)?valkey/valkey$/"],
+	"allowedVersions": "/^9\\.1\\.[0-9]+-alpine$/",
+}
+
 celian_presets := ["config:recommended", "helpers:pinGitHubActionDigests", "customManagers:githubActionsVersions"]
 
 # The regex managers see tests/: the list of :ignoreModulesAndTests without
@@ -97,14 +107,14 @@ config_for(package_rules, managers) := {
 	"osvVulnerabilityAlerts": true,
 	"regex": regex_object,
 	"customManagers": managers,
-	"packageRules": package_rules,
+	"packageRules": array.concat(package_rules, [cache_rule]),
 }
 
 config_with(package_rules) := config_for(package_rules, [image_manager, golden_tools_manager, golden_local_manager])
 
 valid_config := config_with(valid_rules)
 
-valid_platform := {"kubernetes_minor": "1.36", "postgres_major": "18"}
+valid_platform := {"kubernetes_minor": "1.36", "postgres_major": "18", "cache_engine_line": "9.1"}
 
 with_value(obj, key, value) := object.union(object.remove(obj, {key}), {key: value})
 
@@ -299,7 +309,7 @@ test_s23_rejects_a_postgres_entry_narrowed_to_some_files if {
 test_s23_rejects_a_postgres_entry_narrowed_to_a_current_version if {
 	rule := with_value(postgres_rule, "matchCurrentVersion", "/^17\\./")
 	renovate := config_with([rule, node_rule, kind_group, envoy_group])
-	denied_with(checked(renovate, valid_platform), "packageRules[0] sets allowedVersions; only the postgres and node entries set it")
+	denied_with(checked(renovate, valid_platform), "packageRules[0] sets allowedVersions; only the postgres, node and cache entries set it")
 }
 
 test_s23_rejects_a_node_entry_narrowed_to_some_update_types if {
@@ -317,13 +327,13 @@ test_s23_rejects_a_postgres_entry_with_a_negated_pattern if {
 test_s23_rejects_a_later_glob_entry_that_sets_allowed_versions if {
 	rule := {"matchPackageNames": ["*"], "allowedVersions": "/.*/"}
 	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions; only the postgres and node entries set it")
+	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions; only the postgres, node and cache entries set it")
 }
 
 test_s23_rejects_a_later_dep_name_entry_that_sets_allowed_versions if {
 	rule := {"matchDepNames": ["postgres"], "allowedVersions": "/^19\\./"}
 	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions; only the postgres and node entries set it")
+	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions; only the postgres, node and cache entries set it")
 }
 
 test_s23_rejects_a_kind_group_narrowed_to_some_files if {
@@ -583,7 +593,7 @@ test_s23_rejects_custom_managers_that_is_not_a_list if {
 
 test_s23_names_its_requirements_in_each_message if {
 	msgs := deny with input as checked({}, valid_platform)
-	count(msgs) == 7
+	count(msgs) == 8
 	every msg in msgs {
 		startswith(msg, "S23 (FR-013")
 	}
@@ -623,4 +633,49 @@ test_s23_rejects_a_tools_manager_without_the_preflight_checks if {
 	manager := with_value(golden_tools_manager, "managerFilePatterns", ["/^tests/tools/install\\.sh$/"])
 	renovate := config_for(valid_rules, [image_manager, manager, golden_local_manager])
 	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of tests/tools/install.sh")
+}
+
+# The cache image: the patches of the cache_engine_line of platform.yaml, in
+# the Alpine variant alone (ADR-015, conditions 2, 9 and 16).
+
+without_cache_rule(renovate) := object.union(renovate, {"packageRules": [rule | some rule in renovate.packageRules; rule != cache_rule]})
+
+test_s23_rejects_a_config_without_the_cache_rule if {
+	denied_with(checked(without_cache_rule(valid_config), valid_platform), "no packageRules entry keeps the cache image on allowedVersions /^9\\.1\\.[0-9]+-alpine$/")
+}
+
+test_s23_rejects_a_cache_rule_on_the_minor_alone if {
+	rule := with_value(cache_rule, "allowedVersions", "/^9\\.1\\./")
+	renovate := config_with([postgres_rule, node_rule, kind_group, envoy_group, rule])
+	denied_with(checked(renovate, valid_platform), "sets allowedVersions /^9\\.1\\./ for the cache image")
+}
+
+test_s23_rejects_a_cache_rule_on_another_line if {
+	rule := with_value(cache_rule, "allowedVersions", "/^9\\.2\\.[0-9]+-alpine$/")
+	renovate := without_cache_rule(config_with([postgres_rule, node_rule, kind_group, envoy_group, rule]))
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps the cache image")
+}
+
+test_s23_accepts_a_cache_rule_that_follows_platform_yaml if {
+	rule := with_value(cache_rule, "allowedVersions", "/^9\\.2\\.[0-9]+-alpine$/")
+	renovate := without_cache_rule(config_with([postgres_rule, node_rule, kind_group, envoy_group, rule]))
+	accepted(checked(renovate, with_value(valid_platform, "cache_engine_line", "9.2")))
+}
+
+test_s23_rejects_a_cache_rule_for_another_datasource if {
+	rule := with_value(cache_rule, "matchDatasources", ["helm"])
+	renovate := without_cache_rule(config_with([postgres_rule, node_rule, kind_group, envoy_group, rule]))
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps the cache image")
+}
+
+test_s23_rejects_a_cache_rule_that_misses_the_registry_name if {
+	rule := with_value(cache_rule, "matchPackageNames", ["valkey/valkey"])
+	renovate := without_cache_rule(config_with([postgres_rule, node_rule, kind_group, envoy_group, rule]))
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps the cache image")
+}
+
+test_s23_rejects_a_local_manager_without_the_data_folder if {
+	manager := with_value(golden_local_manager, "managerFilePatterns", ["/^local/kind/cluster\\.yaml$/", "/^local/tasks/.+\\.ya?ml$/"])
+	renovate := config_for(valid_rules, [image_manager, golden_tools_manager, manager])
+	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of the images of")
 }

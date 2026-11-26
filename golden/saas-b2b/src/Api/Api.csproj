@@ -2,6 +2,8 @@
   Example API of the SaaS B2B golden repo (spec 001, FR-009): health, readiness
   and notes, served under /api by the API itself (plan, "Routage et adresses").
   Npgsql only, no ORM (research RS-03); version and date in research RS-18.
+  StackExchange.Redis, the client of the cache on both targets (research
+  RS-11, with its version and date).
 -->
 <Project Sdk="Microsoft.NET.Sdk.Web">
   <!-- No file of the project folder is published unless listed here. By
@@ -17,5 +19,6 @@
 
   <ItemGroup>
     <PackageReference Include="Npgsql" Version="10.0.3" />
+    <PackageReference Include="StackExchange.Redis" Version="3.4.35" />
   </ItemGroup>
 </Project>

@@ -1,6 +1,8 @@
 using System.Diagnostics;
 using System.Net;
 using System.Text.Json;
+using Api.Caching;
+using Microsoft.Extensions.DependencyInjection;
 using static Api.Tests.Http;
 
 namespace Api.Tests;
@@ -100,9 +102,10 @@ public sealed class ReadinessTests
     }
 
     [Fact]
-    public async Task Readyz_reports_the_cache_in_error_until_a_cache_client_exists()
+    public async Task Readyz_reports_the_cache_in_error_while_its_settings_are_missing()
     {
-        // No concrete cache client before step 19 (research RS-11).
+        // The concrete client of step 19, with neither CACHE_HOST nor the files
+        // of cache-auth: the cache is in error, and the API keeps answering.
         await using var api = new ApiFactory { KeepDefaultCache = true };
         using var client = api.CreateClient();
 
@@ -112,5 +115,13 @@ public sealed class ReadinessTests
         var body = await ReadReadiness(response);
         Assert.Equal("ok", body.GetProperty("database").GetString());
         Assert.Equal("error", body.GetProperty("cache").GetString());
+    }
+
+    [Fact]
+    public void The_API_registers_the_concrete_cache_client()
+    {
+        using var api = new ApiFactory { KeepDefaultCache = true };
+
+        Assert.IsType<RespCache>(api.Services.GetRequiredService<ICache>());
     }
 }

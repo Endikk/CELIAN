@@ -64,7 +64,8 @@ tasks:
       - task: secrets
       - bash local/scripts/platform.sh up '{{.ENVOY_GATEWAY_IMAGE}}'
       - bash local/scripts/app.sh up
-      - echo 'task up stops after the database. The API and the front arrive with step 9 of spec 001.'
+      - bash local/scripts/cache.sh wait
+      - echo 'task up stops after the database and the cache. The API and the front arrive with step 9 of spec 001.'
 
   # The namespace of the application, then the Secrets of the database, each
   # only when it is missing (contracts/secrets.md; ADR-007, condition 1).

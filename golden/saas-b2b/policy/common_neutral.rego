@@ -27,8 +27,9 @@ named_groups := {
 upstream_groups := {"", "apps", "batch", "policy", "autoscaling"}
 
 # Words that name a tool of a target layer, a GitOps engine or a provider,
+# the cache engine of each target among them (ADR-015, condition 17),
 # matched in any value, case aside.
-tool_words := `(?i)(envoy|zot|flux|argocd|argoproj|configsync|config-sync|kindest|gke|google|googleapis)`
+tool_words := `(?i)(envoy|zot|flux|argocd|argoproj|configsync|config-sync|kindest|gke|google|googleapis|valkey|memorystore)`
 
 objects contains [file.path, obj] if {
 	some file in input

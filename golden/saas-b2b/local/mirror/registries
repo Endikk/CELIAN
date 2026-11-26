@@ -5,8 +5,9 @@
 # list; S13 keeps them in step.
 #
 # Steps 6 to 8 pull from docker.io only: Envoy Gateway (ADR-005) and Postgres
-# (ADR-012). The cache (ADR-015) and Flux (ghcr.io, step 12) add their
-# registry here, once the mounting with several upstreams is tried (RS-13).
+# (ADR-012); so does the cache of step 19, valkey/valkey (ADR-015, condition
+# 1). Flux (ghcr.io, step 12) adds its registry here, once the mounting with
+# several upstreams is tried (RS-13).
 # Images that the engine pulls itself, the node image and the zot image, do
 # not go through the mirror.
 docker.io https://index.docker.io

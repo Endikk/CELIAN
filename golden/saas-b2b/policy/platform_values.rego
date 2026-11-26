@@ -1,12 +1,13 @@
-# S21: the Kubernetes minor and the Postgres major have one value each, kept
-# in platform.yaml, and every file that repeats them agrees with it (spec 001,
-# data-model, "Valeurs partagées"; ADR-004, version rule; ADR-012, condition 5).
+# S21: the Kubernetes minor, the Postgres major and the line of the cache
+# engine have one value each, kept in platform.yaml, and every file that
+# repeats them agrees with it (spec 001, data-model, "Valeurs partagées";
+# ADR-004, version rule; ADR-012, condition 5; ADR-015, condition 16).
 #
 # Input: the files given to `conftest test --combine`, a list of objects with
 # a `path` and the parsed `contents` (research RS-18). Step 1 checks the shape
 # of platform.yaml; step 6 (T041) compares the node images of the kind
-# configuration with it; T065 adds the Postgres image of local/data/, T105
-# the OpenTofu layer.
+# configuration with it; T065 and T105 add the Postgres image and the
+# OpenTofu layer; step 19 adds the images of the cache layer.
 #
 # OpenTofu layer (T105): its .tf files read the Kubernetes minor from
 # platform.yaml through a local. The Postgres major is a literal that equals
@@ -14,14 +15,15 @@
 # skips its Cloud SQL checks (AVD-GCP-0014, 0016, 0020, 0022, 0025).
 package platform_values
 
-# Shared keys and the form of their value. Both are strings: YAML would read
+# Shared keys and the form of their value. All are strings: YAML would read
 # an unquoted 1.30 as the number 1.3.
 shared_keys := {
 	"kubernetes_minor": `^[0-9]+\.[0-9]+$`,
 	"postgres_major": `^[0-9]+$`,
+	"cache_engine_line": `^[0-9]+\.[0-9]+$`,
 }
 
-label := "S21 (FR-010, FR-017; ADR-004, version rule; ADR-012, condition 5)"
+label := "S21 (FR-010, FR-017; ADR-004, version rule; ADR-012, condition 5; ADR-015, condition 16)"
 
 platform_files contains file if {
 	some file in input
@@ -236,4 +238,53 @@ deny contains msg if {
 	found := postgres_image_major(image)
 	found != major
 	msg := sprintf("%s: the Postgres image of %s runs the major %s, platform.yaml says postgres_major %s", [label, path, found, major])
+}
+
+# The cache of the local layer (ADR-015, condition 16): the tag of each
+# image of local/data/cache/, the Deployment and the probe Job, is
+# X.Y.Z-alpine, and X.Y is the cache_engine_line of platform.yaml, the line
+# that Memorystore for Valkey serves by default. The gcp layer reads the same
+# value for its engine_version at step 20. A patch of the line is free, and
+# Renovate follows it (S23).
+cache_files contains file if {
+	some file in input
+	regex.match(`(^|/)local/data/cache/.+\.ya?ml$`, file.path)
+	is_object(file.contents)
+	is_object(object.get(file.contents, ["spec", "template", "spec"], null))
+}
+
+platform_cache_line := value if {
+	count(platform_files) == 1
+	some file in platform_files
+	value := file.contents.cache_engine_line
+	is_string(value)
+}
+
+# The line of a cache image reference: "9.1" for
+# docker.io/valkey/valkey:9.1.4-alpine@sha256:...
+cache_line(image) := line if {
+	is_string(image)
+	parts := regex.find_all_string_submatch_n(`^[^@]+:([0-9]+\.[0-9]+)\.[0-9]+-alpine(@sha256:[a-f0-9]{64})?$`, image, 1)
+	count(parts) == 1
+	line := parts[0][1]
+}
+
+cache_images contains [file.path, container.name, object.get(container, "image", null)] if {
+	some file in cache_files
+	spec := file.contents.spec.template.spec
+	some container in array.concat(object.get(spec, "initContainers", []), object.get(spec, "containers", []))
+}
+
+deny contains msg if {
+	some [path, name, image] in cache_images
+	not cache_line(image)
+	msg := sprintf("%s: container %v in %s has no X.Y.Z-alpine tag to compare with cache_engine_line, found %v", [label, name, path, image])
+}
+
+deny contains msg if {
+	some [path, name, image] in cache_images
+	line := cache_line(image)
+	is_string(platform_cache_line)
+	line != platform_cache_line
+	msg := sprintf("%s: container %v in %s runs the line %s, platform.yaml says cache_engine_line %s", [label, name, path, line, platform_cache_line])
 }
