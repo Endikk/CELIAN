@@ -71,7 +71,11 @@ envoy_names := {
 
 cache_names := {"valkey/valkey", "docker.io/valkey/valkey"}
 
-watched_names := ((postgres_names | kind_pair_names) | envoy_names) | cache_names
+# kubectl, pinned in tests/tools/install.sh under the depName of the
+# Kubernetes releases (github-releases).
+kubectl_names := {"kubernetes/kubernetes"}
+
+watched_names := (((postgres_names | kind_pair_names) | envoy_names) | cache_names) | kubectl_names
 
 platform_files contains file if {
 	some file in input
@@ -102,6 +106,13 @@ expected_node := sprintf("/^v%s\\./", [replace(platform.kubernetes_minor, ".", "
 # conditions 2 and 9): "/^9\\.1\\.[0-9]+-alpine$/" for cache_engine_line "9.1".
 expected_cache := sprintf("/^%s\\.[0-9]+-alpine$/", [replace(platform.cache_engine_line, ".", "\\.")]) if {
 	is_string(platform.cache_engine_line)
+}
+
+# kubectl of the CI stays on the minor of platform.yaml, like the node image.
+# The pattern accepts a leading v: the manager of install.sh strips it, the
+# githubActionsVersions preset that reads the workflow of CELIAN does not.
+expected_kubectl := sprintf("/^v?%s\\./", [replace(platform.kubernetes_minor, ".", "\\.")]) if {
+	is_string(platform.kubernetes_minor)
 }
 
 # Shape of the input.
@@ -149,6 +160,10 @@ catches_any(rule, names) if {
 for_docker(rule) if not rule.matchDatasources
 
 for_docker(rule) if "docker" in rule.matchDatasources
+
+for_github_releases(rule) if not rule.matchDatasources
+
+for_github_releases(rule) if "github-releases" in rule.matchDatasources
 
 grouped(rule) if {
 	is_string(rule.groupName)
@@ -209,6 +224,17 @@ node_entry(rule) if guard_rule(rule, node_names, expected_node)
 
 cache_entry(rule) if guard_rule(rule, cache_names, expected_cache)
 
+kubectl_entry(rule) if {
+	plain(rule, guard_keys, kubectl_names)
+	for_github_releases(rule)
+	every name in kubectl_names {
+		catches(rule, name)
+	}
+	rule.allowedVersions == expected_kubectl
+}
+
+guard_entry(rule) if kubectl_entry(rule)
+
 guard_entry(rule) if postgres_entry(rule)
 
 guard_entry(rule) if node_entry(rule)
@@ -232,7 +258,7 @@ deny contains msg if {
 	is_object(rule)
 	"allowedVersions" in object.keys(rule)
 	not guard_entry(rule)
-	msg := sprintf("%s: packageRules[%v] sets allowedVersions; only the postgres, node and cache entries set it, with no other key than %s, and only regexes or their own names as patterns", [label_versions, i, concat(", ", guard_keys)])
+	msg := sprintf("%s: packageRules[%v] sets allowedVersions; only the postgres, node, cache and kubectl entries set it, with no other key than %s, and only regexes or their own names as patterns", [label_versions, i, concat(", ", guard_keys)])
 }
 
 # An entry that turns updates off is refused in package renovate_delay,
@@ -407,6 +433,32 @@ deny contains msg if {
 	value := rule.allowedVersions
 	value != expected_cache
 	msg := sprintf("%s: packageRules[%v] sets allowedVersions %v for the cache image; only %s is allowed", [label_cache, i, value, expected_cache])
+}
+
+# kubectl: the minor of platform.yaml, as for the node image. A new minor
+# of kubectl goes by hand with kubernetes_minor, ADR-004 version rule.
+
+label_kubectl := "S23 (FR-013; ADR-004, version rule, point 5)"
+
+kubectl_rule_found if {
+	some rule in rules
+	kubectl_entry(rule)
+}
+
+deny contains msg if {
+	is_object(config)
+	is_object(platform)
+	not kubectl_rule_found
+	msg := sprintf("%s: no packageRules entry keeps kubectl on allowedVersions %s, the kubernetes_minor of platform.yaml, with matchPackageNames catching %s, matchDatasources github-releases or none, no other key than %s, and only regexes or these names as patterns", [label_kubectl, expected_kubectl, concat(", ", kubectl_names), concat(", ", guard_keys)])
+}
+
+deny contains msg if {
+	some i, rule in rules
+	is_object(rule)
+	catches_any(rule, kubectl_names)
+	value := rule.allowedVersions
+	value != expected_kubectl
+	msg := sprintf("%s: packageRules[%v] sets allowedVersions %v for kubectl; only %s is allowed", [label_kubectl, i, value, expected_kubectl])
 }
 
 # Envoy Gateway: the charts and the controller image in one group.

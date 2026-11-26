@@ -39,6 +39,15 @@ cache_rule := {
 	"allowedVersions": "/^9\\.1\\.[0-9]+-alpine$/",
 }
 
+# kubectl of the CI, pinned in tests/tools/install.sh: the minor of
+# platform.yaml, with an optional v for the workflow of CELIAN. config_for adds
+# it after the cache entry.
+kubectl_rule := {
+	"matchDatasources": ["github-releases"],
+	"matchPackageNames": ["kubernetes/kubernetes"],
+	"allowedVersions": "/^v?1\\.36\\./",
+}
+
 celian_presets := ["config:recommended", "helpers:pinGitHubActionDigests", "customManagers:githubActionsVersions"]
 
 # The regex managers see tests/: the list of :ignoreModulesAndTests without
@@ -107,7 +116,7 @@ config_for(package_rules, managers) := {
 	"osvVulnerabilityAlerts": true,
 	"regex": regex_object,
 	"customManagers": managers,
-	"packageRules": array.concat(package_rules, [cache_rule]),
+	"packageRules": array.concat(package_rules, [cache_rule, kubectl_rule]),
 }
 
 config_with(package_rules) := config_for(package_rules, [image_manager, golden_tools_manager, golden_local_manager])
@@ -250,7 +259,9 @@ test_s23_rejects_another_kubernetes_minor if {
 
 test_s23_follows_the_kubernetes_minor_of_platform_yaml if {
 	rule := with_value(node_rule, "allowedVersions", "/^v1\\.37\\./")
-	renovate := config_with([postgres_rule, rule, kind_group, envoy_group])
+	kubectl := with_value(kubectl_rule, "allowedVersions", "/^v?1\\.37\\./")
+	base := without_kubectl_rule(config_with([postgres_rule, rule, kind_group, envoy_group]))
+	renovate := object.union(base, {"packageRules": array.concat(base.packageRules, [kubectl])})
 	accepted(checked(renovate, with_value(valid_platform, "kubernetes_minor", "1.37")))
 }
 
@@ -309,7 +320,7 @@ test_s23_rejects_a_postgres_entry_narrowed_to_some_files if {
 test_s23_rejects_a_postgres_entry_narrowed_to_a_current_version if {
 	rule := with_value(postgres_rule, "matchCurrentVersion", "/^17\\./")
 	renovate := config_with([rule, node_rule, kind_group, envoy_group])
-	denied_with(checked(renovate, valid_platform), "packageRules[0] sets allowedVersions; only the postgres, node and cache entries set it")
+	denied_with(checked(renovate, valid_platform), "packageRules[0] sets allowedVersions; only the postgres, node, cache and kubectl entries set it")
 }
 
 test_s23_rejects_a_node_entry_narrowed_to_some_update_types if {
@@ -327,13 +338,13 @@ test_s23_rejects_a_postgres_entry_with_a_negated_pattern if {
 test_s23_rejects_a_later_glob_entry_that_sets_allowed_versions if {
 	rule := {"matchPackageNames": ["*"], "allowedVersions": "/.*/"}
 	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions; only the postgres, node and cache entries set it")
+	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions; only the postgres, node, cache and kubectl entries set it")
 }
 
 test_s23_rejects_a_later_dep_name_entry_that_sets_allowed_versions if {
 	rule := {"matchDepNames": ["postgres"], "allowedVersions": "/^19\\./"}
 	renovate := config_with(array.concat(valid_rules, [rule]))
-	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions; only the postgres, node and cache entries set it")
+	denied_with(checked(renovate, valid_platform), "packageRules[4] sets allowedVersions; only the postgres, node, cache and kubectl entries set it")
 }
 
 test_s23_rejects_a_kind_group_narrowed_to_some_files if {
@@ -593,7 +604,7 @@ test_s23_rejects_custom_managers_that_is_not_a_list if {
 
 test_s23_names_its_requirements_in_each_message if {
 	msgs := deny with input as checked({}, valid_platform)
-	count(msgs) == 8
+	count(msgs) == 9
 	every msg in msgs {
 		startswith(msg, "S23 (FR-013")
 	}
@@ -678,4 +689,42 @@ test_s23_rejects_a_local_manager_without_the_data_folder if {
 	manager := with_value(golden_local_manager, "managerFilePatterns", ["/^local/kind/cluster\\.yaml$/", "/^local/tasks/.+\\.ya?ml$/"])
 	renovate := config_for(valid_rules, [image_manager, golden_tools_manager, manager])
 	denied_with(checked(renovate, valid_platform), "no customManagers entry is the manager of the images of")
+}
+
+# kubectl of the CI: the minor of platform.yaml (ADR-004, version rule, point 5).
+
+without_kubectl_rule(renovate) := object.union(renovate, {"packageRules": [rule | some rule in renovate.packageRules; rule != kubectl_rule]})
+
+test_s23_rejects_a_config_without_the_kubectl_rule if {
+	denied_with(checked(without_kubectl_rule(valid_config), valid_platform), "no packageRules entry keeps kubectl on allowedVersions /^v?1\\.36\\./")
+}
+
+test_s23_rejects_a_kubectl_rule_on_another_minor if {
+	rule := with_value(kubectl_rule, "allowedVersions", "/^v?1\\.37\\./")
+	renovate := without_kubectl_rule(object.union(valid_config, {"packageRules": array.concat(valid_config.packageRules, [rule])}))
+	denied_with(checked(renovate, valid_platform), "sets allowedVersions /^v?1\\.37\\./ for kubectl")
+}
+
+test_s23_rejects_a_kubectl_rule_on_the_major_alone if {
+	rule := with_value(kubectl_rule, "allowedVersions", "/^v?1\\./")
+	renovate := without_kubectl_rule(object.union(valid_config, {"packageRules": array.concat(valid_config.packageRules, [rule])}))
+	denied_with(checked(renovate, valid_platform), "sets allowedVersions /^v?1\\./ for kubectl")
+}
+
+test_s23_rejects_a_kubectl_rule_for_another_datasource if {
+	rule := with_value(kubectl_rule, "matchDatasources", ["docker"])
+	renovate := without_kubectl_rule(object.union(valid_config, {"packageRules": array.concat(valid_config.packageRules, [rule])}))
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps kubectl")
+}
+
+test_s23_rejects_a_kubectl_rule_with_another_criterion if {
+	rule := with_value(kubectl_rule, "matchUpdateTypes", ["patch"])
+	renovate := without_kubectl_rule(object.union(valid_config, {"packageRules": array.concat(valid_config.packageRules, [rule])}))
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps kubectl")
+}
+
+test_s23_rejects_a_kubectl_rule_that_misses_the_name if {
+	rule := with_value(kubectl_rule, "matchPackageNames", ["kubernetes/kubectl"])
+	renovate := without_kubectl_rule(object.union(valid_config, {"packageRules": array.concat(valid_config.packageRules, [rule])}))
+	denied_with(checked(renovate, valid_platform), "no packageRules entry keeps kubectl")
 }
